@@ -51,7 +51,16 @@ BUDGET_LIMIT = 1_000_000
 LUXURY_MIN_PRICE = 5_000_000
 TOP_GAP_LIMIT = 50
 MODEL_MAX_AGE_YEARS = 10
-TARGET_MODELS = ["POLO", "RIO", "SOLARIS"]
+# Модели - и латиницей, и кириллицей: в колонку name (Autodoc или
+# fill_missing_from_title.py из текста title) модель может попасть как
+# "Solaris", так и "Солярис".
+TARGET_MODELS = {"POLO", "RIO", "SOLARIS", "ПОЛО", "РИО", "СОЛЯРИС"}
+
+# Кириллические буквы, которые выглядят как латинские. В документах торгов
+# их часто смешивают в одном слове ("РOLO" с русской Р) - такое слово не
+# совпадёт ни с латинским, ни с кириллическим вариантом, поэтому слово
+# дополнительно проверяем после замены двойников на латиницу.
+CYR_LOOKALIKES = str.maketrans("АВЕКМНОРСТУХ", "ABEKMHOPCTYX")
 
 # Ключевые слова, по которым лот выглядит как повреждённый/неисправный -
 # такие лоты исключаем из "самый большой зазор от рынка": там огромный
@@ -200,7 +209,8 @@ def build_polo_rio_solyaris(header, data_rows, cache):
         # внутри есть буквы RIO). Слова режем по всему, что не буква/цифра -
         # так "RIO X-LINE" и "POLO SEDAN" по-прежнему проходят.
         words = set(re.split(r"[\W_]+", _get(row, header, cache, "name").upper()))
-        if not words & set(TARGET_MODELS):
+        words |= {w.translate(CYR_LOOKALIKES) for w in words}
+        if not words & TARGET_MODELS:
             continue
         year = _to_int(_get(row, header, cache, "year"))
         if year is None or year < CURRENT_YEAR - MODEL_MAX_AGE_YEARS:
