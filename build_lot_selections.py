@@ -33,6 +33,7 @@ market_mid = (autoru_price_low + autoru_price_high) / 2 - середина ви�
 отрицательное - дороже рынка (красный).
 """
 import datetime
+import re
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -194,8 +195,12 @@ def build_heavy_luxury(header, data_rows, cache):
 def build_polo_rio_solyaris(header, data_rows, cache):
     selected = []
     for row in data_rows:
-        model = _get(row, header, cache, "name").upper()
-        if not any(target in model for target in TARGET_MODELS):
+        # Сравниваем ЦЕЛЫЕ слова названия модели, а не подстроку: раньше
+        # проверка "RIO" in model пропускала PRIORA и PATRIOT (в обоих
+        # внутри есть буквы RIO). Слова режем по всему, что не буква/цифра -
+        # так "RIO X-LINE" и "POLO SEDAN" по-прежнему проходят.
+        words = set(re.split(r"[\W_]+", _get(row, header, cache, "name").upper()))
+        if not words & set(TARGET_MODELS):
             continue
         year = _to_int(_get(row, header, cache, "year"))
         if year is None or year < CURRENT_YEAR - MODEL_MAX_AGE_YEARS:
