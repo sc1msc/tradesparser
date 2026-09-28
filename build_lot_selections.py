@@ -9,7 +9,7 @@ build_lots_missing_info.py и остальных build_*.py) - "lots_current_mon
 убыванию (см. _sort_by_gap), лоты без оценки Авто.ру - в конец: это
 общее для всех срезов, т.к. send_digest.py одинаково подписывает
 кандидатов на отправку "из топа по выгодности" для любой подборки:
-  1) lots_top_gap          - топ-20 по наибольшему "% below mkt"
+  1) lots_top_gap          - топ-50 по наибольшему "% below mkt"
   2) lots_budget_1m        - price_current <= 1 000 000
   3) lots_one_owner        - autoru_owners_count == 1
   4) lots_heavy_luxury     - price_current > 5 000 000
@@ -48,7 +48,7 @@ CURRENT_YEAR = datetime.datetime.now().year
 
 BUDGET_LIMIT = 1_000_000
 LUXURY_MIN_PRICE = 5_000_000
-TOP_GAP_LIMIT = 20
+TOP_GAP_LIMIT = 50
 MODEL_MAX_AGE_YEARS = 10
 TARGET_MODELS = ["POLO", "RIO", "SOLARIS"]
 

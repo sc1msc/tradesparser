@@ -298,11 +298,6 @@ def read_rows(worksheet):
     return rows
 
 
-def set_cell(worksheet, row_num, col_name, value):
-    """Точечно записывает одну ячейку, не трогая остальные колонки строки."""
-    worksheet.update_cell(row_num, col_index(col_name), value)
-
-
 if __name__ == "__main__":
     # Быстрая проверка подключения: python sheets_writer.py
     import config

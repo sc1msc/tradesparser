@@ -76,6 +76,36 @@ def _read_existing_extra_columns(target):
     return extra_names, by_vin
 
 
+def _overwrite_sheet(target, out_rows):
+    """
+    Перезаписывает лист БЕЗ промежуточного "пустого" состояния. Раньше
+    было clear() + update(): если второй запрос падал (сеть, 429 от
+    Google), лист оставался пустым - а вместе с ним пропадали и
+    autoru_*-колонки, которые берутся ТОЛЬКО из этого же листа (см.
+    _read_existing_extra_columns) и восстанавливаются лишь повторным
+    прогоном браузера по всем лотам.
+
+    Теперь порядок обратный: сначала одним запросом пишем новые данные
+    поверх старых, и только потом стираем то, что осталось от прошлой
+    версии ниже/правее. Если упадёт первый запрос - на листе остаются
+    старые данные целиком; если второй - лишние старые строки внизу, но
+    ничего не потеряно, следующий запуск их дочистит.
+    """
+    target.update(range_name="A1", values=out_rows)
+
+    n_rows = len(out_rows)
+    n_cols = max(len(r) for r in out_rows)
+    last = gspread.utils.rowcol_to_a1(target.row_count, target.col_count)
+    ranges = []
+    if n_rows < target.row_count:
+        ranges.append(f"A{n_rows + 1}:{last}")  # старые строки ниже новых
+    if n_cols < target.col_count:
+        first = gspread.utils.rowcol_to_a1(1, n_cols + 1)
+        ranges.append(f"{first}:{last}")        # старые колонки правее новых
+    if ranges:
+        target.batch_clear(ranges)
+
+
 def run():
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
@@ -138,8 +168,7 @@ def run():
         extra_values = [extras.get(name, "") for name in extra_names]
         out_rows.append(row + extra_values)
 
-    target.clear()
-    target.update(range_name="A1", values=out_rows)
+    _overwrite_sheet(target, out_rows)
 
     print(f"Готово. Всего строк в '{SOURCE_SHEET}': {len(data_rows)}.")
     print(f"Попало в срез (дедлайн через {WINDOW_DAYS} дн. или меньше, ещё не истёк): {len(selected_rows)}")

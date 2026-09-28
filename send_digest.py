@@ -329,7 +329,11 @@ def run():
             _send_telegram_message(caption, "Смотреть лот →", lot.get("url", ""))
         print(f"  отправлено: {_lot_title(lot)}")
 
-    remaining = max(len(lots) - len(teaser_lots), 0)
+    # Считаем только лоты, которые реально есть на Telegraph-странице
+    # (full_lots - первые DIGEST_FULL_COUNT), минус уже отправленные в
+    # канал. Раньше считалось от всей подборки - и при 80 лотах пост
+    # обещал "ещё 77", а на странице было 20.
+    remaining = sum(1 for lot in full_lots if not any(lot is t for t in teaser_lots))
     closing_text = (
         f"Ещё {remaining} {_lots_word(remaining)} в подборке «{selection['title']}» 👇"
     )
