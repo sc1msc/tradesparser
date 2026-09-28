@@ -19,7 +19,7 @@ build_lots_missing_info.py и остальных build_*.py) - "lots_current_mon
 так актуальнее для "интересности" прямо сейчас.
 
 Разрыв от рынка ("% below mkt") СЧИТАЕМ САМИ - по autoru_price_low/high
-и price_current (см. _compute_gap). Раньше этот процент читался из
+и price_current (см. _compute_gap, формула - lot_metrics.gap_percent). Раньше этот процент читался из
 одноимённой колонки в lots_current_month, но выяснилось, что туда просто
 руками вписано число - оно никак не связано с реальными autoru_price_*
 и не обновляется, когда лот переоценивают. При записи выходных срезов
@@ -39,6 +39,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 import config
+import lot_metrics
 import selections
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -62,22 +63,9 @@ TARGET_MODELS = {"POLO", "RIO", "SOLARIS", "ПОЛО", "РИО", "СОЛЯРИС
 # дополнительно проверяем после замены двойников на латиницу.
 CYR_LOOKALIKES = str.maketrans("АВЕКМНОРСТУХ", "ABEKMHOPCTYX")
 
-# Ключевые слова, по которым лот выглядит как повреждённый/неисправный -
-# такие лоты исключаем из "самый большой зазор от рынка": там огромный
-# дисконт объясняется не выгодой, а состоянием автомобиля (Auto.ru же
-# оценивает исправный авто того же года/модели, отсюда и ложный "разрыв").
-# Список - первое приближение по тому, что реально встречалось в title;
-# расширяйте по мере обнаружения новых выбросов.
-DAMAGE_KEYWORDS = [
-    "ДТП", "НЕИСПРАВН", "НЕ НА ХОДУ", "НЕ НАХОДУ", "БИТ", "АВАРИЙН",
-    "ГОДНЫЕ ОСТАТКИ", "ГОДНЫЕ ОСТАНКИ", "УТИЛИЗАЦ", "ТРЕБУЕТ РЕМОНТА",
-    "ПОСЛЕ ПОЖАРА", "СГОРЕВШ", "ЗАТОПЛЕН", "КОНСТРУКТИВНАЯ ГИБЕЛЬ",
-]
-
-
-def _looks_damaged(title):
-    upper = (title or "").upper()
-    return any(kw in upper for kw in DAMAGE_KEYWORDS)
+# Ключевые слова повреждений и сама проверка - в lot_metrics.py: тот же
+# список использует мини-апп (значок "возможно, повреждён" на карточке).
+_looks_damaged = lot_metrics.looks_damaged
 
 
 def _to_number(value):
@@ -134,15 +122,11 @@ def _compute_gap(row, header, cache):
     """% below mkt = (market_mid - price_current) / market_mid * 100.
     None, если price_current или вилка Авто.ру не заполнены (лот ещё не
     оценён или market_mid <= 0 - защита от деления на ноль/мусора)."""
-    price_current = _to_float(_get(row, header, cache, "price_current"))
-    low = _to_float(_get(row, header, cache, "autoru_price_low"))
-    high = _to_float(_get(row, header, cache, "autoru_price_high"))
-    if price_current is None or low is None or high is None:
-        return None
-    market_mid = (low + high) / 2
-    if market_mid <= 0:
-        return None
-    return (market_mid - price_current) / market_mid * 100
+    return lot_metrics.gap_percent(
+        _to_float(_get(row, header, cache, "price_current")),
+        _to_float(_get(row, header, cache, "autoru_price_low")),
+        _to_float(_get(row, header, cache, "autoru_price_high")),
+    )
 
 
 def build_top_gap(header, data_rows, cache):

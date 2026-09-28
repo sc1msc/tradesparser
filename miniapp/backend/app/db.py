@@ -1,0 +1,198 @@
+# -*- coding: utf-8 -*-
+r"""
+Хранилище мини-аппа - один файл SQLite (путь - переменная окружения
+HONESTLOT_DB, по умолчанию miniapp/backend/data/honestlot.db).
+
+Почему SQLite, а не Postgres из спецификации: лотов сотни (при расширении
+на всю страну - до 5-10 тыс.), пишет в базу только импорт раз в сутки плюс
+редкие клики "в избранное". Отдельный сервер БД на таком объёме - лишние
+деньги и администрирование, а бэкап - это просто копия файла. Весь SQL
+здесь - обычный, без SQLite-специфики, кроме "INSERT ... ON CONFLICT"
+(есть и в Postgres) - переезд, если понадобится, затронет только этот файл.
+
+Таблицы:
+  lots      - витрина лотов. Источник истины - Google-таблица (лист
+              lots_current_month) + карточка лота на сайте торгов; сюда
+              всё приходит через POST /api/import (export_to_miniapp.py).
+              Лоты, пропавшие из листа, НЕ удаляются (in_source = 0):
+              на них могут ссылаться избранные.
+  users     - пользователи Telegram (telegram_id из подписанного initData).
+  favorites - избранное: пара (telegram_id, lot_id).
+"""
+import json
+import os
+import sqlite3
+import threading
+
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "honestlot.db")
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS lots (
+    lot_id            TEXT PRIMARY KEY,
+    url               TEXT,
+    title             TEXT,
+    brand             TEXT,
+    model             TEXT,
+    year              INTEGER,
+    vin               TEXT,
+    plate             TEXT,
+    mileage_km        INTEGER,
+    mileage_estimated INTEGER NOT NULL DEFAULT 0,
+    price_start       INTEGER,
+    price_current     INTEGER,
+    region            TEXT,
+    trade_form        TEXT,
+    is_public_offer   INTEGER NOT NULL DEFAULT 0,
+    status            TEXT,
+    platform          TEXT,
+    applications_end  TEXT,
+    bidding_start     TEXT,
+    periods           TEXT,
+    photos            TEXT,
+    description       TEXT,
+    autoru_price_low  INTEGER,
+    autoru_price_high INTEGER,
+    autoru_owners     INTEGER,
+    in_source         INTEGER NOT NULL DEFAULT 1,
+    first_seen_at     TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    telegram_id   INTEGER PRIMARY KEY,
+    username      TEXT,
+    first_name    TEXT,
+    created_at    TEXT NOT NULL,
+    last_seen_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS favorites (
+    telegram_id INTEGER NOT NULL,
+    lot_id      TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (telegram_id, lot_id)
+);
+"""
+
+# Поля лота, которые принимает импорт (всё остальное в JSON игнорируется).
+# periods/photos - списки, храним как JSON-текст.
+LOT_FIELDS = [
+    "url", "title", "brand", "model", "year", "vin", "plate",
+    "mileage_km", "mileage_estimated", "price_start", "price_current",
+    "region", "trade_form", "is_public_offer", "status", "platform",
+    "applications_end", "bidding_start", "periods", "photos", "description",
+    "autoru_price_low", "autoru_price_high", "autoru_owners",
+]
+JSON_FIELDS = {"periods", "photos"}
+FLAG_FIELDS = {"mileage_estimated", "is_public_offer"}
+
+_lock = threading.Lock()
+
+
+def db_path():
+    return os.environ.get("HONESTLOT_DB") or DEFAULT_DB_PATH
+
+
+def connect():
+    path = db_path()
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.executescript(SCHEMA)
+    return conn
+
+
+_conn = None
+
+
+def conn():
+    """Одно соединение на процесс (uvicorn с одним воркером). Запись - под
+    _lock, чтобы импорт и клики "в избранное" не пересекались."""
+    global _conn
+    if _conn is None:
+        _conn = connect()
+    return _conn
+
+
+def row_to_lot(row):
+    lot = dict(row)
+    for f in JSON_FIELDS:
+        lot[f] = json.loads(lot[f]) if lot.get(f) else []
+    return lot
+
+
+def all_lots():
+    return [row_to_lot(r) for r in conn().execute("SELECT * FROM lots")]
+
+
+def import_lots(lots, now_iso):
+    """Upsert всех пришедших лотов; лоты, которых в этом импорте нет,
+    помечаются in_source = 0 (но не удаляются). Всё в одной транзакции -
+    если импорт упадёт на середине, витрина останется прежней."""
+    placeholders = ", ".join(["?"] * (len(LOT_FIELDS) + 3))
+    columns = ", ".join(["lot_id"] + LOT_FIELDS + ["first_seen_at", "updated_at"])
+    updates = ", ".join(f"{f} = excluded.{f}" for f in LOT_FIELDS)
+    sql = (
+        f"INSERT INTO lots ({columns}, in_source) VALUES ({placeholders}, 1) "
+        f"ON CONFLICT(lot_id) DO UPDATE SET {updates}, "
+        f"updated_at = excluded.updated_at, in_source = 1"
+    )
+    ids = []
+    with _lock:
+        c = conn()
+        with c:
+            for lot in lots:
+                values = []
+                for f in LOT_FIELDS:
+                    v = lot.get(f)
+                    if f in JSON_FIELDS:
+                        v = json.dumps(v or [], ensure_ascii=False)
+                    elif f in FLAG_FIELDS:
+                        v = 1 if v else 0
+                    values.append(v)
+                c.execute(sql, [str(lot["lot_id"])] + values + [now_iso, now_iso])
+                ids.append(str(lot["lot_id"]))
+            if ids:
+                marks = ", ".join(["?"] * len(ids))
+                cur = c.execute(f"UPDATE lots SET in_source = 0 WHERE in_source = 1 AND lot_id NOT IN ({marks})", ids)
+            else:
+                cur = c.execute("UPDATE lots SET in_source = 0 WHERE in_source = 1")
+    return len(ids), cur.rowcount
+
+
+def touch_user(telegram_id, username, first_name, now_iso):
+    with _lock:
+        c = conn()
+        with c:
+            c.execute(
+                "INSERT INTO users (telegram_id, username, first_name, created_at, last_seen_at) "
+                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(telegram_id) DO UPDATE SET "
+                "username = excluded.username, first_name = excluded.first_name, "
+                "last_seen_at = excluded.last_seen_at",
+                (telegram_id, username, first_name, now_iso, now_iso),
+            )
+
+
+def favorite_ids(telegram_id):
+    rows = conn().execute(
+        "SELECT lot_id FROM favorites WHERE telegram_id = ? ORDER BY created_at DESC", (telegram_id,)
+    )
+    return [r["lot_id"] for r in rows]
+
+
+def add_favorite(telegram_id, lot_id, now_iso):
+    with _lock:
+        c = conn()
+        with c:
+            c.execute(
+                "INSERT OR IGNORE INTO favorites (telegram_id, lot_id, created_at) VALUES (?, ?, ?)",
+                (telegram_id, lot_id, now_iso),
+            )
+
+
+def remove_favorite(telegram_id, lot_id):
+    with _lock:
+        c = conn()
+        with c:
+            c.execute("DELETE FROM favorites WHERE telegram_id = ? AND lot_id = ?", (telegram_id, lot_id))

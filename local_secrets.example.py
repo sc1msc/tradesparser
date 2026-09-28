@@ -8,3 +8,8 @@ TRONK_API_KEY = "ВСТАВЬТЕ_КЛЮЧ_TRONK"
 TELEGRAM_BOT_TOKEN = "ВСТАВЬТЕ_ТОКЕН_БОТА"
 # ID Google-таблицы - из её URL: docs.google.com/spreadsheets/d/<ID>/edit
 SPREADSHEET_ID = "ВСТАВЬТЕ_ID_ТАБЛИЦЫ"
+# Мини-апп honestlot: адрес сервера (например "https://51-250-10-20.sslip.io")
+# и ключ импорта - тот же, что HONESTLOT_IMPORT_TOKEN на сервере.
+# Необязательные: без них export_to_miniapp.py просто ничего не делает.
+MINIAPP_API_URL = ""
+MINIAPP_IMPORT_TOKEN = ""

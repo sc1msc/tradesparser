@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "honestlot",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["miniapp/run_local.py"],
+      "port": 8000
+    }
+  ]
+}

@@ -11,6 +11,15 @@ except ImportError:
     TELEGRAM_BOT_TOKEN = "ВСТАВЬТЕ_ТОКЕН_БОТА"
     SPREADSHEET_ID = "ВСТАВЬТЕ_ID_ТАБЛИЦЫ"
 
+# Мини-апп honestlot (export_to_miniapp.py): адрес сервера и ключ импорта.
+# Необязательные - если их нет в local_secrets.py, выгрузка в мини-апп
+# просто пропускается.
+try:
+    from local_secrets import MINIAPP_API_URL, MINIAPP_IMPORT_TOKEN
+except ImportError:
+    MINIAPP_API_URL = ""
+    MINIAPP_IMPORT_TOKEN = ""
+
 # --- Google Sheets ---
 SERVICE_ACCOUNT_FILE = "service_account.json"   # путь к скачанному ключу
 # SPREADSHEET_ID - в local_secrets.py (см. блок секретов выше)
@@ -86,3 +95,8 @@ TELEGRAM_CHANNEL_ID = "@honestlot"
 DIGEST_TEASER_COUNT = 3   # сколько лотов реально уйдёт в канал
 DIGEST_PHOTO_POOL_SIZE = 7  # сколько лотов с фото набрать в пул для ручного отбора
 DIGEST_FULL_COUNT = 100   # сколько лотов максимум положить в Telegraph-страницу (lots_top_gap сам по себе топ-50)
+
+# --- Мини-апп honestlot (export_to_miniapp.py) ---
+# Карточку лота на сайте торгов (все фото, график периодов публичного
+# предложения, статус) перекачиваем, если кэш старше стольких дней.
+MINIAPP_DETAILS_REFRESH_DAYS = 7

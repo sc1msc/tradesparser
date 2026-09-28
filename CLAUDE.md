@@ -46,6 +46,8 @@ send_digest.py ──► Telegram channel + Telegraph page (telegraph_publish.py
 - `fill_missing_from_title` must run *between* `build_lots_processed` and `build_lots_current_month`. Re-running `build_lots_processed` afterwards silently wipes its fills.
 - `evaluate_autoru_browser` reads `mileage_km` from `lots_current_month`, so it must run after the mileage fill and both rebuilds.
 
+Step 8 of `run_pipeline.py` is `export_to_miniapp.py`: it reads `lots_current_month`, downloads each lot card from the trade site for data the sheet lacks (all photos, the public-offer price schedule `bidding_periods`, trade form, status), caches it in `miniapp_details_cache.json` (gitignored, refreshed after `MINIAPP_DETAILS_REFRESH_DAYS`), and POSTs everything to the mini app server. It skips itself when `MINIAPP_API_URL`/`MINIAPP_IMPORT_TOKEN` are not set and never fails the pipeline.
+
 Not in the pipeline (manual/side tools): `autodoc_decode.py` (VIN → Autodoc, writes brand/model/date into `lots` from column AZ, has its own inline config), `evaluate_tronk.py` / `evaluate_avito_browser.py` (their outputs are no longer read downstream; Auto.ru is the only market price used), `filter_beautiful_plates_gspread.py` (uses `plates_series.txt`, writes a `beautiful_plates` tab + xlsx), and `temp.py` (scratch).
 
 ## Key conventions and gotchas
@@ -60,3 +62,11 @@ Not in the pipeline (manual/side tools): `autodoc_decode.py` (VIN → Autodoc, w
 - Adding a new selection takes three edits: a `build_XXX` filter in `build_lot_selections.py`, a registration in its `BUILDERS`, and a matching `key` entry in `selections.py` (sheet name + digest texts).
 - `% below mkt` is computed in `build_lot_selections.py` from `autoru_price_low/high` vs `price_current`. Don't trust the old column value in `lots_current_month`.
 - Secrets are kept out of git (see `.gitignore`). The TRONK key, Telegram bot token, and `SPREADSHEET_ID` live in `local_secrets.py`, which `config.py` imports (template: `local_secrets.example.py`). Never hard-code keys into `config.py` or scripts. Also ignored: `service_account.json`, `telegraph_token.txt` (cached Telegraph token), and `browser_profile/` (the persistent Playwright Chromium profile).
+
+## Mini app (`miniapp/`)
+
+The Telegram Mini App "honestlot" for end users: a FastAPI + SQLite backend and a no-build vanilla JS frontend, both in one Docker image behind Caddy. See `miniapp/README.md`.
+- `lot_metrics.py` (repo root) holds the one `% below mkt` formula and the damage keywords. Both `build_lot_selections.py` and the backend import it, and the Docker image copies it. Don't duplicate the formula.
+- For public-offer lots, the sheet's `applications_end`/`price_current` are the last period's end and the first period's price (`main.py` never re-scrapes known lots). The backend picks the current period from `periods` at request time. Don't "fix" this by reading the sheet columns.
+- Brand/model cleanup (aliases like VAZ→Lada, junk from title parsing) happens in `miniapp/backend/app/lots.py`, not in the sheet.
+- The frontend has no build step: bump `?v=` in `miniapp/frontend/index.html` after changing `app.js`/`style.css`.

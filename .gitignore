@@ -15,3 +15,10 @@ telegraph_token.txt
 browser_profile/
 screenshots/
 *.xlsx
+
+# Мини-апп: кэш карточек лотов, предпросмотр выгрузки, локальная база
+miniapp_details_cache.json
+miniapp_details_cache.json.tmp
+miniapp_export_preview.json
+miniapp/backend/data/
+miniapp/data/

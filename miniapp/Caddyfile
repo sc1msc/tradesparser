@@ -1,0 +1,7 @@
+# Caddy сам получает и продлевает бесплатный сертификат Let's Encrypt на
+# {$DOMAIN} (например 51-250-10-20.sslip.io или свой домен) - Telegram
+# открывает мини-аппы только по https.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:8000
+}

@@ -1,0 +1,27 @@
+# Сервер мини-аппа: api (FastAPI + фронтенд) и caddy (HTTPS).
+# Настройки - в miniapp/.env (шаблон: .env.example), в git не хранится.
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: miniapp/backend/Dockerfile
+    env_file: .env
+    volumes:
+      - ./data:/data          # база SQLite - переживает пересборку контейнера
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file: .env            # DOMAIN - имя, на которое Caddy сам получит сертификат
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  caddy_data:

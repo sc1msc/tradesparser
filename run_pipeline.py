@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 r"""
 Единая точка входа для всего конвейера сбора/донаполнения/пересборки
-данных - вместо того, чтобы помнить и вручную соблюдать порядок из семи
+данных - вместо того, чтобы помнить и вручную соблюдать порядок из восьми
 скриптов, запускается один: python run_pipeline.py
 
 Шаги (строго в этом порядке - порядок важен, см. ниже):
@@ -12,6 +12,8 @@ r"""
   5) build_lots_current_month.py- пересборка lots_current_month
   6) evaluate_autoru_browser.py - оценка через Авто.ру (браузер)
   7) build_lot_selections.py    - пересборка тематических подборок
+  8) export_to_miniapp.py       - выгрузка лотов на сервер мини-аппа honestlot
+                                  (не роняет пайплайн, если сервер недоступен)
 
 Почему именно такой порядок и зачем он единым скриптом:
   - шаг 4 обязан идти МЕЖДУ шагом 3 и шагом 5: build_lots_processed.py
@@ -50,6 +52,7 @@ import build_lots_processed
 import evaluate_autoru_browser
 import fill_missing_from_title
 import fill_missing_mileage
+import export_to_miniapp
 import main
 
 STEPS = [
@@ -60,6 +63,7 @@ STEPS = [
     ("Пересборка lots_current_month", build_lots_current_month),
     ("Оценка через Авто.ру (браузер)", evaluate_autoru_browser),
     ("Пересборка тематических подборок", build_lot_selections),
+    ("Выгрузка в мини-апп honestlot", export_to_miniapp),  # закомментировать, чтобы не выгружать
 ]
 
 
