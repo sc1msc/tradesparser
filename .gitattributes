@@ -1,0 +1,2 @@
+# Файлы мини-аппа уезжают на Linux-сервер - всегда LF (CRLF ломает .env и shell-скрипты)
+miniapp/** text=auto eol=lf
