@@ -1,0 +1,17 @@
+# Окружение и IDE
+.venv/
+venv/
+__pycache__/
+*.pyc
+.idea/
+
+# Секреты - никогда не коммитить (шаблон: local_secrets.example.py)
+local_secrets.py
+service_account.json
+telegraph_token.txt
+.env
+
+# Профиль браузера Playwright (куки, кэш) и артефакты работы скриптов
+browser_profile/
+screenshots/
+*.xlsx

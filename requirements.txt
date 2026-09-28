@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+gspread
+google-auth
+google-api-python-client
+playwright
+pandas
+openpyxl

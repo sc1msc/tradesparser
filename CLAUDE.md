@@ -1,0 +1,62 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+A set of standalone Python scripts that scrape bankruptcy car auction lots (Moscow + Moscow Oblast) from a Next.js trade-aggregator site, enrich them with VIN decoding, mileage, and market valuations (Auto.ru, optionally TRONK/Avito), build themed selections, and publish a digest to a Telegram channel via Telegraph. **The only shared state between scripts is one Google Spreadsheet** (`config.SPREADSHEET_ID`), accessed through a service account (`service_account.json`).
+
+Code comments, docstrings, and console output are in Russian. Every module has a long docstring explaining *why* it works the way it does. Read it before changing a script. Match that style.
+
+## Commands
+
+No build, lint, or test suite. There is no git repo either. Each script runs directly and exposes a `run()` function:
+
+```
+pip install -r requirements.txt
+playwright install chromium           # browser for evaluate_autoru_browser.py / evaluate_avito_browser.py
+python sheets_writer.py               # check the Google Sheets connection
+python run_pipeline.py                # full data pipeline (see order below)
+python main.py                        # any single step can also run on its own
+python send_digest.py                 # publish to Telegram (manual, interactive choice of selection)
+python tronk_valuation.py <VIN>       # one-off paid TRONK test, does not write to the sheet
+```
+
+Several steps prompt for `yes`/`да` confirmation on stdin (paid API calls, launching the browser). They cannot run non-interactively without that input. Playwright scripts run with `headless=False` on purpose (anti-bot) and may pause so a human can solve a captcha.
+
+## Data flow (sheets = pipeline stages)
+
+```
+main.py ──► "lots" (raw, A..AM via sheets_writer + extra cols; AZ/BA/BB = brand/name/date from autodoc_decode.py)
+              │  fill_missing_mileage.py (paid TRONK probeg) writes mileage back into "lots"
+              ▼
+build_lots_processed.py ──► "lots_processed"   (FULL overwrite from "lots" every run)
+              │  fill_missing_from_title.py fills empty brand/name/year from title (only empty cells)
+              ▼
+build_lots_current_month.py ──► "lots_current_month"  (applications_end within 30 days;
+              │                  preserves extra/trailing columns by VIN across rebuilds)
+              │  evaluate_autoru_browser.py adds autoru_* columns here (Playwright)
+              ▼
+build_lot_selections.py ──► "lots_top_gap", "lots_budget_1m", "lots_one_owner", ...
+              ▼
+send_digest.py ──► Telegram channel + Telegraph page (telegraph_publish.py)
+```
+
+`run_pipeline.py` runs steps 1–7 in a fixed order, and **the order matters**:
+- `fill_missing_from_title` must run *between* `build_lots_processed` and `build_lots_current_month`. Re-running `build_lots_processed` afterwards silently wipes its fills.
+- `evaluate_autoru_browser` reads `mileage_km` from `lots_current_month`, so it must run after the mileage fill and both rebuilds.
+
+Not in the pipeline (manual/side tools): `autodoc_decode.py` (VIN → Autodoc, writes brand/model/date into `lots` from column AZ, has its own inline config), `evaluate_tronk.py` / `evaluate_avito_browser.py` (their outputs are no longer read downstream; Auto.ru is the only market price used), `filter_beautiful_plates_gspread.py` (uses `plates_series.txt`, writes a `beautiful_plates` tab + xlsx), and `temp.py` (scratch).
+
+## Key conventions and gotchas
+
+- **`sheets_writer.py` schema is stale.** Its `COLUMNS` (A..AM) is used only by `main.py`, `evaluate_tronk.py`, and `evaluate_avito_browser.py`. The real `lots` sheet has more columns. Newer scripts (`build_*`, `fill_*`, `evaluate_autoru_browser`) bypass it and use gspread directly, addressing columns by header name or explicit column letter. Follow that pattern in new code. `ARCHITECTURE.md` describes the older three-stage design and doesn't cover the newer scripts.
+- `sheets_writer.ensure_header()` rewrites row 1 of `lots` on connect. `SheetState` writes explicit ranges (`A5:AM5`) instead of relying on Sheets table auto-detection, which previously caused column shifts.
+- `main.py` deletes lots whose application deadline passed `EXPIRED_LOT_DAYS` ago and skips `lot_id`s already in the sheet, so re-runs are idempotent.
+- Scraping (`nextjs_json.py`): lot data is JSON embedded in `self.__next_f.push(...)` payloads, not HTML markup. `find_json_value` extracts a bracket-balanced fragment by key (`initialLots`, `initialMeta`, `lot`).
+- Enrichment scripts write only into empty cells, or retry only rows whose status column isn't `ok`/`no_data` (`error: ...` gets retried). They leave a value empty rather than write a guess.
+- **Paid APIs:** TRONK (`tronk_valuation.py`, `tronk_mileage.py`) charges per request. Per-run caps live in `config.py` (`TRONK_MAX_PER_RUN`, `MILEAGE_MAX_PER_RUN`) and are the real budget guard. Don't raise them or remove confirmation prompts casually.
+- Mileage fallback used by the valuation scripts: lot card → TRONK reading extrapolated to today (`ANNUAL_MILEAGE_KM`) → `(current_year - year) * ANNUAL_MILEAGE_KM`.
+- Adding a new selection takes three edits: a `build_XXX` filter in `build_lot_selections.py`, a registration in its `BUILDERS`, and a matching `key` entry in `selections.py` (sheet name + digest texts).
+- `% below mkt` is computed in `build_lot_selections.py` from `autoru_price_low/high` vs `price_current`. Don't trust the old column value in `lots_current_month`.
+- Secrets are kept out of git (see `.gitignore`). The TRONK key, Telegram bot token, and `SPREADSHEET_ID` live in `local_secrets.py`, which `config.py` imports (template: `local_secrets.example.py`). Never hard-code keys into `config.py` or scripts. Also ignored: `service_account.json`, `telegraph_token.txt` (cached Telegraph token), and `browser_profile/` (the persistent Playwright Chromium profile).
