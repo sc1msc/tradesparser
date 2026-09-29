@@ -43,6 +43,7 @@ from google.oauth2.service_account import Credentials
 
 import config
 import selections
+import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SOURCE_SHEET = "lots_current_month"
@@ -94,9 +95,9 @@ def _to_number(value):
     '500000') замена ничего не меняет - проблема реально всплывает
     только на дробных значениях вроде "% below mkt".
     """
-    if not value:
+    if value is None or value == "":
         return None
-    cleaned = str(value).replace("%", "").replace(",", ".").strip()
+    cleaned = str(value).replace("%", "").replace(",", ".").replace(" ", "").replace(" ", "").strip()
     try:
         return float(cleaned)
     except ValueError:
@@ -149,11 +150,6 @@ def gap_percent(price_current, autoru_price_low, autoru_price_high):
     if market_mid <= 0:
         return None
     return (market_mid - price_current) / market_mid * 100
-
-
-def format_gap(gap):
-    """Число -> текст для колонки "% below mkt" ('12,3'); None -> ''."""
-    return f"{gap:.1f}".replace(".", ",") if gap is not None else ""
 
 
 def _compute_gap(row, header, cache):
@@ -283,9 +279,11 @@ def run():
             while len(row) <= gap_col_idx:
                 row.append("")
             gap = _compute_gap(row, header, cache)
-            row[gap_col_idx] = format_gap(gap)
+            row[gap_col_idx] = round(gap, 1) if gap is not None else ""
             out.append(row)
-        return out
+        # Строки прочитаны из листа строками - числа пишем числами
+        # (см. sheets_writer.NUMERIC_COLUMNS).
+        return sheets_writer.numify_rows(header, out)
 
     for item in selections.SELECTIONS:
         sheet_name = item["sheet"]

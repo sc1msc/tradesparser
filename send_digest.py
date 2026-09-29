@@ -40,11 +40,13 @@ MONTHS_RU = [
 
 
 def _fmt_price(value):
-    try:
-        n = int(float(value))
-    except (TypeError, ValueError):
+    # Разбор - тот же, что в подборках: десятичный разделитель в таблице -
+    # запятая ('355674,6'), int(float(...)) на нём падал и цена уходила в
+    # пост как есть.
+    n = build_lot_selections._to_number(value)
+    if n is None:
         return str(value)
-    return f"{n:,}".replace(",", " ") + " ₽"
+    return f"{int(round(n)):,}".replace(",", " ") + " ₽"
 
 
 def _lots_word(n):
@@ -104,9 +106,10 @@ def _apply_current_period(lots, now=None):
             if price != lot.get("price_current") or deadline != lot.get("applications_end"):
                 changed += 1
             lot["price_current"], lot["applications_end"] = price, deadline
-            lot["% below mkt"] = build_lot_selections.format_gap(build_lot_selections.gap_percent(
+            gap = build_lot_selections.gap_percent(
                 price, lot.get("autoru_price_low"), lot.get("autoru_price_high")
-            ))
+            )
+            lot["% below mkt"] = round(gap, 1) if gap is not None else ""
             _, _, period_no, periods_total = state
             lot["_has_next_period"] = period_no < periods_total
         try:
@@ -139,7 +142,7 @@ def _parse_percent(value):
     """Разбор '% below mkt' в число - тот же принцип, что и в
     build_lot_selections._to_number: десятичный разделитель - запятая,
     разделителя разрядов нет."""
-    if not value:
+    if value is None or value == "":  # 0 - это число, а не "нет оценки"
         return None
     cleaned = str(value).replace("%", "").replace(",", ".").strip()
     try:

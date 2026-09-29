@@ -25,6 +25,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 import config
+import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SHEET_NAME = "lots_processed"
@@ -315,6 +316,9 @@ def run():
         if not changed and not (missing_brand or missing_name) and missing_year:
             stats["year_only"] += 1
 
+    # Лист перезаписывается целиком из прочитанных СТРОК - без этого все
+    # числа стали бы текстом (см. sheets_writer.NUMERIC_COLUMNS).
+    sheets_writer.numify_rows(header, data_rows)
     out_rows = [header] + data_rows
     worksheet.update(range_name="A1", values=out_rows)
 
