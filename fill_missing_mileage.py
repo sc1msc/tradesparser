@@ -32,10 +32,16 @@ evaluate_tronk.py (полная оценка цены - там своя, бол�
     считается "актуальным") и формат даты берём напрямую из
     build_lots_current_month.py - чтобы не дублировать число и не
     разъехаться с ним, если там его когда-нибудь поменяют.
+    У публичного предложения applications_end в "lots" - окончательный
+    дедлайн (конец последнего периода), поэтому для него берётся конец
+    ТЕКУЩЕГО периода из bidding_periods (bidding_schedule.py) - тот же,
+    по которому лот попадёт в lots_current_month. Иначе лот с длинным
+    графиком попадал бы в срез и оценку Авто.ру, но без пробега.
     Лист "lots" в полтора раза больше lots_current_month за счёт лотов,
     чьи торги ещё нескоро или уже прошли - платить за их пробег нет
     смысла: либо ещё рано (доберёмся, когда лот станет актуален), либо
     уже поздно (лот больше никто не оценивает).
+  - пропускаем лоты, у которых торги уже завершены/отменены (status)
   - пропускаем те, у кого mileage_km уже заполнен (неважно, откуда)
   - пропускаем те, у кого mileage_probeg_status уже "ok" или "no_data"
     (уже проверяли этот VIN - повторный платный запрос ничего не даст)
@@ -46,6 +52,7 @@ evaluate_tronk.py (полная оценка цены - там своя, бол�
 import datetime
 import time
 
+import bidding_schedule
 import build_lots_current_month as blcm
 import config
 import sheets_writer
@@ -75,8 +82,13 @@ def select_candidates(rows, now=None):
         vin = (r.get("vin") or "").strip()
         if not vin:
             continue
-        if not _is_current(r.get("applications_end"), now):
+        _, deadline = bidding_schedule.effective_price_and_deadline(
+            r.get("price_current"), r.get("applications_end"), r.get("bidding_periods"), now
+        )
+        if not _is_current(deadline, now):
             continue  # торги ещё нескоро или уже прошли - платить рано/поздно
+        if bidding_schedule.is_closed_status(r.get("status")):
+            continue  # торги завершены/отменены - в lots_current_month не попадёт
         if (r.get("mileage_km") or "").strip():
             continue  # пробег уже есть - неважно, откуда взялся
         status = (r.get("mileage_probeg_status") or "").strip()

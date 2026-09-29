@@ -14,6 +14,8 @@ BeautifulSoup - вместо этого из страницы вытаскива
     data = parse_lot_html(html_text, url="https://.../lot/7168718")
 """
 import re
+
+import bidding_schedule
 from nextjs_json import extract_combined_payload, find_json_value
 
 # Госномер РФ: буква + 3 цифры + 2 буквы + 2-3 цифры региона.
@@ -118,7 +120,12 @@ def parse_lot_html(html, url=None):
         "trade_section": trade_section,
         "platform": platform,
         "applications_start": applications_start,
+        # Для публичного предложения applications_end - конец ПОСЛЕДНЕГО
+        # периода (окончание торгов целиком), а цена по периодам снижается -
+        # весь график сохраняем, текущий период считается по времени
+        # (см. bidding_schedule.py). У аукционов графика нет - пустая строка.
         "applications_end": applications_end,
+        "bidding_periods": bidding_schedule.pack_periods(lot.get("bidding_periods")),
         "bidding_start": bidding_start,
         "organizer_name": organizer.get("name") or lot.get("conact_name"),
         "organizer_phone": organizer.get("phone") or lot.get("conact_phone"),

@@ -16,13 +16,17 @@ build_lots_missing_info.py и остальных build_*.py) - "lots_current_mon
   5) lots_polo_rio_solyaris- модель Polo/Rio/Solaris, year >= текущий-10
 
 Цена берётся из price_current (текущая цена торгов, а не стартовая) -
-так актуальнее для "интересности" прямо сейчас.
+так актуальнее для "интересности" прямо сейчас. У публичного предложения
+это уже цена текущего периода графика на момент сборки lots_processed
+(см. bidding_schedule.py); send_digest.py пересчитывает её ещё раз в
+момент отправки.
 
 Разрыв от рынка ("% below mkt") СЧИТАЕМ САМИ - по autoru_price_low/high
-и price_current (см. _compute_gap, формула - lot_metrics.gap_percent). Раньше этот процент читался из
-одноимённой колонки в lots_current_month, но выяснилось, что туда просто
-руками вписано число - оно никак не связано с реальными autoru_price_*
-и не обновляется, когда лот переоценивают. При записи выходных срезов
+и price_current (см. _compute_gap, формула - lot_metrics.gap_percent).
+Раньше этот процент читался из одноимённой колонки в lots_current_month,
+но выяснилось, что туда просто руками вписано число - оно никак не
+связано с реальными autoru_price_* и не обновляется, когда лот
+переоценивают. При записи выходных срезов
 эта же колонка перезаписывается посчитанным значением (см. _write_gap),
 чтобы send_digest.py показывал верный разрыв, а не то, что там раньше
 случайно оказалось.
@@ -118,10 +122,15 @@ def _get(row, header, col_idx_cache, name):
     return row[idx]
 
 
+def format_gap(gap):
+    """Число -> текст для колонки "% below mkt" ('12,3'); None -> ''."""
+    return f"{gap:.1f}".replace(".", ",") if gap is not None else ""
+
+
 def _compute_gap(row, header, cache):
-    """% below mkt = (market_mid - price_current) / market_mid * 100.
-    None, если price_current или вилка Авто.ру не заполнены (лот ещё не
-    оценён или market_mid <= 0 - защита от деления на ноль/мусора)."""
+    """% below mkt по строке листа. Формула - lot_metrics.gap_percent
+    (одна на дайджест и мини-апп); None, если цена или вилка Авто.ру
+    не заполнены."""
     return lot_metrics.gap_percent(
         _to_float(_get(row, header, cache, "price_current")),
         _to_float(_get(row, header, cache, "autoru_price_low")),
@@ -248,7 +257,7 @@ def run():
             while len(row) <= gap_col_idx:
                 row.append("")
             gap = _compute_gap(row, header, cache)
-            row[gap_col_idx] = f"{gap:.1f}".replace(".", ",") if gap is not None else ""
+            row[gap_col_idx] = format_gap(gap)
             out.append(row)
         return out
 

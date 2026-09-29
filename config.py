@@ -45,6 +45,12 @@ EXPIRED_LOT_DAYS = 3
 DELAY_BETWEEN_LOT_REQUESTS = 2.0
 DELAY_BETWEEN_SEARCH_PAGES = 2.0
 
+# --- Обновление статуса и графика публичных предложений (main.py, шаг 4) ---
+# Запросы к сайту бесплатные, но каждый - DELAY_BETWEEN_LOT_REQUESTS секунд
+# (200 лотов ~ 7 минут). Не влезшие в лимит проверяются в следующий запуск
+# (первыми - те, кого дольше всего не проверяли).
+PUBLIC_OFFER_REFRESH_MAX_PER_RUN = 300
+
 # --- Доливка photo_url для уже собранных лотов (backfill_photo_urls.py) ---
 PHOTO_BACKFILL_MAX_PER_RUN = 200
 
