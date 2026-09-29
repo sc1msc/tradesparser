@@ -22,13 +22,16 @@ autoru_price_low/high - см. evaluate_autoru_browser.py). Если оценка
 пока сознательно не делаем, см. TODO.md). А у "публичного предложения"
 торги могут закончиться в любом периоде графика - как только пришла
 заявка. Поэтому карточки ИДУЩИХ публичных предложений (статус в листе ещё
-не "завершены/отменены", окончательный дедлайн не прошёл) читаются заново
-на каждом запуске и в "lots" обновляются status, price_current,
+не "завершены/отменены", окончательный дедлайн не прошёл) перечитываются
+и в "lots" обновляются status, price_current,
 applications_end и bidding_periods. Сам текущий период (цена и дедлайн)
 здесь НЕ пишется - он вычисляется по времени из графика при сборке
 lots_processed и отправке дайджеста (см. bidding_schedule.py): иначе
 цена в листе снова устаревала бы между запусками. Запросы к сайту
-бесплатные, но их десятки-сотни - лимит в config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN.
+бесплатные, но их десятки-сотни - поэтому недавно проверенные лоты
+пропускаются (см. _status_is_fresh: после ночного обновления агрегатора
+или раз в config.PUBLIC_OFFER_REFRESH_HOURS часов), а за один запуск -
+не больше config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN.
 
 Запуск:  python main.py
 """
@@ -52,10 +55,29 @@ HEADERS = {
 }
 
 
+# Сайт периодически не отвечает вовремя ("Read timed out") - обычно это
+# разовый сбой, и повтор через несколько секунд проходит. Повторяем только
+# сетевые сбои и ответы 429/5xx; 404 и прочие 4xx - сразу ошибка (повтор
+# ничего не изменит). Таймаут раздельный: (подключение, чтение).
+FETCH_TIMEOUT = (10, 20)
+FETCH_RETRY_PAUSES = (5, 15)  # паузы перед 2-й и 3-й попыткой, секунд
+
+
 def fetch(url, session):
-    resp = session.get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-    return resp.text
+    for attempt in range(len(FETCH_RETRY_PAUSES) + 1):
+        try:
+            resp = session.get(url, headers=HEADERS, timeout=FETCH_TIMEOUT)
+            if resp.status_code == 429 or resp.status_code >= 500:
+                resp.raise_for_status()
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+            if attempt == len(FETCH_RETRY_PAUSES):
+                raise
+            pause = FETCH_RETRY_PAUSES[attempt]
+            print(f"    сбой загрузки ({type(e).__name__}), повтор через {pause} с...")
+            time.sleep(pause)
+            continue
+        resp.raise_for_status()
+        return resp.text
 
 
 def _final_deadline_passed(applications_end, now):
@@ -69,6 +91,36 @@ def _final_deadline_passed(applications_end, now):
     return end_dt < now
 
 
+def _last_aggregator_update(now):
+    """Момент последнего ночного обновления агрегатора (сегодня или вчера
+    в config.AGGREGATOR_NIGHTLY_UPDATE)."""
+    hh, mm = map(int, config.AGGREGATOR_NIGHTLY_UPDATE.split(":"))
+    today = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    return today if today <= now else today - datetime.timedelta(days=1)
+
+
+def _status_is_fresh(status_checked_at, now):
+    """
+    Карточку можно не перечитывать, если после прошлой проверки агрегатор
+    ещё не делал ночного обновления И прошло меньше
+    config.PUBLIC_OFFER_REFRESH_HOURS часов.
+
+    Почему так: по выборке карточек (поле updated_at) агрегатор обновляет
+    лоты в основном одной ночной пачкой около 04:00-04:20, а днём - лишь
+    отдельные лоты (как раз закрывшиеся торги). Значит, первый запуск
+    после ночи должен перечитать всё, а повторные запуски в тот же день -
+    только если с прошлой проверки прошло много часов (ловим дневные
+    закрытия). Пустая/нераспознанная дата - не свежая.
+    """
+    try:
+        checked = datetime.datetime.fromisoformat(status_checked_at)
+    except (ValueError, TypeError):
+        return False
+    if checked < _last_aggregator_update(now):
+        return False
+    return now - checked < datetime.timedelta(hours=config.PUBLIC_OFFER_REFRESH_HOURS)
+
+
 def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
     """
     Перечитывает карточки идущих публичных предложений и обновляет в
@@ -78,6 +130,7 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
     """
     now = datetime.datetime.now()
     candidates = []
+    fresh = 0
     for r in sheets_writer.read_rows(worksheet):
         lot_id = r.get("lot_id")
         if not lot_id or lot_id in skip_lot_ids or not r.get("url"):
@@ -88,10 +141,14 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
             continue  # торги уже закрыты - статус больше не поменяется
         if _final_deadline_passed(r.get("applications_end"), now):
             continue  # график кончился - лот скоро удалит remove_expired_lots
+        if _status_is_fresh(r.get("status_checked_at"), now):
+            fresh += 1
+            continue
         candidates.append(r)
 
     limit = config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN
-    print(f"Идущих публичных предложений в таблице: {len(candidates)}")
+    print(f"Идущих публичных предложений к проверке: {len(candidates)} "
+          f"(ещё {fresh} проверены недавно - пропускаю)")
     if len(candidates) > limit:
         # Первыми - те, у кого самые давние проверки (пустая дата - самые первые).
         candidates.sort(key=lambda r: r.get("status_checked_at") or "")
