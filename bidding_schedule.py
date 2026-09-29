@@ -24,9 +24,14 @@ price, is_current). А в карточке "сверху" лежат тольк�
 4-м периоде, хотя по времени идёт уже 5-й), а для идущих торгов сайт
 может переключить его позже, чем наступил bid_end.
 
-applications_end в самом листе "lots" остаётся окончательным дедлайном
-(stages.end_bid_time) - на нём держится remove_expired_lots() в
-sheets_writer.py: лот нельзя удалять, пока не прошёл последний период.
+applications_end в самом листе "lots" остаётся окончательным дедлайном -
+на нём держится remove_expired_lots() в sheets_writer.py: лот нельзя
+удалять, пока не прошёл последний период. Окончательный дедлайн - это
+позднейшее из stages.end_bid_time и конца графика (final_deadline):
+на сайте они не всегда совпадают. Бывает, что график длиннее (лот 7131354:
+end_bid_time 25.09, а периоды идут до 05.10 - по одному end_bid_time лот
+удалился бы посреди приёма заявок), бывает - короче (лот 6847295: график
+кончился 17.09, а заявки принимаются до 01.10).
 Цену и дедлайн ТЕКУЩЕГО периода подставляет build_lots_processed.py (и
 ещё раз - send_digest.py в момент отправки).
 
@@ -87,6 +92,23 @@ def unpack_periods(text):
         return []
 
 
+def final_deadline(applications_end, periods_text):
+    """
+    Окончание торгов целиком: позднейшее из applications_end
+    (stages.end_bid_time) и конца последнего периода графика. Строка в
+    формате листа; без графика - applications_end как есть.
+    """
+    periods = unpack_periods(periods_text)
+    if not periods:
+        return applications_end
+    graph_end = periods[-1][0]
+    try:
+        end = datetime.datetime.strptime(applications_end, DATE_FORMAT)
+    except (ValueError, TypeError):
+        return graph_end.strftime(DATE_FORMAT)
+    return max(end, graph_end).strftime(DATE_FORMAT)
+
+
 def current_period(periods_text, now=None):
     """
     Текущий период графика на момент now:
@@ -113,11 +135,20 @@ def effective_price_and_deadline(price_current, applications_end, periods_text, 
     отдаёт график с нулями во всех периодах, когда цены периодов не знает
     (лоты 6951893, 7152131, 7216669) - иначе в подборки шла цена 0 и
     "ниже рынка на 100%".
+
+    Если весь график уже прошёл, а окончательный дедлайн (final_deadline)
+    ещё нет - заявки принимаются по цене с сайта (price_current) до
+    окончательного дедлайна, а не "лот истёк по последнему периоду".
     """
-    state = current_period(periods_text, now)
-    if state is None:
+    periods = unpack_periods(periods_text)
+    if not periods:
         return price_current, applications_end
-    price, deadline, _, _ = state
+    now = now or datetime.datetime.now()
+    upcoming = [(bid_end, price) for bid_end, price in periods if bid_end > now]
+    if not upcoming:
+        return price_current, final_deadline(applications_end, periods_text)
+    bid_end, price = upcoming[0]
+    deadline = bid_end.strftime(DATE_FORMAT)
     if not isinstance(price, (int, float)) or price <= 0:
         return price_current, deadline
     if isinstance(price, float) and price.is_integer():

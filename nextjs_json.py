@@ -13,6 +13,8 @@
 Нам не нужно разбирать это построчно - достаточно склеить все строки-payload
 в один большой текст и найти в нём нужный JSON-объект/массив по ключу
 (например "lot":{...} или "initialLots":[...]) с помощью подсчёта скобок.
+Длинные строковые поля внутри объекта бывают ссылками на отдельный
+текстовый чанк - их разворачивает resolve_text_ref().
 """
 import re
 import json
@@ -84,3 +86,33 @@ def find_json_value(text, key, kind="object", start=0):
         return json.loads(raw), idx + len(marker)
     except json.JSONDecodeError:
         return None, -1
+
+
+# Длинные строки (название лота, описание, условия) Next.js кладёт не в сам
+# объект, а отдельным текстовым чанком "<id>:T<длина в байтах, hex>,<текст>",
+# а в объекте оставляет ссылку "$<id>" (например "title": "$80"). Без
+# разворачивания в таблицу попадало буквально "$7c" - у лота пропадали
+# марка/модель из названия, слова-признаки повреждений и то, что лот
+# состоит из нескольких машин.
+TEXT_REF_RE = re.compile(r"\$([0-9a-f]+)")
+
+
+def is_text_ref(value):
+    return isinstance(value, str) and TEXT_REF_RE.fullmatch(value.strip()) is not None
+
+
+def resolve_text_ref(payload, value):
+    """
+    "$80" -> текст чанка 80 из payload. Не ссылка - значение как есть.
+    Ссылка, для которой текстового чанка нет, - None: лучше пустая ячейка,
+    чем "$80" в названии лота.
+    """
+    if not is_text_ref(value):
+        return value
+    ref_id = TEXT_REF_RE.fullmatch(value.strip()).group(1)
+    m = re.search(r"(?<![0-9a-f])" + ref_id + r":T([0-9a-f]+),", payload)
+    if not m:
+        return None
+    length = int(m.group(1), 16)  # длина в БАЙТАХ utf-8, а не в символах
+    chunk = payload[m.end():m.end() + length]  # символов не меньше, чем байт
+    return chunk.encode("utf-8")[:length].decode("utf-8", errors="ignore")

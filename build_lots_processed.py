@@ -52,6 +52,7 @@ from google.oauth2.service_account import Credentials
 
 import bidding_schedule
 import config
+import fill_missing_from_title
 import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -181,6 +182,11 @@ def run():
 
     out_rows_data.sort(key=lambda r: _date_sort_key(r, end_idx))
 
+    # Пустые brand/name/year - из текста title, прямо здесь, до записи.
+    # Раньше это был отдельный шаг после этого скрипта, и любой отдельный
+    # запуск build_lots_processed.py молча стирал его результат.
+    fill_stats = fill_missing_from_title.fill_rows(header, out_rows_data)
+
     # Числа - числами, а не текстом (см. sheets_writer.NUMERIC_COLUMNS).
     sheets_writer.numify_rows(header, out_rows_data)
     out_rows = [header] + out_rows_data
@@ -190,6 +196,9 @@ def run():
 
     print(f"Готово. Строк: {len(data_rows)}, год определён для {year_filled} из них.")
     print(f"Цена/дедлайн взяты из текущего периода графика (публичное предложение): {by_schedule}")
+    if fill_stats:
+        print("Доливка brand/name/year из title:")
+        fill_missing_from_title.print_stats(fill_stats)
     print(f"Лист '{TARGET_SHEET}' полностью пересобран.")
 
 
