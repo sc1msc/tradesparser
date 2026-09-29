@@ -69,6 +69,6 @@ Not in the pipeline (manual/side tools): `autodoc_decode.py` (VIN → Autodoc, w
 
 The Telegram Mini App "honestlot" for end users: a FastAPI + SQLite backend and a no-build vanilla JS frontend, both in one Docker image behind Caddy. See `miniapp/README.md`.
 - `lot_metrics.py` (repo root) holds the one `% below mkt` formula and the damage keywords. Both `build_lot_selections.py` and the backend import it, and the Docker image copies it. Don't duplicate the formula.
-- For public-offer lots, the sheet's `applications_end`/`price_current` are the last period's end and the first period's price (`main.py` never re-scrapes known lots). The backend picks the current period from `periods` at request time. Don't "fix" this by reading the sheet columns.
+- For public-offer lots, the sheet's `price_current`/`applications_end` are the current period as of the last sheet rebuild. The backend still picks the current period from `periods` at request time, because a period can change between daily imports. The sheet columns are only a fallback when there is no schedule.
 - Brand/model cleanup (aliases like VAZ→Lada, junk from title parsing) happens in `miniapp/backend/app/lots.py`, not in the sheet.
 - The frontend has no build step: bump `?v=` in `miniapp/frontend/index.html` after changing `app.js`/`style.css`.
