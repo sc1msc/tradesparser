@@ -16,7 +16,10 @@ build_lots_missing_info.py и остальных build_*.py) - "lots_current_mon
   5) lots_polo_rio_solyaris- модель Polo/Rio/Solaris, year >= текущий-10
 
 Цена берётся из price_current (текущая цена торгов, а не стартовая) -
-так актуальнее для "интересности" прямо сейчас.
+так актуальнее для "интересности" прямо сейчас. У публичного предложения
+это уже цена текущего периода графика на момент сборки lots_processed
+(см. bidding_schedule.py); send_digest.py пересчитывает её ещё раз в
+момент отправки.
 
 Разрыв от рынка ("% below mkt") СЧИТАЕМ САМИ - по autoru_price_low/high
 и price_current (см. _compute_gap). Раньше этот процент читался из
@@ -130,19 +133,35 @@ def _get(row, header, col_idx_cache, name):
     return row[idx]
 
 
-def _compute_gap(row, header, cache):
+def gap_percent(price_current, autoru_price_low, autoru_price_high):
     """% below mkt = (market_mid - price_current) / market_mid * 100.
-    None, если price_current или вилка Авто.ру не заполнены (лот ещё не
-    оценён или market_mid <= 0 - защита от деления на ноль/мусора)."""
-    price_current = _to_float(_get(row, header, cache, "price_current"))
-    low = _to_float(_get(row, header, cache, "autoru_price_low"))
-    high = _to_float(_get(row, header, cache, "autoru_price_high"))
+    Значения - как в листе (текст, запятая). None, если цена или вилка
+    Авто.ру не заполнены (лот ещё не оценён или market_mid <= 0 - защита
+    от деления на ноль/мусора). Отдельной функцией - её же зовёт
+    send_digest.py, когда пересчитывает цену публичного предложения на
+    момент отправки."""
+    price_current = _to_float(price_current)
+    low = _to_float(autoru_price_low)
+    high = _to_float(autoru_price_high)
     if price_current is None or low is None or high is None:
         return None
     market_mid = (low + high) / 2
     if market_mid <= 0:
         return None
     return (market_mid - price_current) / market_mid * 100
+
+
+def format_gap(gap):
+    """Число -> текст для колонки "% below mkt" ('12,3'); None -> ''."""
+    return f"{gap:.1f}".replace(".", ",") if gap is not None else ""
+
+
+def _compute_gap(row, header, cache):
+    return gap_percent(
+        _get(row, header, cache, "price_current"),
+        _get(row, header, cache, "autoru_price_low"),
+        _get(row, header, cache, "autoru_price_high"),
+    )
 
 
 def build_top_gap(header, data_rows, cache):
@@ -264,7 +283,7 @@ def run():
             while len(row) <= gap_col_idx:
                 row.append("")
             gap = _compute_gap(row, header, cache)
-            row[gap_col_idx] = f"{gap:.1f}".replace(".", ",") if gap is not None else ""
+            row[gap_col_idx] = format_gap(gap)
             out.append(row)
         return out
 

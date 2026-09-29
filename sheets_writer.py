@@ -39,6 +39,7 @@ COLUMNS = [
     "photo_url",
     "mileage_probeg_status", "mileage_probeg_date", "mileage_probeg_source",
     "mileage_probeg_checked_at", "mileage_probeg_km",
+    "bidding_periods", "status_checked_at",
 ]
 
 HEADER_ROW = 1
@@ -235,6 +236,34 @@ class SheetState:
                 "values": [[text]],
             })
 
+        if cell_updates:
+            self.worksheet.batch_update(cell_updates)
+        return row_num
+
+    def update_fields(self, lot_id, data):
+        """
+        Обновляет ТОЛЬКО переданные поля уже занесённого лота - одним
+        запросом к API. В отличие от upsert(), который пишет все COLUMNS
+        подряд и затёр бы пустыми строками всё, чего нет в data (оценки
+        TRONK/Auto.ru, пробег и т.д.). Нужен main.refresh_public_offers():
+        у публичных предложений обновляются статус, цена и график.
+        Шапку повторно не читаем - позиции колонок уже есть в self.col_idx.
+        """
+        row_num = self.lot_row.get(str(lot_id))
+        if row_num is None:
+            return None
+        cell_updates = []
+        for col, value in data.items():
+            col_num = self.col_idx.get(col)
+            if col_num is None:
+                continue
+            text = str(value if value is not None else "")
+            if col in ("price_start", "price_current"):
+                text = text.replace(".", ",")
+            cell_updates.append({
+                "range": f"{_col_letter(col_num)}{row_num}",
+                "values": [[text]],
+            })
         if cell_updates:
             self.worksheet.batch_update(cell_updates)
         return row_num

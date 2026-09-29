@@ -26,6 +26,19 @@ r"""
     bidding_start      <- P
     organizer_phone    <- R
     organizer_email    <- S
+    photo_url, status, bidding_periods <- по имени в шапке lots
+
+Цена и дедлайн ТЕКУЩЕГО периода у публичного предложения: если у лота
+заполнен bidding_periods (график снижения цены, см. bidding_schedule.py),
+то price_current и applications_end здесь НЕ копируются из lots, а
+вычисляются на момент сборки - цена и конец приёма заявок периода, который
+идёт сейчас. В самом lots applications_end - окончательный дедлайн
+(конец последнего периода), и его там менять нельзя: на нём держится
+удаление истёкших лотов. Всё, что дальше (lots_current_month с окном в 30
+дней, подборки, "% below mkt"), автоматически работает с текущим
+периодом. status и bidding_periods едут дальше как есть - первый нужен
+build_lots_current_month.py (отсев завершённых/отменённых торгов), второй -
+send_digest.py (пересчёт цены на момент отправки).
 
 После сборки строки сортируются по applications_end (конец приёма заявок)
 по возрастанию - ближайшие сверху. Это готовит почву для следующего шага:
@@ -37,6 +50,7 @@ import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
+import bidding_schedule
 import config
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -129,11 +143,20 @@ def run():
     # старых, стабильных по порядку колонок это ОК, но плодить новые
     # захардкоженные буквы для каждого нового поля - плохая идея.
     photo_idx = source_header.index("photo_url") if "photo_url" in source_header else None
+    status_idx = source_header.index("status") if "status" in source_header else None
+    periods_idx = source_header.index("bidding_periods") if "bidding_periods" in source_header else None
 
-    header = [name for _, name in COLUMN_MAP] + ["photo_url"]
+    header = [name for _, name in COLUMN_MAP] + ["photo_url", "status", "bidding_periods"]
+    price_idx = header.index("price_current")
+    end_idx = header.index("applications_end")
     out_rows_data = []
 
+    def by_idx(row, idx):
+        return row[idx] if idx is not None and idx < len(row) else ""
+
+    now = datetime.datetime.now()
     year_filled = 0
+    by_schedule = 0
     for row in data_rows:
         out_row = []
         for letter, name in COLUMN_MAP:
@@ -144,12 +167,18 @@ def run():
                     year_filled += 1
             else:
                 out_row.append(get_cell(row, letter))
-        photo_url = row[photo_idx] if photo_idx is not None and photo_idx < len(row) else ""
-        out_row.append(photo_url)
+        periods = by_idx(row, periods_idx)
+        out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods]
+        if periods:
+            price, deadline = bidding_schedule.effective_price_and_deadline(
+                out_row[price_idx], out_row[end_idx], periods, now
+            )
+            if deadline != out_row[end_idx] or price != out_row[price_idx]:
+                by_schedule += 1
+            out_row[price_idx], out_row[end_idx] = price, deadline
         out_rows_data.append(out_row)
 
-    sort_idx = header.index("applications_end")
-    out_rows_data.sort(key=lambda r: _date_sort_key(r, sort_idx))
+    out_rows_data.sort(key=lambda r: _date_sort_key(r, end_idx))
 
     out_rows = [header] + out_rows_data
 
@@ -157,6 +186,7 @@ def run():
     target.update(range_name="A1", values=out_rows)
 
     print(f"Готово. Строк: {len(data_rows)}, год определён для {year_filled} из них.")
+    print(f"Цена/дедлайн взяты из текущего периода графика (публичное предложение): {by_schedule}")
     print(f"Лист '{TARGET_SHEET}' полностью пересобран.")
 
 

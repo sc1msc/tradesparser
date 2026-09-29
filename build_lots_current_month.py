@@ -5,11 +5,19 @@ r"""
 осталось не больше месяца (и дедлайн ещё не прошёл - лоты с истёкшим
 applications_end в срез не попадают, они уже неактуальны).
 
+Для публичного предложения applications_end в lots_processed - уже
+конец приёма заявок ТЕКУЩЕГО периода графика, а не окончание торгов
+целиком (см. build_lots_processed.py / bidding_schedule.py). Поэтому в
+срез попадают и лоты с длинным графиком, если их текущий период
+заканчивается в пределах окна. Лоты, у которых торги уже завершены,
+отменены или приостановлены (status, обновляется в main.py), в срез не
+попадают, даже если по графику приём заявок ещё идёт.
+
 "Месяц" здесь - 30 дней от текущего момента (для простоты; если нужен
 именно календарный месяц - можно заменить на dateutil.relativedelta).
 
 При каждом запуске "lots_current_month" пересобирается заново из текущего
-состояния "lots_processed" (стандартные 15 колонок) - НО с сохранением
+состояния "lots_processed" (стандартные колонки, STANDARD_COLUMNS) - НО с сохранением
 "хвостовых" колонок за пределами этих 15 (например, estimated_mileage и
 результаты оценки Auto.ru, которые пишет evaluate_autoru_browser.py) -
 они переносятся по совпадению VIN из предыдущей версии листа. Без этого
@@ -21,6 +29,7 @@ import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
+import bidding_schedule
 import config
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -30,13 +39,15 @@ TARGET_SHEET = "lots_current_month"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 WINDOW_DAYS = 30
 
-# Эти 15 колонок собираются заново каждый раз из lots_processed. Всё, что
-# дописано ПОСЛЕ них другими скриптами (по имени колонки в шапке) -
-# переносится по VIN, а не пересчитывается здесь.
+# Эти колонки собираются заново каждый раз из lots_processed (должны
+# совпадать с его шапкой). Всё остальное, что дописано в лист другими
+# скриптами (по имени колонки в шапке) - переносится по VIN, а не
+# пересчитывается здесь.
 STANDARD_COLUMNS = [
     "brand", "name", "year", "vin", "plate", "url", "title", "mileage_km",
     "price_start", "price_current", "region", "applications_end",
     "bidding_start", "organizer_phone", "organizer_email", "photo_url",
+    "status", "bidding_periods",
 ]
 
 
@@ -55,10 +66,15 @@ def _read_existing_extra_columns(target):
         return [], {}
 
     header = values[0]
-    if len(header) <= len(STANDARD_COLUMNS):
+    # Хвостовые колонки ищем по ИМЕНИ, а не "всё правее N-й": когда в
+    # STANDARD_COLUMNS добавили status/bidding_periods, срез по позиции
+    # принял бы первые две оценочные колонки старого листа за стандартные
+    # и молча их потерял.
+    extra_positions = [(i, name) for i, name in enumerate(header)
+                       if name and name not in STANDARD_COLUMNS]
+    extra_names = [name for _, name in extra_positions]
+    if not extra_names:
         return [], {}  # хвостовых колонок ещё нет
-
-    extra_names = header[len(STANDARD_COLUMNS):]
     if "vin" not in header:
         return extra_names, {}  # не по чему сопоставлять - переносить нечего
     vin_idx = header.index("vin")
@@ -69,8 +85,7 @@ def _read_existing_extra_columns(target):
         if not vin:
             continue
         extras = {}
-        for i, name in enumerate(extra_names):
-            col_idx = len(STANDARD_COLUMNS) + i
+        for col_idx, name in extra_positions:
             extras[name] = row[col_idx] if col_idx < len(row) else ""
         by_vin[vin] = extras
     return extra_names, by_vin
@@ -129,6 +144,7 @@ def run():
         print('В шапке не нашёл колонку "applications_end".')
         return
     idx = header.index("applications_end")
+    status_idx = header.index("status") if "status" in header else None
 
     now = datetime.datetime.now()
     deadline = now + datetime.timedelta(days=WINDOW_DAYS)
@@ -137,7 +153,12 @@ def run():
     skipped_expired = 0
     skipped_far = 0
     skipped_unparsed = 0
+    skipped_closed = 0
     for row in data_rows:
+        status = row[status_idx] if status_idx is not None and status_idx < len(row) else ""
+        if bidding_schedule.is_closed_status(status):
+            skipped_closed += 1
+            continue
         value = row[idx] if idx < len(row) else ""
         try:
             end_dt = datetime.datetime.strptime(value, DATE_FORMAT)
@@ -152,7 +173,7 @@ def run():
             continue
         selected_rows.append(row)
 
-    # Сохраняем то, что дописали поверх стандартных 15 колонок другие
+    # Сохраняем то, что дописали поверх стандартных колонок другие
     # скрипты (estimated_mileage, оценка Auto.ru и т.д.) - до очистки листа.
     extra_names, extras_by_vin = _read_existing_extra_columns(target)
 
@@ -175,6 +196,7 @@ def run():
     print(f"  пропущено (дедлайн уже прошёл): {skipped_expired}")
     print(f"  пропущено (дедлайн дальше {WINDOW_DAYS} дн.): {skipped_far}")
     print(f"  пропущено (дата не распозналась): {skipped_unparsed}")
+    print(f"  пропущено (торги завершены/отменены/приостановлены): {skipped_closed}")
     if extra_names:
         print(f"Перенесено «хвостовых» колонок: {extra_names}, для {carried_over} из {len(selected_rows)} строк совпал VIN.")
     print(f"Лист '{TARGET_SHEET}' полностью пересобран.")

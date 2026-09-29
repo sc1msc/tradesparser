@@ -9,6 +9,13 @@ Telegraph (см. telegraph_publish.py).
 фильтруем). Какую подборку слать - спрашивается в начале запуска; список
 подборок и их метаданные (лист/заголовок/вступление) - в selections.py.
 
+Цена и дедлайн публичного предложения пересчитываются В МОМЕНТ ОТПРАВКИ
+(см. _apply_current_period): подборки собираются заранее, а цена по
+графику падает ступенями - если между сборкой и отправкой сменился
+период, в канал ушла бы вчерашняя цена, вчерашний "% below mkt" и уже
+прошедший дедлайн. Лоты, у которых дедлайн к моменту отправки прошёл
+(у публичного предложения - закончился весь график), в дайджест не идут.
+
 Запуск вручную:  python send_digest.py
 """
 import datetime
@@ -18,6 +25,8 @@ import gspread
 import requests
 from google.oauth2.service_account import Credentials
 
+import bidding_schedule
+import build_lot_selections
 import config
 import selections
 import telegraph_publish
@@ -74,6 +83,58 @@ def _load_lots(sheet_name):
     return [_row_dict(header, row) for row in data_rows]
 
 
+def _apply_current_period(lots, now=None):
+    """
+    Для лотов с графиком (bidding_periods) - подставляет цену и дедлайн
+    периода, который идёт СЕЙЧАС, и пересчитывает "% below mkt" по той же
+    формуле, что build_lot_selections.py. Выкидывает лоты с прошедшим
+    дедлайном и заново сортирует по выгодности (все подборки отсортированы
+    по "% below mkt", а после смены цены порядок мог поменяться).
+    """
+    now = now or datetime.datetime.now()
+    changed = 0
+    actual = []
+    for lot in lots:
+        periods = lot.get("bidding_periods")
+        state = bidding_schedule.current_period(periods, now)
+        if state is not None:
+            price, deadline = bidding_schedule.effective_price_and_deadline(
+                lot.get("price_current"), lot.get("applications_end"), periods, now
+            )
+            if price != lot.get("price_current") or deadline != lot.get("applications_end"):
+                changed += 1
+            lot["price_current"], lot["applications_end"] = price, deadline
+            lot["% below mkt"] = build_lot_selections.format_gap(build_lot_selections.gap_percent(
+                price, lot.get("autoru_price_low"), lot.get("autoru_price_high")
+            ))
+            _, _, period_no, periods_total = state
+            lot["_has_next_period"] = period_no < periods_total
+        try:
+            end_dt = datetime.datetime.strptime(lot.get("applications_end") or "", "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            end_dt = None
+        if end_dt is not None and end_dt < now:
+            continue
+        actual.append(lot)
+
+    dropped = len(lots) - len(actual)
+    if changed or dropped:
+        print(f"  публичные предложения: цена/дедлайн пересчитаны по графику у {changed}, "
+              f"убрано с прошедшим дедлайном: {dropped}")
+    def gap_key(lot):
+        gap = _parse_percent(lot.get("% below mkt"))
+        return gap if gap is not None else float("-inf")  # без оценки - в конец
+
+    actual.sort(key=gap_key, reverse=True)
+    return actual
+
+
+def _deadline_prefix(lot):
+    """У публичного предложения после дедлайна периода заявки принимаются
+    дальше, но уже по меньшей цене - "Заявки до" было бы неправдой."""
+    return "Цена действует до" if lot.get("_has_next_period") else "Заявки до"
+
+
 def _parse_percent(value):
     """Разбор '% below mkt' в число - тот же принцип, что и в
     build_lot_selections._to_number: десятичный разделитель - запятая,
@@ -123,7 +184,7 @@ def _build_telegraph_content(lots, digest_intro):
     ]
     for lot in lots:
         deadline_label, days_left = _fmt_deadline(lot.get("applications_end"))
-        deadline_text = f"Заявки до {deadline_label}"
+        deadline_text = f"{_deadline_prefix(lot)} {deadline_label}"
         if days_left is not None:
             deadline_text += f" ({days_left} дн.)" if days_left > 0 else " (сегодня)"
 
@@ -238,7 +299,7 @@ def _build_caption(lot):
         f"Рыночная оценка: {_fmt_price(lot.get('autoru_price_low'))}–{_fmt_price(lot.get('autoru_price_high'))}",
         f"<b>{gap_label}</b>{urgency}",
         "",
-        f"{region} · Заявки до {deadline_label}",
+        f"{region} · {_deadline_prefix(lot)} {deadline_label}",
         f'<a href="{url}">Смотреть лот →</a>',
     ]
     return "\n".join(lines)
@@ -286,9 +347,9 @@ def run():
     print(f"\nВыбрана подборка: {selection['title']} (лист '{sheet_name}')")
 
     print(f"Читаю '{sheet_name}'...")
-    lots = _load_lots(sheet_name)
+    lots = _apply_current_period(_load_lots(sheet_name))
     if not lots:
-        print(f"Лист '{sheet_name}' пуст, отправлять нечего.")
+        print(f"Лист '{sheet_name}' пуст (или у всех лотов дедлайн уже прошёл), отправлять нечего.")
         return
 
     full_lots = lots[: config.DIGEST_FULL_COUNT]
