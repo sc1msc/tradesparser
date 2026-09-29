@@ -2,8 +2,9 @@
 r"""
 Строит сразу несколько тематических срезов из "lots_current_month" -
 каждый на свой лист. Работает напрямую через gspread (та же схема, что у
-build_lots_missing_info.py и остальных build_*.py) - "lots_current_month"
-только читает, не трогает.
+build_lots_missing_info.py и остальных build_*.py). В самом
+"lots_current_month" пишет ровно одну колонку - "% below mkt" (см. ниже),
+остальное только читает.
 
 Срезы (см. SELECTIONS ниже) - каждый отсортирован по "% below mkt" по
 убыванию (см. _sort_by_gap), лоты без оценки Авто.ру - в конец: это
@@ -22,13 +23,18 @@ build_lots_missing_info.py и остальных build_*.py) - "lots_current_mon
 момент отправки.
 
 Разрыв от рынка ("% below mkt") СЧИТАЕМ САМИ - по autoru_price_low/high
-и price_current (см. _compute_gap). Раньше этот процент читался из
-одноимённой колонки в lots_current_month, но выяснилось, что туда просто
-руками вписано число - оно никак не связано с реальными autoru_price_*
-и не обновляется, когда лот переоценивают. При записи выходных срезов
-эта же колонка перезаписывается посчитанным значением (см. _write_gap),
-чтобы send_digest.py показывал верный разрыв, а не то, что там раньше
-случайно оказалось.
+и price_current (см. _compute_gap) и пишем:
+  - в колонку "% below mkt" листа lots_current_month - это основная
+    колонка, по которой лоты смотрят в самой таблице. Раньше ни один
+    скрипт её не заполнял: там лежали когда-то вписанные значения вида
+    "4%", не связанные с autoru_price_* и не обновлявшиеся при
+    переоценке, а у новых оценённых лотов было пусто. Пишется здесь, а не
+    в build_lots_current_month.py, потому что этот шаг идёт ПОСЛЕ оценки
+    Auto.ru (evaluate_autoru_browser.py) - значит, видит свежие оценки.
+    Формулу в таблице ставить бесполезно: build_lots_current_month.py
+    перезаписывает лист значениями на каждом прогоне;
+  - в ту же колонку выходных срезов (см. _write_gap) - по ней
+    send_digest.py подписывает лоты.
 
 % below mkt = (market_mid - price_current) / market_mid * 100, где
 market_mid = (autoru_price_low + autoru_price_high) / 2 - середина вилки
@@ -270,6 +276,22 @@ def run():
     else:
         gap_col_idx = len(header)
         header.append(PERCENT_BELOW_MKT_COL)
+
+    # "% below mkt" в самом lots_current_month - одним запросом, всей
+    # колонкой (числом, в процентных пунктах: 12.3 = 12,3%).
+    gaps = []
+    cache = {}
+    for row in data_rows:
+        gap = _compute_gap(row, header, cache)
+        gaps.append([round(gap, 1) if gap is not None else ""])
+    if gap_col_idx + 1 > source.col_count:
+        source.add_cols(gap_col_idx + 1 - source.col_count)
+    first = gspread.utils.rowcol_to_a1(1, gap_col_idx + 1)
+    last = gspread.utils.rowcol_to_a1(len(data_rows) + 1, gap_col_idx + 1)
+    source.update(range_name=f"{first}:{last}", values=[[PERCENT_BELOW_MKT_COL]] + gaps)
+    filled = sum(1 for g in gaps if g[0] != "")
+    print(f"{SOURCE_SHEET}: '% below mkt' посчитан для {filled} из {len(data_rows)} лотов "
+          f"(у остальных нет оценки Auto.ru или цены)")
 
     def _write_gap(rows):
         cache = {}
