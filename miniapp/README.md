@@ -7,8 +7,8 @@
 
 ```
 ПК (run_pipeline.py)                           Сервер (Yandex Cloud, одна ВМ)
-  ... шаги 1-7 -> лист lots_current_month
-  8) export_to_miniapp.py ── POST /api/import ──> api (FastAPI + SQLite) ──> Telegram Mini App
+  ... шаги 1-6 -> лист lots_current_month
+  7) export_to_miniapp.py ── POST /api/import ──> api (FastAPI + SQLite) ──> Telegram Mini App
        + карточки лотов с сайта                    caddy (HTTPS)
          (все фото, график периодов),
          кэш: miniapp_details_cache.json

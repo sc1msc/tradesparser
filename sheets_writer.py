@@ -14,6 +14,8 @@ import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
+import bidding_schedule
+
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Порядок колонок в таблице. Если добавите новое поле - допишите сюда,
@@ -169,6 +171,11 @@ def remove_expired_lots(worksheet, days):
     нераспознанной датой не трогает - лучше оставить лишний лот, чем
     случайно снести что-то из-за сбоя парсинга.
 
+    У публичного предложения дедлайн - позднейшее из applications_end и
+    конца графика (bidding_schedule.final_deadline): у строк, записанных
+    до того, как main.py стал так считать, в applications_end может
+    лежать stages.end_bid_time, который раньше конца графика.
+
     Возвращает количество удалённых строк.
     """
     values = worksheet.get_all_values()
@@ -178,6 +185,7 @@ def remove_expired_lots(worksheet, days):
     if "applications_end" not in header:
         return 0
     end_idx = header.index("applications_end")
+    periods_idx = header.index("bidding_periods") if "bidding_periods" in header else None
 
     cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
 
@@ -185,6 +193,8 @@ def remove_expired_lots(worksheet, days):
     for offset, row in enumerate(values[1:]):
         row_num = FIRST_DATA_ROW + offset
         raw = row[end_idx] if end_idx < len(row) else ""
+        if periods_idx is not None and periods_idx < len(row):
+            raw = bidding_schedule.final_deadline(raw, row[periods_idx]) or ""
         if not raw:
             continue
         try:

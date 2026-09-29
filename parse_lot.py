@@ -16,7 +16,7 @@ BeautifulSoup - вместо этого из страницы вытаскива
 import re
 
 import bidding_schedule
-from nextjs_json import extract_combined_payload, find_json_value
+from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
 
 # Госномер РФ: буква + 3 цифры + 2 буквы + 2-3 цифры региона.
 # Буквы - только те, что совпадают по начертанию с латиницей (ГОСТ Р 50577-93):
@@ -74,8 +74,10 @@ def parse_lot_html(html, url=None):
         # Возвращаем максимум того, что можно, чтобы пайплайн не падал целиком.
         return {"url": url, "lot_id": None, "title": None, "parse_error": "lot JSON not found"}
 
-    title = lot.get("title")
-    description = lot.get("information")  # текстовое описание тех. характеристик
+    # Длинные тексты бывают ссылкой "$80" на отдельный чанк - разворачиваем
+    # (см. nextjs_json.resolve_text_ref).
+    title = resolve_text_ref(payload, lot.get("title"))
+    description = resolve_text_ref(payload, lot.get("information"))  # тех. характеристики
     status = _get(lot, "status", "title")
     region = _get(lot, "region", "title")
     trade_kind = lot.get("trade_form")
@@ -85,6 +87,7 @@ def parse_lot_html(html, url=None):
     stages = lot.get("stages") or {}
     applications_start = stages.get("begin_bid_time")
     applications_end = stages.get("end_bid_time")
+    bidding_periods = bidding_schedule.pack_periods(lot.get("bidding_periods"))
     bidding_start = stages.get("begin_offer_time") or lot.get("begin_offer_time")
 
     organizer = lot.get("organizer") or {}
@@ -120,12 +123,13 @@ def parse_lot_html(html, url=None):
         "trade_section": trade_section,
         "platform": platform,
         "applications_start": applications_start,
-        # Для публичного предложения applications_end - конец ПОСЛЕДНЕГО
-        # периода (окончание торгов целиком), а цена по периодам снижается -
-        # весь график сохраняем, текущий период считается по времени
-        # (см. bidding_schedule.py). У аукционов графика нет - пустая строка.
-        "applications_end": applications_end,
-        "bidding_periods": bidding_schedule.pack_periods(lot.get("bidding_periods")),
+        # Для публичного предложения applications_end - окончание торгов
+        # целиком: позднейшее из stages.end_bid_time и конца графика (они не
+        # всегда совпадают, см. bidding_schedule.final_deadline). Цена по
+        # периодам снижается - весь график сохраняем, текущий период
+        # считается по времени. У аукционов графика нет - пустая строка.
+        "applications_end": bidding_schedule.final_deadline(applications_end, bidding_periods),
+        "bidding_periods": bidding_periods,
         "bidding_start": bidding_start,
         "organizer_name": organizer.get("name") or lot.get("conact_name"),
         "organizer_phone": organizer.get("phone") or lot.get("conact_phone"),

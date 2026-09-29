@@ -7,6 +7,12 @@
   4) перечитывает карточки идущих публичных предложений и обновляет их
      статус и график снижения цены (refresh_public_offers, см. ниже)
 
+Новый лот, у которого приём заявок уже закончился, в таблицу не
+заносится: сайт держит часть таких лотов в "активной" выдаче неделями
+(лот 7215092 - дедлайн 22.09, а в выдаче "Торги объявлены"), и они
+крутились по кругу: remove_expired_lots удалял, следующий же обход
+поиска заносил заново.
+
 Раньше здесь же (шаг 3) была оценка через Авито по requests
 (avito_valuation.make_session/resolve_vin/get_price) - убрана: при 429 от
 Авито ретраи там растягиваются до ~4 минут НА ЛОТ (backoff 8s x 2^n x 5
@@ -33,6 +39,11 @@ lots_processed и отправке дайджеста (см. bidding_schedule.py
 или раз в config.PUBLIC_OFFER_REFRESH_HOURS часов), а за один запуск -
 не больше config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN.
 
+Тем же шагом перечитываются карточки лотов (любой формы торгов), у которых
+вместо названия или описания в листе лежит ссылка вида "$7c" - так их
+записывал parse_lot.py до того, как научился разворачивать длинные тексты
+(nextjs_json.resolve_text_ref). У них обновляются ещё title и description.
+
 Запуск:  python main.py
 """
 import time
@@ -41,6 +52,7 @@ import requests
 
 import bidding_schedule
 import config
+import nextjs_json
 import parse_search
 import parse_lot
 import sheets_writer
@@ -80,12 +92,14 @@ def fetch(url, session):
         return resp.text
 
 
-def _final_deadline_passed(applications_end, now):
-    """applications_end в листе "lots" - окончательный дедлайн (конец
-    последнего периода). Нераспознанная дата - считаем, что не прошёл:
-    лучше лишний раз перечитать карточку, чем пропустить лот."""
+def _final_deadline_passed(applications_end, periods_text, now):
+    """Окончательный дедлайн - позднейшее из applications_end и конца
+    графика (bidding_schedule.final_deadline). Нераспознанная дата -
+    считаем, что не прошёл: лучше лишний раз перечитать карточку, чем
+    пропустить лот."""
     try:
-        end_dt = datetime.datetime.strptime(applications_end, bidding_schedule.DATE_FORMAT)
+        end_dt = datetime.datetime.strptime(
+            bidding_schedule.final_deadline(applications_end, periods_text), bidding_schedule.DATE_FORMAT)
     except (ValueError, TypeError):
         return False
     return end_dt < now
@@ -125,6 +139,8 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
     """
     Перечитывает карточки идущих публичных предложений и обновляет в
     "lots" статус, текущую цену сайта, окончательный дедлайн и график.
+    Заодно - карточки лотов со ссылкой "$7c" вместо названия/описания
+    (см. докстринг модуля): им обновляет и title/description.
     skip_lot_ids - лоты, только что занесённые в этом же запуске (их
     карточка уже свежая). Возвращает (проверено, закрылось).
     """
@@ -135,23 +151,26 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
         lot_id = r.get("lot_id")
         if not lot_id or lot_id in skip_lot_ids or not r.get("url"):
             continue
-        if not bidding_schedule.is_public_offer(r.get("trade_kind")):
+        r["_broken_text"] = nextjs_json.is_text_ref(r.get("title")) or nextjs_json.is_text_ref(r.get("description"))
+        if not (r["_broken_text"] or bidding_schedule.is_public_offer(r.get("trade_kind"))):
             continue
         if bidding_schedule.is_closed_status(r.get("status")):
             continue  # торги уже закрыты - статус больше не поменяется
-        if _final_deadline_passed(r.get("applications_end"), now):
+        if _final_deadline_passed(r.get("applications_end"), r.get("bidding_periods"), now):
             continue  # график кончился - лот скоро удалит remove_expired_lots
-        if _status_is_fresh(r.get("status_checked_at"), now):
+        if not r["_broken_text"] and _status_is_fresh(r.get("status_checked_at"), now):
             fresh += 1
             continue
         candidates.append(r)
 
     limit = config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN
-    print(f"Идущих публичных предложений к проверке: {len(candidates)} "
-          f"(ещё {fresh} проверены недавно - пропускаю)")
+    broken = sum(1 for r in candidates if r["_broken_text"])
+    print(f"Лотов к проверке: {len(candidates)}, из них со ссылкой вместо названия: {broken} "
+          f"(ещё {fresh} публичных проверены недавно - пропускаю)")
+    # Первыми - лоты со ссылкой вместо названия, затем те, у кого самые
+    # давние проверки (пустая дата - самые первые).
+    candidates.sort(key=lambda r: (not r["_broken_text"], r.get("status_checked_at") or ""))
     if len(candidates) > limit:
-        # Первыми - те, у кого самые давние проверки (пустая дата - самые первые).
-        candidates.sort(key=lambda r: r.get("status_checked_at") or "")
         print(f"  проверю {limit} (config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN), "
               f"остальные {len(candidates) - limit} - в следующий запуск")
         candidates = candidates[:limit]
@@ -181,6 +200,9 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
         # Пустой дедлайн с сайта не затирает известный.
         if lot_data.get("applications_end"):
             updates["applications_end"] = lot_data["applications_end"]
+        if r["_broken_text"]:
+            updates["title"] = lot_data.get("title")
+            updates["description"] = lot_data.get("description")
         sheet_state.update_fields(lot_id, updates)
         checked += 1
 
@@ -237,6 +259,10 @@ def run():
                 continue
 
             lot_data = parse_lot.parse_lot_html(lot_html, url=lot_stub["url"])
+            if _final_deadline_passed(lot_data.get("applications_end"), lot_data.get("bidding_periods"),
+                                      datetime.datetime.now()):
+                print(f"    приём заявок закончился {lot_data.get('applications_end')} - не заношу")
+                continue
 
             # пробег: сначала то, что нашли в самой карточке лота,
             # иначе - то, что удалось вытащить из заголовка/описания на странице поиска

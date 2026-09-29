@@ -16,8 +16,17 @@ r"""
 это осознанно: лучше не записывать ничего, чем записать наугад неверный
 бренд/модель.
 
-Работает напрямую с листом "lots_processed" через gspread (ищет колонки
-по именам в шапке) - "lots" не трогает вообще.
+Основной путь - fill_rows(): её вызывает build_lots_processed.py прямо
+при сборке листа, до записи. Раньше это был отдельный шаг пайплайна,
+который обязан был идти строго после build_lots_processed.py: любой
+отдельный запуск build_lots_processed.py молча стирал все доливки
+(29.09 так и случилось - год пропал у 679 строк вместо 110). Разбор
+текста ничего не скачивает и занимает доли секунды, поэтому отдельного
+шага больше нет.
+
+run() оставлен для ручного запуска: работает напрямую с листом
+"lots_processed" через gspread (ищет колонки по именам в шапке) - "lots"
+не трогает вообще.
 """
 import re
 
@@ -250,24 +259,15 @@ def extract_brand_model(title):
     return None, None, None
 
 
-def run():
-    creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    client = gspread.authorize(creds)
-    worksheet = client.open_by_key(config.SPREADSHEET_ID).worksheet(SHEET_NAME)
-
-    values = worksheet.get_all_values()
-    if not values:
-        print(f"Лист '{SHEET_NAME}' пуст.")
-        return
-
-    header = values[0]
-    data_rows = values[1:]
-
-    required = ["brand", "name", "year", "title"]
-    for field in required:
+def fill_rows(header, data_rows):
+    """
+    Дописывает в строки (на месте) пустые brand/name/year из title.
+    Возвращает статистику или None, если в шапке нет нужных колонок.
+    """
+    for field in ("brand", "name", "year", "title"):
         if field not in header:
             print(f'В шапке не нашёл колонку "{field}".')
-            return
+            return None
 
     brand_idx = header.index("brand")
     name_idx = header.index("name")
@@ -281,15 +281,15 @@ def run():
         while len(row) < len(header):
             row.append("")
 
-        missing_brand = not row[brand_idx].strip()
-        missing_name = not row[name_idx].strip()
-        missing_year = not row[year_idx].strip()
+        missing_brand = not str(row[brand_idx]).strip()
+        missing_name = not str(row[name_idx]).strip()
+        missing_year = not str(row[year_idx]).strip()
 
         if not (missing_brand or missing_name or missing_year):
             stats["untouched"] += 1
             continue
 
-        title = row[title_idx]
+        title = str(row[title_idx])
         changed = False
 
         if missing_year:
@@ -316,6 +316,32 @@ def run():
         if not changed and not (missing_brand or missing_name) and missing_year:
             stats["year_only"] += 1
 
+    return stats
+
+
+def print_stats(stats):
+    print(f"  Найдено по явным лейблам (марка:/модель:): {stats['labeled']}")
+    print(f"  Найдено позиционной эвристикой: {stats['positional']}")
+    print(f"  Не распознано ни одним методом (бренд/модель): {stats['unresolved']}")
+    print(f"  Строк без пропусков (не трогали): {stats['untouched']}")
+
+
+def run():
+    creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    client = gspread.authorize(creds)
+    worksheet = client.open_by_key(config.SPREADSHEET_ID).worksheet(SHEET_NAME)
+
+    values = worksheet.get_all_values()
+    if not values:
+        print(f"Лист '{SHEET_NAME}' пуст.")
+        return
+
+    header = values[0]
+    data_rows = values[1:]
+    stats = fill_rows(header, data_rows)
+    if stats is None:
+        return
+
     # Лист перезаписывается целиком из прочитанных СТРОК - без этого все
     # числа стали бы текстом (см. sheets_writer.NUMERIC_COLUMNS).
     sheets_writer.numify_rows(header, data_rows)
@@ -323,10 +349,7 @@ def run():
     worksheet.update(range_name="A1", values=out_rows)
 
     print("Готово.")
-    print(f"  Найдено по явным лейблам (марка:/модель:): {stats['labeled']}")
-    print(f"  Найдено позиционной эвристикой: {stats['positional']}")
-    print(f"  Не распознано ни одним методом (бренд/модель): {stats['unresolved']}")
-    print(f"  Строк без пропусков (не трогали): {stats['untouched']}")
+    print_stats(stats)
 
 
 if __name__ == "__main__":

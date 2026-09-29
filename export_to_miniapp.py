@@ -43,7 +43,7 @@ from google.oauth2.service_account import Credentials
 
 import config
 import main
-from nextjs_json import extract_combined_payload, find_json_value
+from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SOURCE_SHEET = "lots_current_month"
@@ -87,7 +87,8 @@ def _title(obj, key):
 def fetch_details(url, session):
     """Карточка лота -> то, что нужно мини-аппу и чего нет в таблице."""
     html = main.fetch(url, session)
-    lot, _ = find_json_value(extract_combined_payload(html), "lot", kind="object")
+    payload = extract_combined_payload(html)
+    lot, _ = find_json_value(payload, "lot", kind="object")
     if lot is None:
         raise ValueError("на странице не найден JSON лота")
     photos = []
@@ -113,7 +114,8 @@ def fetch_details(url, session):
         "is_public_offer": bool(periods) or "публичн" in trade_form.lower() or lot.get("trade_form_id") == 5,
         "status": _title(lot, "status"),
         "platform": _title(lot, "marketplace"),
-        "description": lot.get("information"),
+        # Длинное описание бывает ссылкой "$81" на отдельный чанк (nextjs_json.resolve_text_ref).
+        "description": resolve_text_ref(payload, lot.get("information")),
         "applications_end": stages.get("end_bid_time"),
         "fetched_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
