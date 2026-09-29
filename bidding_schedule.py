@@ -109,13 +109,16 @@ def effective_price_and_deadline(price_current, applications_end, periods_text, 
     предложения с графиком - текущего периода, иначе - как в листе.
     Цена возвращается в формате листа (десятичный разделитель - запятая,
     как пишет sheets_writer.SheetState.upsert). Если у периода цена не
-    указана - остаётся price_current.
+    указана - остаётся price_current. Цена 0 - тоже "не указана": сайт
+    отдаёт график с нулями во всех периодах, когда цены периодов не знает
+    (лоты 6951893, 7152131, 7216669) - иначе в подборки шла цена 0 и
+    "ниже рынка на 100%".
     """
     state = current_period(periods_text, now)
     if state is None:
         return price_current, applications_end
     price, deadline, _, _ = state
-    if price is None:
+    if not isinstance(price, (int, float)) or price <= 0:
         return price_current, deadline
     if isinstance(price, float) and price.is_integer():
         price = int(price)

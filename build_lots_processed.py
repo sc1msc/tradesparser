@@ -52,6 +52,7 @@ from google.oauth2.service_account import Credentials
 
 import bidding_schedule
 import config
+import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SOURCE_SHEET = "lots"
@@ -180,6 +181,8 @@ def run():
 
     out_rows_data.sort(key=lambda r: _date_sort_key(r, end_idx))
 
+    # Числа - числами, а не текстом (см. sheets_writer.NUMERIC_COLUMNS).
+    sheets_writer.numify_rows(header, out_rows_data)
     out_rows = [header] + out_rows_data
 
     target.clear()

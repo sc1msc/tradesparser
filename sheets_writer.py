@@ -45,6 +45,63 @@ COLUMNS = [
 HEADER_ROW = 1
 FIRST_DATA_ROW = 2
 
+# Колонки, в которых в ячейке должно лежать ЧИСЛО, а не текст - на всех
+# листах (lots, lots_processed, lots_current_month, подборки).
+#
+# Почему это вообще надо делать руками: gspread 6 пишет с raw=True
+# (valueInputOption=RAW) - Python-строка "450000" ложится в ячейку ТЕКСТОМ,
+# число - числом. А все пересборки (build_lots_processed.py,
+# fill_missing_from_title.py, build_lots_current_month.py,
+# build_lot_selections.py) читают лист через get_all_values() - то есть
+# строками - и пишут обратно. Итог: каждая пересборка превращала числа в
+# текст, в том числе оценки Auto.ru, которые evaluate_autoru_browser.py
+# пишет числами. Текст в числовой колонке ломает сортировку/фильтры и
+# формулы в самой таблице.
+#
+# USER_ENTERED (как будто ввёл руками) здесь не подходит: Sheets тогда
+# превратит и даты applications_end в свой формат даты (сломается
+# strptime во всех скриптах), и телефоны "+7..." в числа. Поэтому
+# приводим к числу только перечисленные колонки (см. numify_rows).
+NUMERIC_COLUMNS = {
+    "price_start", "price_current", "mileage_km", "year",
+    "estimated_mileage", "mileage_probeg_km",
+    "autoru_price_low", "autoru_price_high",
+    "autoru_tradein_low", "autoru_tradein_high",
+    "autoru_uncertainty_percent", "autoru_year", "autoru_owners_count",
+    "% below mkt",
+}
+
+
+def to_number(value):
+    """
+    '450000' -> 450000, '355674,6' -> 355674.6 (десятичный разделитель в
+    таблице - запятая, но точку тоже понимаем), '1 500 000' -> 1500000.
+    Числа возвращает как есть. Пустое и всё, что числом не является
+    ('10%', 'нет данных'), возвращает БЕЗ изменений - лучше оставить текст,
+    чем потерять значение.
+    """
+    if isinstance(value, (int, float)) or value is None:
+        return value
+    s = str(value).strip().replace(" ", "").replace(" ", "").replace(",", ".")
+    try:
+        n = float(s)
+    except ValueError:
+        return value
+    if s.lower() in ("nan", "inf", "-inf", "infinity", "-infinity"):
+        return value
+    return int(n) if n.is_integer() else n
+
+
+def numify_rows(header, rows):
+    """Приводит к числу ячейки NUMERIC_COLUMNS во всех строках (на месте).
+    Звать прямо перед записью листа - стоит доли секунды на весь лист."""
+    idxs = [i for i, name in enumerate(header) if name in NUMERIC_COLUMNS]
+    for row in rows:
+        for i in idxs:
+            if i < len(row):
+                row[i] = to_number(row[i])
+    return rows
+
 
 def _col_letter(n):
     """1 -> 'A', 24 -> 'X', 27 -> 'AA' и т.д."""
@@ -229,8 +286,8 @@ class SheetState:
             if col_num is None:
                 continue
             text = str(data.get(col, "") or "")
-            if col in ("price_start", "price_current"):
-                text = text.replace(".", ",")
+            if col in NUMERIC_COLUMNS:
+                text = to_number(text)  # число, а не текст - см. NUMERIC_COLUMNS
             cell_updates.append({
                 "range": f"{_col_letter(col_num)}{row_num}",
                 "values": [[text]],
@@ -258,8 +315,8 @@ class SheetState:
             if col_num is None:
                 continue
             text = str(value if value is not None else "")
-            if col in ("price_start", "price_current"):
-                text = text.replace(".", ",")
+            if col in NUMERIC_COLUMNS:
+                text = to_number(text)
             cell_updates.append({
                 "range": f"{_col_letter(col_num)}{row_num}",
                 "values": [[text]],

@@ -31,6 +31,7 @@ from google.oauth2.service_account import Credentials
 
 import bidding_schedule
 import config
+import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SOURCE_SHEET = "lots_processed"
@@ -189,6 +190,10 @@ def run():
         extra_values = [extras.get(name, "") for name in extra_names]
         out_rows.append(row + extra_values)
 
+    # Всё прочитано строками (в т.ч. перенесённые оценки Auto.ru, которые
+    # evaluate_autoru_browser.py писал числами) - возвращаем числам числа,
+    # см. sheets_writer.NUMERIC_COLUMNS.
+    sheets_writer.numify_rows(out_header, out_rows[1:])
     _overwrite_sheet(target, out_rows)
 
     print(f"Готово. Всего строк в '{SOURCE_SHEET}': {len(data_rows)}.")
