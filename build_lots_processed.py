@@ -52,6 +52,7 @@ from google.oauth2.service_account import Credentials
 
 import bidding_schedule
 import config
+import lot_metrics
 import fill_missing_from_title
 import sheets_writer
 
@@ -147,8 +148,14 @@ def run():
     photo_idx = source_header.index("photo_url") if "photo_url" in source_header else None
     status_idx = source_header.index("status") if "status" in source_header else None
     periods_idx = source_header.index("bidding_periods") if "bidding_periods" in source_header else None
+    title_idx = source_header.index("title") if "title" in source_header else None
+    desc_idx = source_header.index("description") if "description" in source_header else None
 
-    header = [name for _, name in COLUMN_MAP] + ["photo_url", "status", "bidding_periods"]
+    # lot_kind - машина / мультилот / право требования / доля
+    # (lot_metrics.lot_kind): по title И описанию - второй VIN мультилота или
+    # "право требования" бывают только в описании, а дальше по пайплайну
+    # описания нет.
+    header = [name for _, name in COLUMN_MAP] + ["photo_url", "status", "bidding_periods", "lot_kind"]
     price_idx = header.index("price_current")
     end_idx = header.index("applications_end")
     out_rows_data = []
@@ -170,7 +177,8 @@ def run():
             else:
                 out_row.append(get_cell(row, letter))
         periods = by_idx(row, periods_idx)
-        out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods]
+        kind = lot_metrics.lot_kind(by_idx(row, title_idx) + " " + by_idx(row, desc_idx))
+        out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods, kind]
         if periods:
             price, deadline = bidding_schedule.effective_price_and_deadline(
                 out_row[price_idx], out_row[end_idx], periods, now

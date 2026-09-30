@@ -128,7 +128,7 @@ async function api(path, opts = {}) {
 
 // ---------- состояние ----------
 
-const emptyFilters = () => ({ brands: [], models: {}, year: null, price: null, mileageTo: null, gapMin: null, regions: [], trade: [] });
+const emptyFilters = () => ({ brands: [], models: {}, year: null, price: null, mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [] });
 const SORTS = [["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
 
 const state = {
@@ -159,11 +159,12 @@ function queryString(filters, q, sort) {
   if (filters.gapMin != null) p.set("gap_min", filters.gapMin);
   if (filters.regions.length) p.set("regions", filters.regions.join(","));
   if (filters.trade.length) p.set("trade", filters.trade.join(","));
+  if ((filters.kinds || []).length) p.set("kinds", filters.kinds.join(","));
   return p.toString();
 }
 
 function activeFilterCount(f) {
-  return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.regions.length, f.trade.length]
+  return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.regions.length, f.trade.length, (f.kinds || []).length]
     .filter(Boolean).length;
 }
 
@@ -211,7 +212,8 @@ function card(it) {
   const deadline = it.is_open
     ? h("div", { class: "deadline" + (isSoon(it.deadline) ? " soon" : "") },
         `Заявки до ${dShort(it.deadline)} · ${timeLeft(it.deadline, true)}`,
-        it.trade === "public_offer" ? h("span", { class: "tag" }, "ПП") : null)
+        it.trade === "public_offer" ? h("span", { class: "tag" }, "ПП") : null,
+        it.kind === "multilot" ? h("span", { class: "tag" }, "Мультилот") : null)
     : h("div", { class: "deadline" }, "Приём заявок завершён");
   return h("div", { class: "card" + (it.is_open ? "" : " closed"), role: "button", onclick: () => push({ kind: "lot", id: it.id }) },
     thumb,
@@ -390,6 +392,10 @@ function rows(pairs) {
 }
 
 function marketBlock(lot) {
+  if (lot.kind === "multilot") {
+    return h("div", { class: "block" }, h("h3", {}, "Рынок"),
+      h("div", { class: "sub" }, "Мультилот: несколько машин одним лотом. Сравнение с рынком для такого лота не считаем — смотрите состав лота в описании."));
+  }
   if (lot.market_low == null || lot.market_high == null) {
     return h("div", { class: "block" }, h("h3", {}, "Рынок"), h("div", { class: "sub" }, "Оценки Авто.ру для этого лота пока нет."));
   }
@@ -489,6 +495,7 @@ const PRICE_STEPS = [0, 100e3, 200e3, 300e3, 400e3, 500e3, 600e3, 700e3, 800e3, 
 const MILEAGE_STEPS = [20e3, 40e3, 60e3, 80e3, 100e3, 120e3, 150e3, 200e3, 250e3, 300e3, null];
 const GAP_OPTIONS = [[null, "Любой"], [0.5, "Ниже рынка"], [10, "от 10%"], [20, "от 20%"], [30, "от 30%"]];
 const TRADES = [["auction", "Аукцион"], ["public_offer", "Публичное предложение"]];
+const KINDS = [["car", "Одна машина"], ["multilot", "Мультилоты"]];
 
 // Двухползунковый слайдер по массиву шагов. single=true - только правый ползунок ("до").
 function dualSlider(steps, [iFrom, iTo], onInput, single) {
@@ -629,6 +636,8 @@ function renderFilters(initial) {
   const regionChips = chipGroup(facets.regions.map((r) => [r.key, regionShort(r.key) === "МО" ? "Московская обл." : regionShort(r.key), r.count]),
     (v) => draft.regions.includes(v), (v) => { draft.regions = toggleIn(draft.regions, v); });
   const tradeChips = chipGroup(TRADES, (v) => draft.trade.includes(v), (v) => { draft.trade = toggleIn(draft.trade, v); });
+  draft.kinds = draft.kinds || [];
+  const kindChips = chipGroup(KINDS, (v) => draft.kinds.includes(v), (v) => { draft.kinds = toggleIn(draft.kinds, v); });
 
   const reset = h("button", { class: "btn secondary", onclick: () => renderFilters(emptyFilters()) }, "Сбросить");
   showBtn.addEventListener("click", () => {
@@ -647,6 +656,7 @@ function renderFilters(initial) {
     h("div", { class: "fsec" }, h("h3", {}, "Ниже рынка"), gapChips),
     h("div", { class: "fsec" }, h("h3", {}, "Регион"), regionChips),
     h("div", { class: "fsec" }, h("h3", {}, "Форма торгов"), tradeChips),
+    h("div", { class: "fsec" }, h("h3", {}, "Тип лота"), kindChips),
     h("div", { class: "bottombar" }, reset, showBtn)));
   refreshCount();
 }

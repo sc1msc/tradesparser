@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS lots (
     autoru_price_high INTEGER,
     autoru_owners     INTEGER,
     estimate_uncertain INTEGER NOT NULL DEFAULT 0,
+    lot_kind          TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -103,6 +104,7 @@ LOT_FIELDS = [
     "region", "trade_form", "is_public_offer", "status", "platform",
     "applications_end", "bidding_start", "periods", "photos", "description",
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
+    "lot_kind",
 ]
 JSON_FIELDS = {"periods", "photos"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
@@ -110,7 +112,7 @@ FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 # Колонки, добавленные после первого запуска на сервере: CREATE TABLE IF NOT
 # EXISTS их в существующую базу не добавит - досоздаём ALTER TABLE.
 MIGRATIONS = {
-    "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0")],
+    "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0"), ("lot_kind", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT")],
 }
 

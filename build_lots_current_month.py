@@ -31,6 +31,7 @@ from google.oauth2.service_account import Credentials
 
 import bidding_schedule
 import config
+import lot_metrics
 import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -48,7 +49,7 @@ STANDARD_COLUMNS = [
     "brand", "name", "year", "vin", "plate", "url", "title", "mileage_km",
     "price_start", "price_current", "region", "applications_end",
     "bidding_start", "organizer_phone", "organizer_email", "photo_url",
-    "status", "bidding_periods",
+    "status", "bidding_periods", "lot_kind",
 ]
 
 
@@ -146,6 +147,7 @@ def run():
         return
     idx = header.index("applications_end")
     status_idx = header.index("status") if "status" in header else None
+    kind_idx = header.index("lot_kind") if "lot_kind" in header else None
 
     now = datetime.datetime.now()
     deadline = now + datetime.timedelta(days=WINDOW_DAYS)
@@ -155,10 +157,17 @@ def run():
     skipped_far = 0
     skipped_unparsed = 0
     skipped_closed = 0
+    skipped_kind = 0
     for row in data_rows:
         status = row[status_idx] if status_idx is not None and status_idx < len(row) else ""
         if bidding_schedule.is_closed_status(status):
             skipped_closed += 1
+            continue
+        # Права требования и доли - не машина: из среза (а значит, из
+        # подборок, дайджеста, оценки Авто.ру и мини-аппа) исключаются.
+        kind = row[kind_idx] if kind_idx is not None and kind_idx < len(row) else ""
+        if kind in lot_metrics.EXCLUDED_KINDS:
+            skipped_kind += 1
             continue
         value = row[idx] if idx < len(row) else ""
         try:

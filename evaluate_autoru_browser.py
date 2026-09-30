@@ -141,6 +141,10 @@ def run():
         vin = row[col["vin"]].strip()
         if not vin or status in ("ok", "ambiguous"):
             continue
+        # Мультилот (несколько машин одним лотом) не оцениваем: вилка одной
+        # машины к цене всего лота отношения не имеет (lot_metrics.lot_kind).
+        if "lot_kind" in col and row[col["lot_kind"]].strip() == lot_metrics.LOT_MULTILOT:
+            continue
         candidates.append((i + 2, row))  # 1-based номер строки (шапка - строка 1)
 
     print(f"Кандидатов на оценку (есть VIN, ещё не оценены, лот актуален): {len(candidates)}")

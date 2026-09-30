@@ -11,6 +11,7 @@ build_lot_selections.py. Мини-апп обязан показывать то�
 копируем. Модуль без зависимостей (ни gspread, ни config) - его целиком
 копирует к себе Docker-образ бэкенда (см. miniapp/backend/Dockerfile).
 """
+import re
 
 # Ключевые слова, по которым лот выглядит как повреждённый/неисправный.
 # Используются двояко:
@@ -96,3 +97,62 @@ def estimate_is_uncertain(uncertainty_percent, autoru_status=None):
         return float(str(uncertainty_percent).replace(",", ".")) >= UNCERTAIN_ESTIMATE_PERCENT
     except (TypeError, ValueError):
         return False
+
+
+# ---------- тип лота: машина / мультилот / право требования / доля ----------
+
+# Не всё, что продаётся в разделе "легковой транспорт", - это одна машина:
+#   - право требования (ПРАВО ТРЕБОВАНИЯ передать ВАЗ 21013, к Иванову о
+#     передаче ТС, исполнительный лист об истребовании) - покупатель получает
+#     не машину, а иск; цена и "% ниже рынка" бессмысленны;
+#   - доля (3/4 доли автомобиля) - то же;
+#   - мультилот (несколько машин одним лотом: лот 7178974 - 17 Solaris за
+#     6,27 млн давал "-510%") - оценка Авто.ру одной машины к цене лота
+#     отношения не имеет.
+# Решение пользователя (30.09.2026): права требования и доли исключаются
+# отовсюду (срез, подборки, дайджест, мини-апп), мультилоты остаются
+# отдельной группой без оценки и процента.
+LOT_CAR = "car"
+LOT_MULTILOT = "multilot"
+LOT_RIGHTS = "rights"
+LOT_SHARE = "share"
+EXCLUDED_KINDS = {LOT_RIGHTS, LOT_SHARE}
+
+_RIGHTS_RE = re.compile(r"ПРАВ[АО]?\s+ТРЕБОВАНИ|ДЕБИТОРСК|УСТУПК[АИ]\s+ПРАВ")
+# "3/4 доли", "1/2 доля", "доля в праве". Не путать с "ДОЛЖНИК".
+_SHARE_RE = re.compile(r"\d+\s*/\s*\d+\s*(ДОЛ[ЯИЮ]|ЧАСТ)|ДОЛ[ЯИЮ]\s+В\s+ПРАВЕ")
+_VIN_RE = re.compile(r"(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Z0-9])")
+# Перед номером кузова/шасси/рамы стоит метка - это та же машина, не вторая
+# (у Mazda/Volvo номер кузова отличается от VIN, но тоже 17 знаков).
+_BODY_LABEL_RE = re.compile(r"(КУЗОВ|ШАССИ|РАМ[АЫ]|КАБИН)[^A-Z0-9]{0,30}$")
+
+
+def lot_vins(text):
+    """Разные VIN в тексте лота - без номеров кузова/шасси/рамы и без чисто
+    цифровых 17-значных номеров (номер уголовного дела и т.п.)."""
+    upper = (text or "").upper()
+    vins = []
+    for m in _VIN_RE.finditer(upper):
+        vin = m.group(0)
+        if vin.isdigit() or _BODY_LABEL_RE.search(upper[max(0, m.start() - 40):m.start()]):
+            continue
+        if vin not in vins:
+            vins.append(vin)
+    return vins
+
+
+def lot_kind(text):
+    """Тип лота по тексту (title + description): LOT_RIGHTS / LOT_SHARE /
+    LOT_MULTILOT / LOT_CAR. Проверено на листе lots 01.10.2026: 13 прав
+    требования и 1 доля находятся почти всегда по title; мультилот - два и
+    больше разных VIN (лоты 7178974 - 17 VIN, 7219980 - второй VIN только в
+    описании). Нумерацию "2." как признак не используем - она часто
+    встречается в правилах осмотра, а не в перечне машин."""
+    upper = (text or "").upper()
+    if _RIGHTS_RE.search(upper):
+        return LOT_RIGHTS
+    if _SHARE_RE.search(upper):
+        return LOT_SHARE
+    if len(lot_vins(upper)) >= 2:
+        return LOT_MULTILOT
+    return LOT_CAR

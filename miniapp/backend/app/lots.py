@@ -145,6 +145,15 @@ def _prepare(lot):
     lot["name"] = " ".join(x for x in (brand, model) if x) or (lot.get("title") or "Лот")[:60]
     lot["trade"] = TRADE_PUBLIC_OFFER if lot.get("is_public_offer") else TRADE_AUCTION
     lot["damage"] = lot_metrics.damage_keywords(lot.get("title"))
+    # тип лота (lot_metrics.lot_kind): мультилот - без процента к рынку и
+    # с меткой; права требования/доли в ленту не попадают вовсе
+    lot["kind"] = lot.get("lot_kind") or lot_metrics.LOT_CAR
+    if lot["kind"] == lot_metrics.LOT_MULTILOT:
+        # Марка/модель у мультилота - от одной из машин (Авто.ру по первому
+        # VIN: лот из 17 Solaris выходил "Hyundai Santa FE"). Показываем
+        # название лота с сайта и не кладём его в фильтр по марке.
+        lot["brand_key"] = lot["model_key"] = ""
+        lot["name"] = " ".join((lot.get("title") or "Мультилот").split())[:60]
     lot["search_text"] = _norm_key(" ".join(
         str(x or "") for x in (brand, model, lot.get("title"), lot.get("vin"), lot.get("plate"))
     ))
@@ -211,6 +220,8 @@ def current_state(lot, now):
 
 
 def gap_for(lot, price):
+    if lot["kind"] != lot_metrics.LOT_CAR:
+        return None  # мультилот: цена за несколько машин против вилки одной
     return lot_metrics.gap_percent(price, lot.get("autoru_price_low"), lot.get("autoru_price_high"))
 
 
@@ -218,7 +229,8 @@ def is_open(lot, state, now):
     """Лот виден в ленте: есть в текущем листе, приём заявок ещё идёт,
     торги не отменены/не завершены."""
     return bool(lot.get("in_source")) and state["deadline"] is not None \
-        and state["deadline"] > now and not lot["_closed_status"]
+        and state["deadline"] > now and not lot["_closed_status"] \
+        and lot["kind"] not in lot_metrics.EXCLUDED_KINDS
 
 
 def _iso(dt):
@@ -236,7 +248,8 @@ def summary(lot, state, now, favorites):
         "id": lot["lot_id"],
         "name": lot["name"],
         "year": lot.get("year"),
-        "mileage_km": lot.get("mileage_km"),
+        # пробег мультилота - одной из машин, для лота целиком ничего не значит
+        "mileage_km": lot.get("mileage_km") if lot["kind"] == lot_metrics.LOT_CAR else None,
         "mileage_estimated": bool(lot.get("mileage_estimated")),
         "price": state["price"],
         "gap": round(gap, 1) if gap is not None else None,
@@ -248,6 +261,7 @@ def summary(lot, state, now, favorites):
         "region": lot.get("region"),
         "photo": _first_photo(lot),
         "damaged": bool(lot["damage"]),
+        "kind": lot["kind"],
         "favorite": lot["lot_id"] in favorites,
         "is_open": is_open(lot, state, now),
     }
@@ -323,6 +337,7 @@ def parse_filters(params):
         "price_to": _num(params.get("price_to")),
         "mileage_to": _num(params.get("mileage_to")),
         "regions": set(_split(params.get("regions"))),
+        "kinds": set(_split(params.get("kinds"))),
         "trade": set(_split(params.get("trade"))),
         "gap_min": _num(params.get("gap_min")),
     }
@@ -354,6 +369,8 @@ def _matches(item, lot, f):
     if f["regions"] and (lot.get("region") or "") not in f["regions"]:
         return False
     if f["trade"] and lot["trade"] not in f["trade"]:
+        return False
+    if f["kinds"] and lot["kind"] not in f["kinds"]:
         return False
     if f["gap_min"] is not None and (item["gap"] is None or item["gap"] < f["gap_min"]):
         return False

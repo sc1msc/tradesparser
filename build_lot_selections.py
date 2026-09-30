@@ -130,9 +130,11 @@ def _get(row, header, col_idx_cache, name):
 
 
 def _compute_gap(row, header, cache):
-    """% below mkt по строке листа. Формула - lot_metrics.gap_percent
-    (одна на дайджест и мини-апп); None, если цена или вилка Авто.ру
-    не заполнены."""
+    """% below mkt = (market_mid - price_current) / market_mid * 100.
+    None, если цена или вилка Авто.ру не заполнены, и у мультилота: цена
+    за несколько машин против вилки одной (было "-510%")."""
+    if _get(row, header, cache, "lot_kind") == lot_metrics.LOT_MULTILOT:
+        return None
     return lot_metrics.gap_percent(
         _to_float(_get(row, header, cache, "price_current")),
         _to_float(_get(row, header, cache, "autoru_price_low")),
@@ -299,11 +301,21 @@ def run():
         # (см. sheets_writer.NUMERIC_COLUMNS).
         return sheets_writer.numify_rows(header, out)
 
+    # В подборки (а значит, в дайджест) идут только лоты "одна машина":
+    # мультилоты - отдельная группа без оценки (права требования и доли
+    # отсеяны ещё в build_lots_current_month.py). Пустой lot_kind - старый
+    # лист до появления колонки - считаем машиной.
+    kind_cache = {}
+    car_rows = [row for row in data_rows
+                if (_get(row, header, kind_cache, "lot_kind") or lot_metrics.LOT_CAR) == lot_metrics.LOT_CAR]
+    if len(car_rows) != len(data_rows):
+        print(f"В подборки не идут мультилоты и прочее не-\"одна машина\": {len(data_rows) - len(car_rows)}")
+
     for item in selections.SELECTIONS:
         sheet_name = item["sheet"]
         builder = BUILDERS[item["key"]]
         cache = {}
-        selected_rows = _write_gap(builder(header, data_rows, cache))
+        selected_rows = _write_gap(builder(header, car_rows, cache))
 
         try:
             target = spreadsheet.worksheet(sheet_name)

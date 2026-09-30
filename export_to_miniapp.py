@@ -215,6 +215,10 @@ def build_lot(row, details):
         "autoru_owners": _to_int(row.get("autoru_owners_count")),
         "estimate_uncertain": lot_metrics.estimate_is_uncertain(
             row.get("autoru_uncertainty_percent"), row.get("autoru_status")),
+        # тип лота из листа (по title + описанию из lots); если колонки ещё
+        # нет - считаем сами по title и описанию из карточки
+        "lot_kind": row.get("lot_kind") or lot_metrics.lot_kind(
+            (row.get("title") or "") + " " + (d.get("description") or "")),
     }
 
 
