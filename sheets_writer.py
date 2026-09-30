@@ -234,6 +234,13 @@ def remove_expired_lots(worksheet, days):
     return len(rows_to_delete)
 
 
+# На сколько строк расширять лист, когда новые лоты упираются в конец сетки
+# (Google не расширяет лист сам при записи явных диапазонов вида A1566 -
+# отвечает "exceeds grid limits"). Пачкой, а не по строке на лот: одно
+# расширение на ~200 лотов вместо лишнего запроса к API на каждый.
+ROWS_GROW_STEP = 200
+
+
 class SheetState:
     """
     Держит в памяти соответствие lot_id -> номер строки и следующую
@@ -269,6 +276,15 @@ class SheetState:
                 self.lot_row[row[0]] = row_num
 
         self.next_row = FIRST_DATA_ROW + len(data_rows)
+        self.row_count = worksheet.row_count  # размер сетки листа (не число заполненных строк)
+
+    def _ensure_row(self, row_num):
+        """Расширяет сетку листа, если строка row_num за её пределами."""
+        if row_num <= self.row_count:
+            return
+        grow = max(ROWS_GROW_STEP, row_num - self.row_count)
+        self.worksheet.add_rows(grow)
+        self.row_count += grow
 
     def __len__(self):
         return len(self.lot_row)
@@ -284,6 +300,7 @@ class SheetState:
             row_num = self.next_row
             self.lot_row[lot_id] = row_num
             self.next_row += 1
+            self._ensure_row(row_num)
 
         # Пишем каждую колонку в её РЕАЛЬНУЮ позицию отдельным элементом
         # batch_update - но одним запросом к API на лот (как и раньше),
