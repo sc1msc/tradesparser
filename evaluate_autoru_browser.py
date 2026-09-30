@@ -18,7 +18,8 @@ sheets_writer.py, его локальная схема колонок разош
 
 Пробег для запроса к Авто.ру берётся из mileage_km (там либо пробег с
 карточки лота, либо показание TRONK, пересчитанное на сегодня - см.
-fill_missing_mileage.py); только если он пуст - из estimated_mileage,
+fill_missing_mileage.py); только если он пуст или неправдоподобен (больше
+lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM) - из estimated_mileage,
 который сам же и считает по формуле (как для Avito):
 (текущий_год - year) * config.ANNUAL_MILEAGE_KM. Если и year пуст -
 пробег взять неоткуда, лот помечается "no_mileage" и пропускается.
@@ -43,6 +44,7 @@ from google.oauth2.service_account import Credentials
 from playwright.sync_api import sync_playwright
 
 import config
+import lot_metrics
 import autoru_valuation
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -177,8 +179,13 @@ def run():
 
         for row_num, row in to_process:
             vin = row[col["vin"]].strip().upper()
-            mileage = _clean_mileage(row[col["mileage_km"]])
+            raw_mileage = _clean_mileage(row[col["mileage_km"]])
+            # Больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника
+            # (TRONK/текст лота): считаем, что пробега нет, и оцениваем по году.
+            mileage = lot_metrics.plausible_mileage(raw_mileage)
             mileage_source = "mileage_km"
+            if raw_mileage is not None and mileage is None:
+                print(f"  Пробег {raw_mileage} км неправдоподобен - считаю по году выпуска")
             updates = {}  # копим все поля этого лота, пишем одним batch_update в конце
 
             if mileage is None:

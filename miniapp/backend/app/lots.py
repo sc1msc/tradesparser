@@ -240,6 +240,9 @@ def summary(lot, state, now, favorites):
         "mileage_estimated": bool(lot.get("mileage_estimated")),
         "price": state["price"],
         "gap": round(gap, 1) if gap is not None else None,
+        # Авто.ру сам указывает большую погрешность (lot_metrics.estimate_is_uncertain) -
+        # лот показываем, но с пометкой "оценка может быть неточной"
+        "gap_uncertain": gap is not None and bool(lot.get("estimate_uncertain")),
         "deadline": _iso(state["deadline"]),
         "trade": lot["trade"],
         "region": lot.get("region"),

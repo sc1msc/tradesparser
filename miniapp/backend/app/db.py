@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS lots (
     autoru_price_low  INTEGER,
     autoru_price_high INTEGER,
     autoru_owners     INTEGER,
+    estimate_uncertain INTEGER NOT NULL DEFAULT 0,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -81,10 +82,16 @@ LOT_FIELDS = [
     "mileage_km", "mileage_estimated", "price_start", "price_current",
     "region", "trade_form", "is_public_offer", "status", "platform",
     "applications_end", "bidding_start", "periods", "photos", "description",
-    "autoru_price_low", "autoru_price_high", "autoru_owners",
+    "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
 ]
 JSON_FIELDS = {"periods", "photos"}
-FLAG_FIELDS = {"mileage_estimated", "is_public_offer"}
+FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
+
+# Колонки, добавленные после первого запуска на сервере: CREATE TABLE IF NOT
+# EXISTS их в существующую базу не добавит - досоздаём ALTER TABLE.
+MIGRATIONS = {
+    "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0")],
+}
 
 _lock = threading.Lock()
 
@@ -100,6 +107,12 @@ def connect():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    for table, columns in MIGRATIONS.items():
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, ddl in columns:
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+    conn.commit()
     return conn
 
 

@@ -51,6 +51,7 @@ from google.oauth2.service_account import Credentials
 
 import bidding_schedule
 import config
+import lot_metrics
 import main
 from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
 
@@ -161,8 +162,10 @@ def _sheet_periods(text):
 
 def build_lot(row, details):
     lot_id = LOT_ID_RE.search(row.get("url") or "").group(1)
-    mileage = _to_int(row.get("mileage_km"))
-    estimated = _to_int(row.get("estimated_mileage"))
+    # Пробег больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника:
+    # показываем оценку по году (как и оценивает такой лот Авто.ру).
+    mileage = lot_metrics.plausible_mileage(row.get("mileage_km"))
+    estimated = lot_metrics.plausible_mileage(row.get("estimated_mileage"))
     d = details or {}
     periods = _sheet_periods(row.get("bidding_periods")) or [
         [p.get("bid_end") or p.get("end"), p.get("price")] for p in d.get("periods") or []
@@ -210,6 +213,8 @@ def build_lot(row, details):
         "autoru_price_low": _to_int(row.get("autoru_price_low")),
         "autoru_price_high": _to_int(row.get("autoru_price_high")),
         "autoru_owners": _to_int(row.get("autoru_owners_count")),
+        "estimate_uncertain": lot_metrics.estimate_is_uncertain(
+            row.get("autoru_uncertainty_percent"), row.get("autoru_status")),
     }
 
 

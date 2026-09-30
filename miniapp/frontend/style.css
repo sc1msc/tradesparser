@@ -99,6 +99,8 @@ input { font: inherit; color: inherit; }
 .gap { font-size: 12px; font-weight: 600; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
 .gap.good { color: var(--green); background: var(--green-soft); }
 .gap.neutral { color: var(--hint); background: var(--neutral-soft); }
+.unsure { font-size: 11px; color: var(--hint); border: 1px dashed var(--sep); border-radius: 5px; padding: 0 4px; }
+.unsure-note { color: var(--warn); }
 .meta { color: var(--hint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .deadline { font-size: 13px; }
 .deadline.soon { font-weight: 600; }

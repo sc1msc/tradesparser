@@ -155,21 +155,31 @@ def _parse_percent(value):
         return None
 
 
-def _fmt_gap_label(value):
+def _fmt_gap_label(value, lot=None):
     """Превращает '% below mkt' в подпись направления вместо голой 'скидки'.
 
     Ни Telegram (HTML в подписях/сообщениях), ни Telegraph не поддерживают
     цвет шрифта - только bold/italic и т.п. Вместо цвета используем
     цветной кружок-эмодзи (🟢/🔴), текст оборачивается в bold отдельно
-    там, где формируется само сообщение."""
+    там, где формируется само сообщение.
+
+    Если оценка Авто.ру у лота неточная (lot_metrics.estimate_is_uncertain:
+    погрешность >= 90% или машина определена неоднозначно) - к подписи
+    добавляется "(оценка может быть неточной)": такие лоты остаются в
+    подборках, читатель сам решает, верить ли проценту."""
     n = _parse_percent(value)
     if n is None:
         return str(value)
     if n > 0:
-        return f"🟢 ниже рынка на {n:g}%".replace(".", ",")
-    if n < 0:
-        return f"🔴 выше рынка на {abs(n):g}%".replace(".", ",")
-    return "⚪ на уровне рынка"
+        label = f"🟢 ниже рынка на {n:g}%".replace(".", ",")
+    elif n < 0:
+        label = f"🔴 выше рынка на {abs(n):g}%".replace(".", ",")
+    else:
+        label = "⚪ на уровне рынка"
+    if lot is not None and lot_metrics.estimate_is_uncertain(
+            lot.get("autoru_uncertainty_percent"), lot.get("autoru_status")):
+        label += f" ({lot_metrics.UNCERTAIN_NOTE})"
+    return label
 
 
 def _lot_title(lot):
@@ -205,7 +215,7 @@ def _build_telegraph_content(lots, digest_intro):
         nodes.append({"tag": "p", "children": [
             {"tag": "strong", "children": [_fmt_price(lot.get("price_current"))]},
             f"  (рынок {_fmt_price(lot.get('autoru_price_low'))}–{_fmt_price(lot.get('autoru_price_high'))}, ",
-            {"tag": "strong", "children": [_fmt_gap_label(lot.get("% below mkt", ""))]},
+            {"tag": "strong", "children": [_fmt_gap_label(lot.get("% below mkt", ""), lot)]},
             ")",
         ]})
         nodes.append({"tag": "p", "children": [
@@ -297,7 +307,7 @@ def _build_caption(lot):
     title = html.escape(_lot_title(lot))
     region = html.escape(lot.get("region") or "регион не указан")
     deadline_label = html.escape(deadline_label)
-    gap_label = html.escape(_fmt_gap_label(lot.get("% below mkt", "")))
+    gap_label = html.escape(_fmt_gap_label(lot.get("% below mkt", ""), lot))
     url = html.escape(lot.get("url", ""), quote=True)
     lines = [
         f"🚗 <b>{title}</b>",
@@ -330,7 +340,7 @@ def _prompt_manual_pick(candidates):
     for i, lot in enumerate(candidates, 1):
         deadline_label, _ = _fmt_deadline(lot.get("applications_end"))
         print(f"  [{i}] {_lot_title(lot)} — {_fmt_price(lot.get('price_current'))}, "
-              f"{_fmt_gap_label(lot.get('% below mkt', ''))}, до {deadline_label}")
+              f"{_fmt_gap_label(lot.get('% below mkt', ''), lot)}, до {deadline_label}")
         print(f"      фото: {lot.get('photo_url')}")
         print(f"      лот:  {lot.get('url')}")
 

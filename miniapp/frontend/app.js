@@ -209,7 +209,8 @@ function card(it) {
     thumb,
     h("div", { class: "info" },
       h("div", { class: "name" }, it.name, it.year ? h("span", { class: "yr" }, `, ${it.year}`) : null),
-      h("div", { class: "priceline" }, h("span", { class: "price" }, rub(it.price)), gapBadge(it.gap)),
+      h("div", { class: "priceline" }, h("span", { class: "price" }, rub(it.price)), gapBadge(it.gap),
+        it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
       meta ? h("div", { class: "meta" }, meta) : null,
       deadline),
     heartButton(it.id));
@@ -399,6 +400,8 @@ function marketBlock(lot) {
       h("div", { class: "mark", style: { left: pos(lot.price) }, title: "Цена лота" })),
     h("div", { class: "range-labels" }, h("span", {}, "▮ цена лота"), h("span", {}, `середина ${short(Math.round(mid))} ₽`)),
     h("div", { class: "sub", style: { marginTop: "8px" } }, verdict),
+    lot.gap_uncertain ? h("div", { class: "sub unsure-note" },
+      "Оценка может быть неточной: Авто.ру сам указывает большую погрешность для этой машины.") : null,
     lot.mileage_estimated ? h("div", { class: "sub" }, "Оценка сделана по примерному пробегу.") : null);
 }
 
