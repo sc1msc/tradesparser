@@ -5,20 +5,28 @@ r"""
 Что делает:
   1) читает лист "lots_current_month" (только читает, ничего не пишет);
   2) для каждого лота берёт с его карточки на сайте торгов то, чего в
-     таблице нет: ВСЕ фото (в таблице - только первое), график периодов
-     "публичного предложения" (цена и конец приёма заявок каждого этапа),
-     форму торгов, статус, площадку, описание;
+     таблице нет: ВСЕ фото (в таблице - только первое), описание, форму
+     торгов, площадку и stages.end_bid_time;
   3) отправляет всё одним запросом на сервер мини-аппа (POST /api/import).
 
-Почему карточки лотов качаются здесь, а не в main.py: main.py пропускает
-лоты, которые уже есть в таблице, а фото и графики нужны и для них тоже.
-Чтобы не менять схему листа "lots" (и все скрипты, завязанные на её
-колонки), эти данные в таблицу не пишутся вовсе - они кэшируются в
-локальном файле DETAILS_CACHE_FILE (в git не хранится) и уходят только в
-мини-апп. Первый запуск скачивает карточки всех лотов (сотни запросов с
-паузой DELAY_BETWEEN_LOT_REQUESTS - это десятки минут), дальше - только
-новые лоты и те, чей кэш старше MINIAPP_DETAILS_REFRESH_DAYS (статус
-торгов мог смениться: отменены, приостановлены и т.п.).
+Что откуда:
+  - статус торгов и график публичного предложения (bidding_periods) - из
+    ЛИСТА: пайплайн обновляет их каждый день (main.py перечитывает идущие
+    публичные предложения, см. DATA_UPDATES.md). Кэш карточек - только
+    запасной вариант, если в листе пусто;
+  - окончательный дедлайн публичного предложения - bidding_schedule.
+    final_deadline(end_bid_time с карточки, график из листа): в листе
+    applications_end у публичного предложения - уже дедлайн ТЕКУЩЕГО
+    периода, а бэкенду нужен окончательный (текущий период он выбирает
+    сам в момент запроса);
+  - фото, описание, форма торгов, площадка - из карточки (кэш), в таблице
+    их нет.
+
+Карточки кэшируются в локальном файле DETAILS_CACHE_FILE (в git не
+хранится): в таблицу эти данные не пишутся, они нужны только мини-аппу.
+Первый запуск скачивает карточки всех лотов (сотни запросов с паузой
+DELAY_BETWEEN_LOT_REQUESTS - это десятки минут), дальше - только новые
+лоты и те, чей кэш старше MINIAPP_DETAILS_REFRESH_DAYS.
 
 Если в local_secrets.py не заданы MINIAPP_API_URL / MINIAPP_IMPORT_TOKEN -
 шаг ничего не делает (пайплайн работает как раньше). Если сервер
@@ -41,6 +49,7 @@ import gspread
 import requests
 from google.oauth2.service_account import Credentials
 
+import bidding_schedule
 import config
 import main
 from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
@@ -141,11 +150,33 @@ def read_sheet():
     return [dict(zip(header, row + [""] * (len(header) - len(row)))) for row in values[1:]]
 
 
+def _sheet_periods(text):
+    """bidding_periods из листа ('[[bid_end, price], ...]') -> список пар."""
+    try:
+        pairs = json.loads(text) if text else []
+    except ValueError:
+        return []
+    return [p for p in pairs if isinstance(p, list) and len(p) == 2]
+
+
 def build_lot(row, details):
     lot_id = LOT_ID_RE.search(row.get("url") or "").group(1)
     mileage = _to_int(row.get("mileage_km"))
     estimated = _to_int(row.get("estimated_mileage"))
     d = details or {}
+    periods = _sheet_periods(row.get("bidding_periods")) or [
+        [p.get("bid_end") or p.get("end"), p.get("price")] for p in d.get("periods") or []
+        if p.get("bid_end") or p.get("end")
+    ]
+    trade_form = d.get("trade_form")
+    is_public_offer = bool(periods) or bool(d.get("is_public_offer")) or bidding_schedule.is_public_offer(trade_form)
+    if periods:
+        # окончательный дедлайн: end_bid_time с карточки (не меняется) против
+        # конца графика; без кэша - applications_end листа (текущий период)
+        applications_end = bidding_schedule.final_deadline(
+            d.get("applications_end") or row.get("applications_end"), json.dumps(periods))
+    else:
+        applications_end = row.get("applications_end") or d.get("applications_end")
     return {
         "lot_id": lot_id,
         "url": row.get("url"),
@@ -165,13 +196,13 @@ def build_lot(row, details):
         "price_start": _to_int(row.get("price_start")),
         "price_current": _to_int(row.get("price_current")),
         "region": row.get("region") or None,
-        "trade_form": d.get("trade_form"),
-        "is_public_offer": bool(d.get("is_public_offer")),
-        "status": d.get("status"),
+        "trade_form": trade_form,
+        "is_public_offer": is_public_offer,
+        "status": row.get("status") or d.get("status"),
         "platform": d.get("platform"),
-        "applications_end": row.get("applications_end") or d.get("applications_end"),
+        "applications_end": applications_end,
         "bidding_start": row.get("bidding_start") or None,
-        "periods": d.get("periods") or [],
+        "periods": periods,
         # Если карточку скачать не удалось - хотя бы первое фото из таблицы.
         "photos": d.get("photos") or ([{"full": row["photo_url"], "thumb": row["photo_url"]}]
                                       if row.get("photo_url") else []),

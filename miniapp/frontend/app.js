@@ -420,7 +420,8 @@ async function renderLot(id) {
       : h("div", { class: "dl" }, "Приём заявок завершён"),
     lot.bidding_start && lot.trade !== "public_offer" ? h("div", { class: "dl-note" }, `Торги: ${dLong(lot.bidding_start)} МСК`) : null);
 
-  const periods = lot.periods.length ? h("div", { class: "block periods" },
+  // график без единой известной цены (сайт отдаёт нули) не показываем - одни прочерки
+  const periods = lot.periods.some((p) => p.price) ? h("div", { class: "block periods" },
     h("h3", {}, "График снижения цены"),
     h("div", { class: "rows" }, lot.periods.map((p) =>
       h("div", { class: "row" + (p.is_current ? " cur" : "") + (p.is_past ? " past" : "") },

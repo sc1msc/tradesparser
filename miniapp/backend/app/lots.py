@@ -4,16 +4,19 @@ r"""
 сортировка, фасеты для экрана фильтров.
 
 ГЛАВНОЕ - цена и дедлайн считаются в момент запроса, а не при импорте:
-у "публичного предложения" цена ступенчато снижается по графику периодов
-(bidding_periods с карточки лота на сайте торгов), и дедлайн, который надо
-показать пользователю - конец приёма заявок ТЕКУЩЕГО периода, а не
-последнего (так же показывает и сам сайт). В lots_current_month
-price_current/applications_end публичного предложения - уже текущий
-период, но на момент сборки листа (build_lots_processed.py, см.
-DATA_UPDATES.md). Импорт раз в сутки, а период может смениться в любой
-момент - поэтому для публичного предложения берём график и выбираем
-"текущий период" по часам сервера при каждом запросе; колонки листа -
-только запасной вариант, если графика нет.
+у "публичного предложения" цена ступенчато снижается по графику периодов,
+и дедлайн, который надо показать пользователю - конец приёма заявок
+ТЕКУЩЕГО периода, а не последнего (так же показывает и сам сайт). Импорт
+раз в сутки, а период может смениться в любой момент - поэтому текущий
+период выбирается по часам сервера при каждом запросе.
+
+Сам расчёт - bidding_schedule.effective_price_and_deadline, ТОТ ЖЕ, что у
+пайплайна и дайджеста (модуль копируется в Docker-образ, как lot_metrics):
+цена 0 в графике = "не указана" (берётся price_current), а если график
+кончился раньше окончательного дедлайна - заявки принимаются по цене с
+сайта до окончательного дедлайна. Поэтому applications_end, который
+присылает export_to_miniapp.py для публичного предложения - ОКОНЧАТЕЛЬНЫЙ
+дедлайн (bidding_schedule.final_deadline), а не текущего периода.
 
 "% below mkt" - та же формула, что у дайджеста (lot_metrics.gap_percent),
 но от ТЕКУЩЕЙ цены периода. С фронта процент никогда не принимается.
@@ -26,20 +29,17 @@ DATA_UPDATES.md). Импорт раз в сутки, а период может 
 фильтров и заведомо быстро. Кэш сбрасывается после каждого импорта.
 """
 import datetime
+import json
 import re
 import threading
 
+import bidding_schedule
 import lot_metrics
 
 from . import db
 
 MSK = datetime.timezone(datetime.timedelta(hours=3))
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-# Статусы торгов (с сайта), при которых лот не показываем в ленте, даже
-# если дедлайн формально ещё не наступил. Сравнение по подстроке, без
-# регистра - точный список статусов сайта нам неизвестен.
-CLOSED_STATUS_MARKERS = ("отмен", "заверш", "приостанов", "аннулир")
 
 # Короткие бренды/слова, которые пишем целиком заглавными ("BMW", а не "Bmw").
 UPPER_WORDS = {"BMW", "UAZ", "GAZ", "VAZ", "MG", "BYD", "GMC", "DS", "JAC", "FAW", "GAC", "BAIC", "SWM", "MINI", "AMG"}
@@ -148,21 +148,25 @@ def _prepare(lot):
     lot["search_text"] = _norm_key(" ".join(
         str(x or "") for x in (brand, model, lot.get("title"), lot.get("vin"), lot.get("plate"))
     ))
-    periods = []
+    # График: [[bid_end, price], ...] (формат листа, см. bidding_schedule).
+    # Старые записи базы - списком словарей с карточки сайта.
+    pairs = []
     for p in lot.get("periods") or []:
-        end = parse_dt(p.get("bid_end") or p.get("end"))
-        if end is None:
-            continue
-        periods.append({
-            "begin": parse_dt(p.get("begin")),
-            "bid_end": end,
-            "price": _int(p.get("price")),
-        })
-    periods.sort(key=lambda p: p["bid_end"])
+        if isinstance(p, dict):
+            p = [p.get("bid_end") or p.get("end"), p.get("price")]
+        if isinstance(p, (list, tuple)) and len(p) == 2 and parse_dt(p[0]):
+            pairs.append([str(p[0])[:19], p[1]])
+    pairs.sort(key=lambda pair: pair[0])
+    lot["_periods_text"] = json.dumps(pairs) if pairs else ""
+    periods, prev_end = [], None
+    for bid_end, price in pairs:
+        end = parse_dt(bid_end)
+        price = _int(price)
+        # начало периода - конец предыдущего; цена 0 = "не указана"
+        periods.append({"begin": prev_end, "bid_end": end, "price": price if price and price > 0 else None})
+        prev_end = end
     lot["_periods"] = periods
-    lot["_applications_end"] = parse_dt(lot.get("applications_end"))
-    status = (lot.get("status") or "").lower()
-    lot["_closed_status"] = any(m in status for m in CLOSED_STATUS_MARKERS)
+    lot["_closed_status"] = bidding_schedule.is_closed_status(lot.get("status"))
     return lot
 
 
@@ -186,26 +190,24 @@ def invalidate():
 
 
 def current_state(lot, now):
-    """Цена и дедлайн на момент now + информация о периоде (для публичного
-    предложения). Для аукциона - цена и конец приёма заявок из листа."""
-    periods = lot["_periods"]
-    if lot["trade"] == TRADE_PUBLIC_OFFER and periods:
-        idx = next((i for i, p in enumerate(periods) if p["bid_end"] > now), None)
-        if idx is None:  # все периоды прошли
-            last = periods[-1]
-            return {"price": last["price"], "deadline": last["bid_end"], "period_index": len(periods) - 1,
-                    "periods_total": len(periods), "next": None}
-        cur = periods[idx]
-        nxt = periods[idx + 1] if idx + 1 < len(periods) else None
-        return {
-            "price": cur["price"] if cur["price"] is not None else lot.get("price_current"),
-            "deadline": cur["bid_end"],
-            "period_index": idx,
-            "periods_total": len(periods),
-            "next": {"price": nxt["price"], "from": nxt["begin"] or cur["bid_end"]} if nxt else None,
-        }
-    return {"price": lot.get("price_current"), "deadline": lot["_applications_end"],
-            "period_index": None, "periods_total": None, "next": None}
+    """Цена и дедлайн на момент now (bidding_schedule - общий расчёт с
+    пайплайном) + номер текущего периода и следующая ступень цены для
+    экрана лота. Для аукциона - цена и конец приёма заявок из листа."""
+    periods = lot["_periods"] if lot["trade"] == TRADE_PUBLIC_OFFER else []
+    price_text = "" if lot.get("price_current") is None else str(lot["price_current"])
+    naive_now = now.astimezone(MSK).replace(tzinfo=None)  # даты сайта - Москва без зоны
+    price, deadline = bidding_schedule.effective_price_and_deadline(
+        price_text, lot.get("applications_end") or "", lot["_periods_text"] if periods else "", naive_now)
+    idx = next((i for i, p in enumerate(periods) if p["bid_end"] > now), None)
+    nxt = periods[idx + 1] if idx is not None and idx + 1 < len(periods) else None
+    return {
+        "price": _int(str(price or "").replace(",", ".")),
+        "deadline": parse_dt(deadline),
+        "period_index": idx,
+        "periods_total": len(periods) or None,
+        # следующая ступень - только если у неё известна цена
+        "next": {"price": nxt["price"], "from": nxt["begin"]} if nxt and nxt["price"] else None,
+    }
 
 
 def gap_for(lot, price):

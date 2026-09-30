@@ -3,7 +3,7 @@
 #   bash miniapp/deploy.sh
 #
 # Отправляет на сервер ЗАКОММИЧЕННОЕ состояние (git archive HEAD) - только
-# lot_metrics.py и папку miniapp/, без секретов и кэшей - и пересобирает
+# lot_metrics.py, bidding_schedule.py и папку miniapp/, без секретов и кэшей - и пересобирает
 # контейнеры. Незакоммиченные правки на сервер не попадут: сначала commit.
 # База (miniapp/data/) и настройки (miniapp/.env) на сервере не трогаются.
 set -euo pipefail
@@ -11,12 +11,12 @@ set -euo pipefail
 HOST="${HONESTLOT_HOST:-honestlot@84.201.144.182}"
 cd "$(git rev-parse --show-toplevel)"
 
-if ! git diff --quiet HEAD -- lot_metrics.py miniapp; then
-  echo "Внимание: есть незакоммиченные правки в miniapp/ или lot_metrics.py - они НЕ будут выложены."
+if ! git diff --quiet HEAD -- lot_metrics.py bidding_schedule.py miniapp; then
+  echo "Внимание: есть незакоммиченные правки в miniapp/, lot_metrics.py или bidding_schedule.py - они НЕ будут выложены."
 fi
 
 echo "Отправляю $(git rev-parse --short HEAD) на $HOST ..."
-git archive --format=tar HEAD lot_metrics.py miniapp | ssh "$HOST" 'mkdir -p ~/honestlot && tar -x -C ~/honestlot'
+git archive --format=tar HEAD lot_metrics.py bidding_schedule.py miniapp | ssh "$HOST" 'mkdir -p ~/honestlot && tar -x -C ~/honestlot'
 
 ssh "$HOST" 'set -e
 cd ~/honestlot/miniapp
