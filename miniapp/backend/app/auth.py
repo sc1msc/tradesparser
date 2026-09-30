@@ -21,12 +21,16 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 from urllib.parse import parse_qsl
 
 # initData подписан один раз при открытии мини-аппа и не обновляется, пока
 # оно открыто - поэтому срок жизни щедрый, а не минуты.
 MAX_AGE_SECONDS = 7 * 24 * 3600
+
+
+START_PARAM_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class AuthError(Exception):
@@ -61,6 +65,10 @@ def validate_init_data(init_data, bot_token, now=None):
         raise AuthError("неверное поле user")
     if not isinstance(user, dict) or not user.get("id"):
         raise AuthError("в initData нет пользователя")
+    # Метка источника из ссылки t.me/<бот>?startapp=<метка> - тоже под
+    # подписью, подделать нельзя. Telegram разрешает A-Z a-z 0-9 _ -, до 64.
+    start_param = fields.get("start_param") or ""
+    user["start_param"] = start_param[:64] if START_PARAM_RE.match(start_param) else None
     return user
 
 
@@ -72,5 +80,5 @@ def user_from_header(authorization):
     if not init_data:
         dev_id = os.environ.get("HONESTLOT_DEV_USER_ID")
         if dev_id:
-            return {"id": int(dev_id), "username": "dev", "first_name": "Dev"}
+            return {"id": int(dev_id), "username": "dev", "first_name": "Dev", "start_param": None}
     return validate_init_data(init_data, os.environ.get("HONESTLOT_BOT_TOKEN", ""))

@@ -47,3 +47,21 @@ docker compose -f miniapp/docker-compose.yml up -d --build
 MINIAPP_API_URL = "https://<DOMAIN>"
 MINIAPP_IMPORT_TOKEN = "<то же, что HONESTLOT_IMPORT_TOKEN>"
 ```
+
+## Ссылки с меткой источника и метрики
+
+Ссылка, по которой открывается мини-апп сразу, с меткой, откуда пришёл человек:
+
+```
+https://t.me/honestlot_bot?startapp=<метка>
+```
+
+Метка: латиница, цифры, `_` и `-`, до 64 символов. Например, `podbor_2026_10` для поста в канале про подбор или `sales` для канала продаж. Ссылка работает, когда у бота включено основное мини-приложение: @BotFather → `/mybots` → бот → Bot Settings → Configure Mini App → Enable Mini App, адрес — тот же, что у кнопки меню.
+
+Метка приходит в подписанных данных Telegram (`start_param`) и записывается пользователю в `users.source` при первом входе. При входе через кнопку меню метки нет.
+
+Сводка по пользователям, источникам и активности:
+
+```
+ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose exec -T api python -m app.stats"
+```

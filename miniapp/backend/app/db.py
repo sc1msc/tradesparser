@@ -17,7 +17,15 @@ HONESTLOT_DB, по умолчанию miniapp/backend/data/honestlot.db).
               Лоты, пропавшие из листа, НЕ удаляются (in_source = 0):
               на них могут ссылаться избранные.
   users     - пользователи Telegram (telegram_id из подписанного initData).
+              source - откуда пришёл: параметр startapp ссылки вида
+              t.me/honestlot_bot?startapp=<метка> (в initData - start_param,
+              подписан Telegram). Первый известный источник не
+              перезаписывается; last_source - метка последнего входа по ссылке.
   favorites - избранное: пара (telegram_id, lot_id).
+  events    - минимальная аналитика: open (открыл мини-апп), lot_view
+              (открыл карточку лота), fav_add (в избранное), source_click
+              (перешёл на сайт торгов - самый сильный сигнал интереса).
+              Сводка - python -m app.stats (miniapp/backend/app/stats.py).
 """
 import json
 import os
@@ -64,8 +72,20 @@ CREATE TABLE IF NOT EXISTS users (
     username      TEXT,
     first_name    TEXT,
     created_at    TEXT NOT NULL,
-    last_seen_at  TEXT NOT NULL
+    last_seen_at  TEXT NOT NULL,
+    source        TEXT,
+    last_source   TEXT
 );
+
+CREATE TABLE IF NOT EXISTS events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id INTEGER NOT NULL,
+    type        TEXT NOT NULL,
+    lot_id      TEXT,
+    source      TEXT,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_created ON events (created_at);
 
 CREATE TABLE IF NOT EXISTS favorites (
     telegram_id INTEGER NOT NULL,
@@ -91,7 +111,10 @@ FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 # EXISTS их в существующую базу не добавит - досоздаём ALTER TABLE.
 MIGRATIONS = {
     "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0")],
+    "users": [("source", "TEXT"), ("last_source", "TEXT")],
 }
+
+EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click"}
 
 _lock = threading.Lock()
 
@@ -174,16 +197,32 @@ def import_lots(lots, now_iso):
     return len(ids), cur.rowcount
 
 
-def touch_user(telegram_id, username, first_name, now_iso):
+def touch_user(telegram_id, username, first_name, now_iso, start_param=None):
+    """start_param - метка из ссылки ?startapp=... (None при входе через
+    кнопку меню). source - первый известный источник, не перезаписывается."""
     with _lock:
         c = conn()
         with c:
             c.execute(
-                "INSERT INTO users (telegram_id, username, first_name, created_at, last_seen_at) "
-                "VALUES (?, ?, ?, ?, ?) ON CONFLICT(telegram_id) DO UPDATE SET "
+                "INSERT INTO users (telegram_id, username, first_name, created_at, last_seen_at, "
+                "source, last_source) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(telegram_id) DO UPDATE SET "
                 "username = excluded.username, first_name = excluded.first_name, "
-                "last_seen_at = excluded.last_seen_at",
-                (telegram_id, username, first_name, now_iso, now_iso),
+                "last_seen_at = excluded.last_seen_at, "
+                "source = COALESCE(users.source, excluded.source), "
+                "last_source = COALESCE(excluded.last_source, users.last_source)",
+                (telegram_id, username, first_name, now_iso, now_iso, start_param, start_param),
+            )
+
+
+def log_event(telegram_id, event_type, now_iso, lot_id=None, source=None):
+    if event_type not in EVENT_TYPES:
+        return
+    with _lock:
+        c = conn()
+        with c:
+            c.execute(
+                "INSERT INTO events (telegram_id, type, lot_id, source, created_at) VALUES (?, ?, ?, ?, ?)",
+                (telegram_id, event_type, lot_id, source, now_iso),
             )
 
 

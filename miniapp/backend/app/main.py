@@ -12,6 +12,9 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   GET    /api/favorites          - избранное текущего пользователя
   PUT    /api/favorites/{id}     - добавить в избранное
   DELETE /api/favorites/{id}     - убрать из избранного
+  POST   /api/events             - событие для аналитики: {"type": "open"} при
+                                   старте, {"type": "source_click", "lot_id"} при
+                                   переходе на сайт торгов (остальное пишет сервер)
   POST   /api/import             - загрузка лотов с ПК (export_to_miniapp.py),
                                    защищён ключом X-Import-Token
                                    (переменная окружения HONESTLOT_IMPORT_TOKEN)
@@ -46,13 +49,14 @@ def _now_iso():
     return datetime.datetime.now(lots.MSK).isoformat(timespec="seconds")
 
 
-def current_user(authorization):
+def current_user(authorization, with_source=False):
     try:
         user = auth.user_from_header(authorization)
     except auth.AuthError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso())
-    return int(user["id"])
+    db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(),
+                  user.get("start_param"))
+    return (int(user["id"]), user.get("start_param")) if with_source else int(user["id"])
 
 
 @app.get("/api/lots")
@@ -79,6 +83,7 @@ def api_lot(lot_id: str, authorization: str = Header(default="")):
     lot = lots.get(lot_id)
     if lot is None:
         raise HTTPException(status_code=404, detail="лот не найден")
+    db.log_event(uid, "lot_view", _now_iso(), lot_id=lot_id)
     return lots.detail(lot, lots.now_msk(), set(db.favorite_ids(uid)))
 
 
@@ -94,6 +99,7 @@ def api_favorite_add(lot_id: str, authorization: str = Header(default="")):
     if lots.get(lot_id) is None:
         raise HTTPException(status_code=404, detail="лот не найден")
     db.add_favorite(uid, lot_id, _now_iso())
+    db.log_event(uid, "fav_add", _now_iso(), lot_id=lot_id)
     return {"ok": True}
 
 
@@ -101,6 +107,22 @@ def api_favorite_add(lot_id: str, authorization: str = Header(default="")):
 def api_favorite_remove(lot_id: str, authorization: str = Header(default="")):
     uid = current_user(authorization)
     db.remove_favorite(uid, lot_id)
+    return {"ok": True}
+
+
+class EventPayload(BaseModel):
+    type: str
+    lot_id: str | None = None
+
+
+@app.post("/api/events")
+def api_event(payload: EventPayload, authorization: str = Header(default="")):
+    uid, start_param = current_user(authorization, with_source=True)
+    # с фронта принимаем только то, что сервер сам не видит
+    if payload.type not in ("open", "source_click"):
+        raise HTTPException(status_code=400, detail="неизвестный тип события")
+    db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id,
+                 source=start_param if payload.type == "open" else None)
     return {"ok": True}
 
 

@@ -104,6 +104,11 @@ function toast(text) {
 }
 const haptic = (kind) => { try { tg && tg.HapticFeedback.impactOccurred(kind || "light"); } catch { /* вне Telegram */ } };
 function openLink(url) { if (IN_TG) tg.openLink(url); else window.open(url, "_blank", "noopener"); }
+// Аналитика: ошибки не показываем пользователю - это не его забота.
+function track(type, lotId) {
+  api("/events", { method: "POST", keepalive: true, body: JSON.stringify({ type, lot_id: lotId || null }) })
+    .catch(() => {});
+}
 
 // ---------- API ----------
 
@@ -111,7 +116,10 @@ class AuthError extends Error {}
 async function api(path, opts = {}) {
   const r = await fetch("/api" + path, {
     ...opts,
-    headers: { Authorization: "tma " + ((tg && tg.initData) || "") },
+    headers: {
+      Authorization: "tma " + ((tg && tg.initData) || ""),
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
+    },
   });
   if (r.status === 401) throw new AuthError(await r.text());
   if (!r.ok) throw new Error(`Ошибка ${r.status}`);
@@ -472,7 +480,7 @@ async function renderLot(id) {
     ])),
     desc ? h("div", { class: "block" }, h("h3", {}, "Описание"), desc, descToggle) : null,
     h("div", { class: "bottombar" },
-      h("button", { class: "btn", onclick: () => openLink(lot.url) }, "Открыть лот на сайте торгов"))));
+      h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.url); } }, "Открыть лот на сайте торгов"))));
 }
 
 // ---------- фильтры ----------
@@ -663,6 +671,7 @@ async function start() {
   favsEl.classList.add("hidden");
   renderTabs();
   loadFeed(true);
+  track("open");
   try {
     const [facets, favs] = await Promise.all([api("/facets"), api("/favorites")]);
     state.facets = facets;
