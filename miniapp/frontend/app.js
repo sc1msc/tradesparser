@@ -245,7 +245,7 @@ function buildFeed() {
   feed.more = h("button", { class: "more hidden", onclick: () => loadFeed(false) }, "Показать ещё");
   feed.el = h("div", { class: "screen" },
     h("div", { class: "topbar" },
-      h("div", { class: "brandline" }, h("img", { src: "logo.svg", alt: "" }), h("div", { class: "word" }, "honest", h("span", {}, "lot"))),
+      h("div", { class: "brandline" }, h("img", { src: "logo.svg", alt: "" }), h("div", { class: "word" }, "Honest", h("span", {}, "Lot"))),
       h("div", { class: "searchrow" },
         h("label", { class: "search" }, icon("search"), feed.input),
         h("button", { class: "iconbtn", "aria-label": "Фильтры", onclick: () => push({ kind: "filters" }) }, icon("filter"), feed.badge)),
@@ -656,7 +656,7 @@ function renderFilters(initial) {
 function showStub() {
   document.getElementById("app").replaceChildren(h("div", { class: "stub" },
     h("img", { src: "logo.svg", alt: "" }),
-    h("h2", {}, "honestlot"),
+    h("h2", {}, "HonestLot"),
     h("p", {}, "Выгодные лоты с банкротных торгов. Приложение работает внутри Telegram."),
     h("button", { class: "btn", style: { maxWidth: "280px", margin: "16px auto 0", display: "block" }, onclick: () => { location.href = `https://t.me/${BOT}`; } },
       `Открыть @${BOT}`)));
