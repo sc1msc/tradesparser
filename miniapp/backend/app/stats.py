@@ -4,6 +4,10 @@ r"""
 
 На сервере (с ПК, одной командой):
   ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose exec -T api python -m app.stats"
+Список пользователей (id, username, имя, источник, даты), новые сверху:
+  ... python -m app.stats users            - все
+  ... python -m app.stats users podbor_post1 - только пришедшие по этой метке
+  ... python -m app.stats users -          - только "без метки"
 Локально (база miniapp/backend/data/honestlot.db):
   python -m app.stats   (из папки miniapp/backend)
 
@@ -20,6 +24,7 @@ r"""
 """
 import datetime
 import sqlite3
+import sys
 
 from . import db
 
@@ -81,5 +86,33 @@ def run():
     c.close()
 
 
+def list_users(source=None):
+    """source=None - все; "-" - без метки; иначе - по первому источнику."""
+    c = sqlite3.connect(db.db_path())
+    c.row_factory = sqlite3.Row
+    sql = ("SELECT u.telegram_id, u.username, u.first_name, u.source, u.last_source, u.created_at, u.last_seen_at, "
+           "(SELECT COUNT(*) FROM events e WHERE e.telegram_id = u.telegram_id AND e.type = 'lot_view') views, "
+           "(SELECT COUNT(*) FROM favorites f WHERE f.telegram_id = u.telegram_id) favs FROM users u")
+    args = ()
+    if source == "-":
+        sql += " WHERE u.source IS NULL"
+    elif source:
+        sql += " WHERE u.source = ?"
+        args = (source,)
+    rows = _q(c, sql + " ORDER BY u.created_at DESC", args)
+    print(f"{'telegram_id':<12} {'username':<20} {'имя':<16} {'источник':<16} {'последний':<16} "
+          f"{'пришёл':<16} {'был':<16} {'просм':>5} {'избр':>4}")
+    for r in rows:
+        print(f"{r['telegram_id']:<12} {('@' + r['username']) if r['username'] else '-':<20} "
+              f"{(r['first_name'] or '-')[:16]:<16} {r['source'] or '-':<16} {r['last_source'] or '-':<16} "
+              f"{r['created_at'][:16].replace('T', ' '):<16} {r['last_seen_at'][:16].replace('T', ' '):<16} "
+              f"{r['views']:>5} {r['favs']:>4}")
+    print(f"\nВсего: {len(rows)}")
+    c.close()
+
+
 if __name__ == "__main__":
-    run()
+    if len(sys.argv) > 1 and sys.argv[1] == "users":
+        list_users(sys.argv[2] if len(sys.argv) > 2 else None)
+    else:
+        run()

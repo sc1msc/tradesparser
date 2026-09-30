@@ -65,3 +65,13 @@ https://t.me/honestlot_bot?startapp=<метка>
 ```
 ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose exec -T api python -m app.stats"
 ```
+
+Список пользователей поимённо (id, username, имя, первый и последний источник, даты, просмотры, избранное), новые сверху:
+
+```
+ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose exec -T api python -m app.stats users"
+ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose exec -T api python -m app.stats users podbor_post1"
+ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose exec -T api python -m app.stats users -"
+```
+
+Вторая команда — только пришедшие по метке `podbor_post1`, третья — только «без метки».
