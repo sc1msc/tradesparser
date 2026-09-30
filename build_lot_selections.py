@@ -140,6 +140,23 @@ def _compute_gap(row, header, cache):
     )
 
 
+# Формат ячеек "% below mkt": обычное число с одним знаком. Значение пишется в
+# процентных пунктах (15.4 = 15,4%). Без явного формата часть ячеек
+# наследует процентный формат от старых ручных значений (пересборка листа
+# меняет значения, но не форматы строк) - и Google показывает 15.4 как
+# "1540%" (было у 77 строк lots_current_month 01.10.2026).
+GAP_NUMBER_FORMAT = {"numberFormat": {"type": "NUMBER", "pattern": "0.0"}}
+
+
+def _format_gap_column(worksheet, col_idx, rows_count):
+    """col_idx - 0-based индекс колонки, rows_count - число строк данных."""
+    if rows_count <= 0:
+        return
+    first = gspread.utils.rowcol_to_a1(2, col_idx + 1)
+    last = gspread.utils.rowcol_to_a1(rows_count + 1, col_idx + 1)
+    worksheet.format(f"{first}:{last}", GAP_NUMBER_FORMAT)
+
+
 def build_top_gap(header, data_rows, cache):
     rows_with_gap = []
     excluded_damaged = 0
@@ -263,6 +280,7 @@ def run():
     first = gspread.utils.rowcol_to_a1(1, gap_col_idx + 1)
     last = gspread.utils.rowcol_to_a1(len(data_rows) + 1, gap_col_idx + 1)
     source.update(range_name=f"{first}:{last}", values=[[PERCENT_BELOW_MKT_COL]] + gaps)
+    _format_gap_column(source, gap_col_idx, len(data_rows))
     filled = sum(1 for g in gaps if g[0] != "")
     print(f"{SOURCE_SHEET}: '% below mkt' посчитан для {filled} из {len(data_rows)} лотов "
           f"(у остальных нет оценки Auto.ru или цены)")
@@ -295,6 +313,7 @@ def run():
         out_rows = [header] + selected_rows
         target.clear()
         target.update(range_name="A1", values=out_rows)
+        _format_gap_column(target, gap_col_idx, len(selected_rows))
 
         print(f"{sheet_name}: {len(selected_rows)} лотов (из {len(data_rows)})")
 
