@@ -22,7 +22,11 @@ ssh "$HOST" 'set -e
 cd ~/honestlot/miniapp
 if [ ! -f .env ]; then echo "На сервере нет ~/honestlot/miniapp/.env - см. miniapp/README.md"; exit 1; fi
 docker compose up -d --build --remove-orphans
-# Caddyfile подключён как файл: при его изменении контейнер не пересоздаётся - перечитать вручную
-docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+# Caddyfile подключён в контейнер отдельным файлом: после выкладки (новый файл) контейнер
+# продолжает видеть старый, и даже caddy reload его не замечает. Изменился - перезапуск caddy.
+if ! docker compose exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - Caddyfile; then
+  echo "Caddyfile изменился - перезапускаю caddy"
+  docker compose restart caddy
+fi
 docker image prune -f >/dev/null
 docker compose ps'
