@@ -42,7 +42,7 @@ MSK = datetime.timezone(datetime.timedelta(hours=3))
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 # Короткие бренды/слова, которые пишем целиком заглавными ("BMW", а не "Bmw").
-UPPER_WORDS = {"BMW", "UAZ", "GAZ", "VAZ", "MG", "BYD", "GMC", "DS", "JAC", "FAW", "GAC", "BAIC", "SWM", "MINI", "AMG"}
+UPPER_WORDS = {"BMW", "UAZ", "GAZ", "VAZ", "MG", "BYD", "GMC", "DS", "JAC", "FAW", "GAC", "BAIC", "SWM", "MINI", "AMG", "GWM", "ZAZ"}
 
 # Синонимы марок: Авто.ру пишет "VAZ", таблица - "Lada" и т.п. Ключ - после
 # замены "_" на пробел и перевода в верхний регистр.
@@ -55,6 +55,54 @@ BRAND_ALIASES = {
     "ГАЗ": "GAZ", "УАЗ": "UAZ",
 }
 BRAND_LABELS = {"SSANGYONG": "SsangYong", "LIXIANG": "LiXiang"}
+
+# Известные марки (ключ - как в BRAND_ALIASES/ленте) и их написания в
+# документах торгов. Нужны, когда в поле марки попал кусок фразы ("Тс:
+# Фольксваген", "И Модель: Ссанг Енг Рекстон", "Чанган Cs 35"): тогда марку
+# ищем в тексте по этому списку, а то, что после неё, считаем моделью.
+KNOWN_BRANDS = {
+    "AUDI", "BAIC", "BELGEE", "BMW", "BYD", "CADILLAC", "CHANGAN", "CHERY", "CHEVROLET",
+    "CHRYSLER", "CITROEN", "DAEWOO", "DATSUN", "DODGE", "DONGFENG", "EXEED", "FAW", "FIAT",
+    "FORD", "FUSO", "GAZ", "GEELY", "GENESIS", "GREAT WALL", "GWM", "HAVAL", "HONDA",
+    "HYUNDAI", "INFINITI", "ISUZU", "IVECO", "JAC", "JAECOO", "JAGUAR", "JEEP", "JETOUR",
+    "KAIYI", "KIA", "LADA", "LAND ROVER", "LEXUS", "LIFAN", "LIVAN", "LIXIANG", "MAZDA",
+    "MERCEDES-BENZ", "MG", "MINI", "MITSUBISHI", "МОСКВИЧ", "NISSAN", "OMODA", "OPEL",
+    "PEUGEOT", "PORSCHE", "RENAULT", "SAAB", "SKODA", "SMART", "SSANGYONG", "SUBARU",
+    "SUZUKI", "SWM", "TANK", "TESLA", "TOYOTA", "UAZ", "VOLKSWAGEN", "VOLVO", "VORTEX",
+    "WEY", "ZAZ", "ZOTYE",
+}
+BRAND_SPELLINGS = {
+    "ЧАНГАН": "CHANGAN", "ЧЕРИ": "CHERY", "ДЖИЛИ": "GEELY", "ХАВАЛ": "HAVAL", "ХАВЕЙЛ": "HAVAL",
+    "ХЕНДЭ": "HYUNDAI", "ХЕНДАЙ": "HYUNDAI", "ХУНДАЙ": "HYUNDAI", "ХЁНДЭ": "HYUNDAI",
+    "КИА": "KIA", "ФОРД": "FORD", "ТОЙОТА": "TOYOTA", "РЕНО": "RENAULT", "ШКОДА": "SKODA",
+    "ФОЛЬКСВАГЕН": "VOLKSWAGEN", "НИССАН": "NISSAN", "МИЦУБИСИ": "MITSUBISHI",
+    "МИЦУБИШИ": "MITSUBISHI", "МАЗДА": "MAZDA", "ПЕЖО": "PEUGEOT", "СИТРОЕН": "CITROEN",
+    "ШЕВРОЛЕ": "CHEVROLET", "ОПЕЛЬ": "OPEL", "БМВ": "BMW", "МЕРСЕДЕС-БЕНЦ": "MERCEDES-BENZ",
+    "МЕРСЕДЕС БЕНЦ": "MERCEDES-BENZ", "МЕРСЕДЕС": "MERCEDES-BENZ", "АУДИ": "AUDI",
+    "ЛЕКСУС": "LEXUS", "ХОНДА": "HONDA", "СУБАРУ": "SUBARU", "СУЗУКИ": "SUZUKI",
+    "ВОЛЬВО": "VOLVO", "ДЭУ": "DAEWOO", "ДЕУ": "DAEWOO", "ЛИФАН": "LIFAN", "ИНФИНИТИ": "INFINITI",
+    "ПОРШЕ": "PORSCHE", "ССАНГ ЕНГ": "SSANGYONG", "ССАНГ ЙОНГ": "SSANGYONG",
+    "ССАНГЙОНГ": "SSANGYONG", "ОМОДА": "OMODA", "ДЖЕТУР": "JETOUR", "ЭКСИД": "EXEED",
+    "ЛЕНД РОВЕР": "LAND ROVER", "ЛЭНД РОВЕР": "LAND ROVER", "ЯГУАР": "JAGUAR", "ДЖИП": "JEEP",
+    "ФИАТ": "FIAT", "ГАЗ": "GAZ", "УАЗ": "UAZ", "ВАЗ": "LADA", "ЛАДА": "LADA",
+    "ТЕСЛА": "TESLA", "ГРЕЙТ ВОЛЛ": "GREAT WALL", "ЗАЗ": "ZAZ",
+    "SSANG YONG": "SSANGYONG", "MERCEDES": "MERCEDES-BENZ", "MERCEDES BENZ": "MERCEDES-BENZ",
+    "VAZ": "LADA", "CHERYEXEED": "EXEED",
+}
+_BRAND_NAMES = sorted(set(KNOWN_BRANDS) | set(BRAND_SPELLINGS), key=len, reverse=True)
+_BRAND_FIND_RE = re.compile(
+    r"(?<![A-ZА-ЯЁ0-9])(" + "|".join(re.escape(n) for n in _BRAND_NAMES) + r")(?![A-ZА-ЯЁ0-9])")
+
+
+def find_brand(text):
+    """Первая известная марка в тексте -> (ключ, текст после неё) или (None, "")."""
+    upper = " ".join((text or "").upper().replace("Ё", "Е").replace("_", " ").split())
+    m = _BRAND_FIND_RE.search(upper)
+    if not m:
+        return None, ""
+    key = BRAND_SPELLINGS.get(m.group(1), m.group(1))
+    original = " ".join((text or "").replace("_", " ").split())
+    return key, original[m.end():] if len(original) == len(upper) else upper[m.end():]
 # Настоящая марка - короткое слово из букв/цифр/дефисов. Всё прочее ("$7C",
 # "И МОДЕЛЬ: ССАНГ ЕНГ ...", целый абзац из title) - мусор разбора текста:
 # такой лот остаётся в ленте и в поиске, но без марки в фильтре.
@@ -112,14 +160,45 @@ def clean_brand(value):
     """-> (ключ, подпись) или ("", "") для мусора."""
     key = _norm_key(value)
     key = BRAND_ALIASES.get(key, key)
+    key = BRAND_SPELLINGS.get(key, key)
     if not BRAND_RE.match(key):
         return "", ""
+    if " " in key and key not in KNOWN_BRANDS:
+        return "", ""  # "ЧАНГАН CS 35" - марка с моделью, разбирает resolve_brand_model
     return key, BRAND_LABELS.get(key) or pretty_name(key)
+
+
+def resolve_brand_model(brand, model, title):
+    """Марка и модель лота с дочисткой мусора из разбора текста:
+    -> (ключ марки, подпись марки, модель для clean_model)."""
+    key, label = clean_brand(brand)
+    if key:
+        return key, label, model
+    # в поле марки - фраза: ищем в ней (и в модели) известную марку, хвост - модель
+    for text in (brand, model):
+        found, rest = find_brand(text)
+        if found:
+            return found, BRAND_LABELS.get(found) or pretty_name(found), _model_tail(found, rest) or model
+    found, rest = find_brand(title)  # не нашли ни в марке, ни в модели - ищем в названии лота
+    if found:
+        return found, BRAND_LABELS.get(found) or pretty_name(found), model or _model_tail(found, rest)
+    return "", "", ""
+
+
+def _model_tail(brand_key, rest):
+    """Хвост после марки -> модель: до первой запятой/скобки, без
+    разделителей и повторного названия марки ("Чери/Chery Tiggo7" -> "Tiggo7")."""
+    rest = re.split(r"[,;(]", rest or "", maxsplit=1)[0]
+    words = rest.replace("/", " ").split()
+    while words and BRAND_SPELLINGS.get(words[0].upper(), words[0].upper()) == brand_key:
+        words = words[1:]
+    return " ".join(words).strip(" :–-")
 
 
 def clean_model(value, brand_label):
     model = " ".join((value or "").replace("_", " ").split())
-    model = re.sub(r"^(модель|model)\s*:?\s*", "", model, flags=re.IGNORECASE)
+    model = re.sub(r"^\W*(модель|model|тс|т\.с\.)\s*[:–-]?\s*", "", model, flags=re.IGNORECASE)
+    model = re.sub(r"^\W*(модель|model)\s*[:–-]?\s*", "", model, flags=re.IGNORECASE)
     model = re.sub(r"^\([^)]*\)\s*", "", model)  # "(lada) 2190 Granta" -> "2190 Granta"
     # Документы торгов смешивают в одном слове кириллицу с латиницей
     # ("Sаnта FЕ") - в словах, где есть латиница, двойники меняем на латиницу.
@@ -127,7 +206,7 @@ def clean_model(value, brand_label):
     # Модель из Autodoc иногда начинается с марки ("Audi A6 ...") - убираем повтор.
     if brand_label and _norm_key(model).startswith(_norm_key(brand_label) + " "):
         model = model[len(brand_label):].strip()
-    model = MODEL_JUNK_RE.sub("", model).strip(" ,.:;-")
+    model = MODEL_JUNK_RE.sub("", model).strip(" ,.:;-()")
     if len(model) > 25:
         return ""
     return pretty_name(model)
@@ -136,8 +215,8 @@ def clean_model(value, brand_label):
 def _prepare(lot):
     """Статичные (не зависящие от времени) производные поля - один раз на
     загрузку кэша."""
-    brand_key, brand = clean_brand(lot.get("brand"))
-    model = clean_model(lot.get("model"), brand) if brand else ""
+    brand_key, brand, raw_model = resolve_brand_model(lot.get("brand"), lot.get("model"), lot.get("title"))
+    model = clean_model(raw_model, brand) if brand else ""
     lot["brand_label"] = brand
     lot["model_label"] = model
     lot["brand_key"] = brand_key
