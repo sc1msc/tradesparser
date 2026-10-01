@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640">
+  <!-- Юзерпик @honestlot_bot: логотип мини-аппа (frontend/logo.svg) - белый ценник с
+       галочкой на фирменном зелёном. Telegram обрезает аватар в круг, поэтому знак
+       занимает центральную часть с запасом по краям. Пара - support_userpic.svg
+       (тот же знак внутри облачка сообщения). -->
+  <rect width="640" height="640" fill="#179a50"/>
+  <g transform="translate(320 320) scale(8.6) translate(-31 -31.5)" fill="none" stroke="#ffffff" stroke-linejoin="round">
+    <path d="M17 18h17.5a4 4 0 0 1 2.9 1.2l9.4 9.9a4 4 0 0 1 0 5.5L37.4 44.6a4 4 0 0 1-5.8.1L16.2 29.3A4 4 0 0 1 15 26.5V20a2 2 0 0 1 2-2z" stroke-width="3.5"/>
+    <path d="M24.5 31.5l5 5 9-10" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>
