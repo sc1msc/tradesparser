@@ -8,7 +8,7 @@ const IN_TG = !!(tg && tg.initData);
 const PAGE = 20;
 const BOT = "honestlot_bot";
 // Аккаунт поддержки в Telegram (без @). Пусто - ссылка "Написать в поддержку" не показывается.
-const SUPPORT = "";
+const SUPPORT = "honestlot_support_bot";
 
 // Итог торгов (fav_state / outcome с сервера, см. lots.outcome) - как подписать.
 const OUTCOME_TEXT = {
