@@ -206,7 +206,12 @@ def clean_model(value, brand_label):
     # Модель из Autodoc иногда начинается с марки ("Audi A6 ...") - убираем повтор.
     if brand_label and _norm_key(model).startswith(_norm_key(brand_label) + " "):
         model = model[len(brand_label):].strip()
-    model = MODEL_JUNK_RE.sub("", model).strip(" ,.:;-()")
+    model = MODEL_JUNK_RE.sub("", model).strip(" ,.:;-")
+    # непарная скобка от обрезанной фразы ("Pajero)"), парные ("2131 (4X4)") не трогаем
+    if model.endswith(")") and model.count("(") < model.count(")"):
+        model = model[:-1].strip()
+    if model.startswith("(") and model.count("(") > model.count(")"):
+        model = model[1:].strip()
     if len(model) > 25:
         return ""
     return pretty_name(model)
