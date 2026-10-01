@@ -18,8 +18,6 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
                                    торгов ещё неизвестен - ПК перечитывает их на сайте
   POST   /api/lot-status         - (ключ импорта) статусы, перечитанные с сайта
-  POST   /api/telegram/webhook   - сообщения боту от Telegram; ответ - в теле
-                                   ответа вебхука (см. bot.py), защищён секретом
   POST   /api/import             - загрузка лотов с ПК (export_to_miniapp.py),
                                    защищён ключом X-Import-Token
                                    (переменная окружения HONESTLOT_IMPORT_TOKEN)
@@ -40,7 +38,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, bot, db, lots
+from . import auth, db, lots
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -172,18 +170,6 @@ def api_import(payload: ImportPayload, x_import_token: str = Header(default=""))
     imported, hidden = db.import_lots(payload.lots, _now_iso())
     lots.invalidate()
     return {"imported": imported, "left_source": hidden}
-
-
-@app.post("/api/telegram/webhook")
-async def telegram_webhook(request: Request,
-                           x_telegram_bot_api_secret_token: str = Header(default="")):
-    if not bot.secret_ok(x_telegram_bot_api_secret_token):
-        raise HTTPException(status_code=403, detail="неверный секрет вебхука")
-    try:
-        update = await request.json()
-    except ValueError:
-        return {}
-    return bot.reply(update) or {}
 
 
 @app.get("/api/health")
