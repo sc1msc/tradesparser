@@ -46,6 +46,7 @@ from playwright.sync_api import sync_playwright
 import config
 import lot_metrics
 import autoru_valuation
+import vin_cache
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SHEET_NAME = "lots_current_month"
@@ -116,7 +117,8 @@ def _batch_write(worksheet, row_num, col, updates):
 def run():
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
-    worksheet = client.open_by_key(config.SPREADSHEET_ID).worksheet(SHEET_NAME)
+    spreadsheet = client.open_by_key(config.SPREADSHEET_ID)
+    worksheet = spreadsheet.worksheet(SHEET_NAME)
 
     values = worksheet.get_all_values()
     if not values:
@@ -168,6 +170,9 @@ def run():
 
     processed = 0
     ok_count = 0
+    # Готовые оценки - ещё и в справочник по VIN: переживут выпадение лота
+    # из среза и пригодятся, если машину выставят снова (vin_cache.py).
+    cache = vin_cache.VinCache(spreadsheet)
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=config.AUTORU_HEADLESS)
@@ -240,10 +245,13 @@ def run():
 
             updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             _batch_write(worksheet, row_num, col, updates)
+            if updates.get("autoru_status") in vin_cache.AUTORU_FINAL:
+                cache.update(vin, updates)
             processed += 1
             time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
 
         browser.close()
+    cache.flush()
 
     print(f"\nГотово. Обработано: {processed}, успешно: {ok_count}.")
 

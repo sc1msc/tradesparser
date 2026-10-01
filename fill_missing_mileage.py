@@ -74,6 +74,7 @@ import config
 import lot_metrics
 import sheets_writer
 import tronk_mileage
+import vin_cache
 
 
 SKIP_STATUSES = {"ok", "no_data", "suspicious"}
@@ -199,12 +200,24 @@ def run():
     candidates = select_candidates(rows)
     print(f"Лотов-кандидатов (есть VIN, лот актуален, пробег не указан, ещё не проверяли): {len(candidates)}")
 
+    # Справочник по VIN (vin_cache.py): пробег, купленный раньше - в том
+    # числе для лотов, которых в "lots" уже нет (удалены после дедлайна).
+    # Купленное до появления справочника подбираем из строк "lots".
+    cache = vin_cache.VinCache(worksheet.spreadsheet)
+    absorbed = cache.absorb_mileage(rows)
+    if absorbed:
+        cache.flush()
+        print(f"В справочник по VIN перенесено уже купленных пробегов: {absorbed}")
+
     if not candidates:
         print("Нечего доливать, выхожу.")
         return
 
-    # 1) VIN уже проверен в другой строке - копируем бесплатно.
+    # 1) VIN уже проверен в другой строке или есть в справочнике - копируем бесплатно.
     donors = checked_by_vin(rows)
+    for vin in {_vin(r) for r in candidates}:
+        if vin not in donors and cache.mileage(vin):
+            donors[vin] = cache.mileage(vin)
     reused = [r for r in candidates if _vin(r) in donors]
     for r in reused:
         sheets_writer.batch_set_cells(worksheet, r["_row_num"], updates_from_donor(donors[_vin(r)]))
@@ -269,6 +282,8 @@ def run():
 
         for r in vin_rows:
             sheets_writer.batch_set_cells(worksheet, r["_row_num"], updates)
+        if updates["mileage_probeg_status"] in vin_cache.MILEAGE_FINAL:
+            cache.update(vin, {f: updates.get(f) for f in vin_cache.MILEAGE_FIELDS})
 
         print(f"  -> {updates['mileage_probeg_status']} (TRONK: {fields['mileage_km']} на {fields['mileage_date']}, "
               f"на сегодня: {estimated}, источник: {fields['mileage_source']})")
@@ -276,6 +291,7 @@ def run():
         processed += 1
         time.sleep(config.DELAY_BETWEEN_MILEAGE_REQUESTS)
 
+    cache.flush()
     print(f"\nГотово. Отправлено запросов: {processed}, заполнено пробегов: {filled}, "
           f"отброшено неправдоподобных: {suspicious} (~{processed * price_per_request:.2f} руб. потрачено).")
 

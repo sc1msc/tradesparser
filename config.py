@@ -102,6 +102,10 @@ AVITO_BROWSER_HEADLESS = False
 AUTORU_MAX_PER_RUN = 300
 DELAY_BETWEEN_AUTORU_REQUESTS = 3.0
 AUTORU_HEADLESS = False  # см. комментарий выше про Avito - та же логика
+# Сколько дней оценка Авто.ру из справочника по VIN (vin_cache.py) годится
+# для того же автомобиля в новом лоте. Старше - лот оценивается заново:
+# рынок за несколько месяцев заметно меняется.
+AUTORU_ESTIMATE_TTL_DAYS = 60
 
 # --- Дайджест в Telegram-канал (send_digest.py) ---
 # TELEGRAM_BOT_TOKEN - в local_secrets.py, см. начало файла.

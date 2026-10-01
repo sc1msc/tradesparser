@@ -32,6 +32,7 @@ from google.oauth2.service_account import Credentials
 import bidding_schedule
 import config
 import lot_metrics
+import vin_cache
 import sheets_writer
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -187,13 +188,41 @@ def run():
     # скрипты (estimated_mileage, оценка Auto.ru и т.д.) - до очистки листа.
     extra_names, extras_by_vin = _read_existing_extra_columns(target)
 
+    # Справочник по VIN (vin_cache.py): сначала сохраняем туда оценки
+    # Авто.ру из старой версии среза (лоты, выпадающие сейчас из окна,
+    # иначе унесли бы их с собой), потом подставляем оттуда свежие
+    # оценки лотам, у которых своей нет (машину выставили снова).
+    cache = vin_cache.VinCache(spreadsheet)
+    absorbed = cache.absorb_autoru(
+        {**extras, "vin": vin} for vin, extras in extras_by_vin.items())
+    cache.flush()
+    now_dt = datetime.datetime.now()
+    autoru_cols = [c for c in vin_cache.AUTORU_FIELDS if c in extra_names]
+    from_cache = 0
+    expired = 0
+
     vin_idx = header.index("vin") if "vin" in header else None
     out_header = header + extra_names
     out_rows = [out_header]
     carried_over = 0
     for row in selected_rows:
         vin = row[vin_idx] if vin_idx is not None and vin_idx < len(row) else ""
-        extras = extras_by_vin.get(vin, {})
+        extras = dict(extras_by_vin.get(vin, {}))
+        if autoru_cols and vin_cache.norm_vin(vin):
+            # в справочнике - самая свежая оценка этой машины (absorb выше)
+            fresh = cache.autoru(vin, config.AUTORU_ESTIMATE_TTL_DAYS, now_dt)
+            own_status = (extras.get("autoru_status") or "").strip()
+            if fresh is not None:
+                if own_status not in vin_cache.AUTORU_FINAL:
+                    from_cache += 1
+                for c in autoru_cols:
+                    extras[c] = fresh.get(c, "")
+            elif own_status in vin_cache.AUTORU_FINAL:
+                # оценка старше AUTORU_ESTIMATE_TTL_DAYS - стираем, шаг 5
+                # оценит лот заново по сегодняшнему рынку
+                for c in autoru_cols:
+                    extras[c] = ""
+                expired += 1
         if extras:
             carried_over += 1
         extra_values = [extras.get(name, "") for name in extra_names]
@@ -205,6 +234,8 @@ def run():
     sheets_writer.numify_rows(out_header, out_rows[1:])
     _overwrite_sheet(target, out_rows)
 
+    print(f"Справочник по VIN: сохранено оценок Авто.ру {absorbed}, подставлено в срез {from_cache}, "
+          f"устарело (старше {config.AUTORU_ESTIMATE_TTL_DAYS} дн., оценятся заново) {expired}")
     print(f"Готово. Всего строк в '{SOURCE_SHEET}': {len(data_rows)}.")
     print(f"Попало в срез (дедлайн через {WINDOW_DAYS} дн. или меньше, ещё не истёк): {len(selected_rows)}")
     print(f"  пропущено (дедлайн уже прошёл): {skipped_expired}")
