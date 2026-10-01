@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640">
+  <!-- Юзерпик @honestlot_support_bot: фирменный зелёный и ценник с галочкой из logo.svg
+       мини-аппа - внутри облачка сообщения. Telegram обрезает аватар в круг, поэтому
+       всё значимое - в центральном круге. -->
+  <rect width="640" height="640" fill="#179a50"/>
+  <!-- облачко -->
+  <rect x="138" y="160" width="364" height="268" rx="76" fill="#ffffff"/>
+  <path d="M214 410 L176 492 L300 420 Z" fill="#ffffff"/>
+  <!-- ценник с галочкой (как в logo.svg), зелёным внутри облачка -->
+  <g transform="translate(320 294) scale(4.9) translate(-31 -31.5)" fill="none" stroke="#179a50" stroke-linejoin="round">
+    <path d="M17 18h17.5a4 4 0 0 1 2.9 1.2l9.4 9.9a4 4 0 0 1 0 5.5L37.4 44.6a4 4 0 0 1-5.8.1L16.2 29.3A4 4 0 0 1 15 26.5V20a2 2 0 0 1 2-2z" stroke-width="3.5"/>
+    <path d="M24.5 31.5l5 5 9-10" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>
