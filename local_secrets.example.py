@@ -13,3 +13,7 @@ SPREADSHEET_ID = "ВСТАВЬТЕ_ID_ТАБЛИЦЫ"
 # Необязательные: без них export_to_miniapp.py просто ничего не делает.
 MINIAPP_API_URL = ""
 MINIAPP_IMPORT_TOKEN = ""
+# Бот мини-аппа: токен @honestlot_bot и секрет вебхука (тот же, что
+# HONESTLOT_WEBHOOK_SECRET на сервере). Нужны только miniapp/set_webhook.py.
+MINIAPP_BOT_TOKEN = ""
+MINIAPP_WEBHOOK_SECRET = ""
