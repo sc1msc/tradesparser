@@ -19,6 +19,12 @@ try:
 except ImportError:
     MINIAPP_API_URL = ""
     MINIAPP_IMPORT_TOKEN = ""
+# Бот мини-аппа (@honestlot_bot) - только для miniapp/set_webhook.py.
+try:
+    from local_secrets import MINIAPP_BOT_TOKEN, MINIAPP_WEBHOOK_SECRET
+except ImportError:
+    MINIAPP_BOT_TOKEN = ""
+    MINIAPP_WEBHOOK_SECRET = ""
 
 # --- Google Sheets ---
 SERVICE_ACCOUNT_FILE = "service_account.json"   # путь к скачанному ключу
