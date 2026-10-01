@@ -21,7 +21,8 @@ HONESTLOT_DB, по умолчанию miniapp/backend/data/honestlot.db).
               t.me/honestlot_bot?startapp=<метка> (в initData - start_param,
               подписан Telegram). Первый известный источник не
               перезаписывается; last_source - метка последнего входа по ссылке.
-  favorites - избранное: пара (telegram_id, lot_id).
+  favorites - избранное: (telegram_id, lot_id) + vin машины - избранное
+              следует за машиной (см. lots.favorites_list).
   events    - минимальная аналитика: open (открыл мини-апп), lot_view
               (открыл карточку лота), fav_add (в избранное), source_click
               (перешёл на сайт торгов - самый сильный сигнал интереса).
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS lots (
     autoru_owners     INTEGER,
     estimate_uncertain INTEGER NOT NULL DEFAULT 0,
     lot_kind          TEXT,
+    status_checked_at TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -91,6 +93,7 @@ CREATE INDEX IF NOT EXISTS events_created ON events (created_at);
 CREATE TABLE IF NOT EXISTS favorites (
     telegram_id INTEGER NOT NULL,
     lot_id      TEXT NOT NULL,
+    vin         TEXT,
     created_at  TEXT NOT NULL,
     PRIMARY KEY (telegram_id, lot_id)
 );
@@ -112,7 +115,9 @@ FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 # Колонки, добавленные после первого запуска на сервере: CREATE TABLE IF NOT
 # EXISTS их в существующую базу не добавит - досоздаём ALTER TABLE.
 MIGRATIONS = {
-    "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0"), ("lot_kind", "TEXT")],
+    "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0"), ("lot_kind", "TEXT"),
+             ("status_checked_at", "TEXT")],
+    "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT")],
 }
 
@@ -228,25 +233,44 @@ def log_event(telegram_id, event_type, now_iso, lot_id=None, source=None):
             )
 
 
-def favorite_ids(telegram_id):
+def favorite_rows(telegram_id):
+    """[(lot_id, vin)] избранного пользователя, новые сверху."""
     rows = conn().execute(
-        "SELECT lot_id FROM favorites WHERE telegram_id = ? ORDER BY created_at DESC", (telegram_id,)
+        "SELECT lot_id, vin FROM favorites WHERE telegram_id = ? ORDER BY created_at DESC", (telegram_id,)
     )
-    return [r["lot_id"] for r in rows]
+    return [(r["lot_id"], r["vin"]) for r in rows]
 
 
-def add_favorite(telegram_id, lot_id, now_iso):
+def all_favorite_rows():
+    return [(r["lot_id"], r["vin"]) for r in conn().execute("SELECT DISTINCT lot_id, vin FROM favorites")]
+
+
+def add_favorite(telegram_id, lot_id, vin, now_iso):
     with _lock:
         c = conn()
         with c:
             c.execute(
-                "INSERT OR IGNORE INTO favorites (telegram_id, lot_id, created_at) VALUES (?, ?, ?)",
-                (telegram_id, lot_id, now_iso),
+                "INSERT OR IGNORE INTO favorites (telegram_id, lot_id, vin, created_at) VALUES (?, ?, ?, ?)",
+                (telegram_id, lot_id, vin, now_iso),
             )
 
 
-def remove_favorite(telegram_id, lot_id):
+def remove_favorite(telegram_id, lot_id, vin=None):
+    """Убирает лот и - если у него есть машина - все её лоты из избранного:
+    избранное следует за машиной, снимать звёздочку тоже нужно с машины."""
     with _lock:
         c = conn()
         with c:
-            c.execute("DELETE FROM favorites WHERE telegram_id = ? AND lot_id = ?", (telegram_id, lot_id))
+            c.execute("DELETE FROM favorites WHERE telegram_id = ? AND (lot_id = ? OR (vin IS NOT NULL AND vin = ?))",
+                      (telegram_id, lot_id, vin or ""))
+
+
+def update_statuses(items, now_iso):
+    """Статусы лотов, перечитанные с сайта (lots.watchlist): [{lot_id, status}]."""
+    with _lock:
+        c = conn()
+        with c:
+            for it in items:
+                c.execute("UPDATE lots SET status = COALESCE(?, status), status_checked_at = ? WHERE lot_id = ?",
+                          (it.get("status") or None, now_iso, str(it["lot_id"])))
+    return len(items)

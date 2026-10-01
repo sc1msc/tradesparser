@@ -28,6 +28,12 @@ r"""
 DELAY_BETWEEN_LOT_REQUESTS - это десятки минут), дальше - только новые
 лоты и те, чей кэш старше MINIAPP_DETAILS_REFRESH_DAYS.
 
+После выгрузки - итоги торгов для избранного: сервер отдаёт список лотов из
+избранного (и лотов избранных машин), у которых приём заявок закончился, а
+окончательного статуса ещё нет (GET /api/watchlist); их карточки
+перечитываются с сайта, статусы уходят на сервер (POST /api/lot-status).
+Таких лотов единицы-десятки, перепроверка не чаще раза в сутки на лот.
+
 Если в local_secrets.py не заданы MINIAPP_API_URL / MINIAPP_IMPORT_TOKEN -
 шаг ничего не делает (пайплайн работает как раньше). Если сервер
 недоступен - шаг печатает ошибку и НЕ роняет пайплайн: мини-апп просто
@@ -222,6 +228,41 @@ def build_lot(row, details):
     }
 
 
+def refresh_watchlist(api_url, token, session, cache):
+    """Итоги торгов для лотов из избранного (см. докстринг модуля). Ошибки
+    печатаются и не роняют пайплайн."""
+    headers = {"X-Import-Token": token}
+    try:
+        resp = requests.get(f"{api_url}/api/watchlist", headers=headers, timeout=60)
+        resp.raise_for_status()
+        watch = [w for w in resp.json().get("lots", []) if w.get("url")]
+    except requests.RequestException as e:
+        print(f"  Не удалось получить список избранного для перепроверки: {e}")
+        return
+    print(f"Лотов из избранного без итога торгов: {len(watch)}")
+    if not watch:
+        return
+    statuses = []
+    for i, w in enumerate(watch, start=1):
+        try:
+            details = fetch_details(w["url"], session)
+            cache[str(w["lot_id"])] = details
+            statuses.append({"lot_id": w["lot_id"], "status": details.get("status")})
+            print(f"  [{i}/{len(watch)}] {w['lot_id']}: {details.get('status')}")
+        except Exception as e:
+            print(f"  [{i}/{len(watch)}] {w['lot_id']}: не удалось перечитать: {e}")
+        time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
+    _save_cache(cache)
+    if not statuses:
+        return
+    try:
+        resp = requests.post(f"{api_url}/api/lot-status", json={"lots": statuses}, headers=headers, timeout=60)
+        resp.raise_for_status()
+        print(f"  Статусы обновлены на сервере: {resp.json().get('updated')}")
+    except requests.RequestException as e:
+        print(f"  Не удалось отправить статусы: {e}")
+
+
 def run(dry_run=False):
     api_url = (config.MINIAPP_API_URL or "").rstrip("/")
     token = config.MINIAPP_IMPORT_TOKEN
@@ -276,6 +317,7 @@ def run(dry_run=False):
         return
     result = resp.json()
     print(f"  Готово: загружено {result.get('imported')}, ушли из листа (скрыты из ленты): {result.get('left_source')}")
+    refresh_watchlist(api_url, token, session, cache)
 
 
 if __name__ == "__main__":

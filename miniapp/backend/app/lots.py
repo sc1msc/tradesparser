@@ -24,6 +24,23 @@ r"""
 Все даты сайта торгов - московское время без зоны; сравниваем с "сейчас"
 тоже по Москве (UTC+3 круглый год, переходов на летнее время нет).
 
+МАШИНА И ЛОТЫ. Одна машина (VIN) бывает в нескольких лотах:
+  - параллельно - одни и те же торги опубликованы на нескольких площадках
+    (ЭТП и "вне ЭТП"): в ленте одна карточка - лот с наименьшей ценой,
+    затем ближайшим дедлайном, предпочтительно на ЭТП (_primary_key);
+    остальные - на экране лота "эта машина на других площадках";
+  - последовательно - торги не состоялись, машину выставили снова: это
+    история торгов машины на экране лота.
+Связываем только лоты "одна машина" с VIN из 17 знаков (lot["car"]);
+мультилоты и лоты без VIN живут сами по себе.
+
+ИЗБРАННОЕ СЛЕДУЕТ ЗА МАШИНОЙ (решение 01.10.2026: пользователь покупает
+актив, а не конкретные торги). В favorites хранится и lot_id, и VIN;
+карточка в избранном показывает актуальный лот машины: открытый, если он
+есть (в том числе новый - "перевыставлен"), иначе последний закрытый с
+итогом торгов. Через FAVORITE_ARCHIVE_DAYS после дедлайна закрытая
+карточка уходит в "Архив".
+
 Объём - сотни лотов (до 5-10 тыс. при расширении географии), поэтому вся
 выборка/сортировка идёт в памяти по кэшу лотов: это проще SQL-конструктора
 фильтров и заведомо быстро. Кэш сбрасывается после каждого импорта.
@@ -69,6 +86,25 @@ TRADE_AUCTION = "auction"
 TRADE_PUBLIC_OFFER = "public_offer"
 
 SORTS = ("gap", "price_asc", "price_desc", "deadline")
+
+# Через сколько дней после дедлайна закрытая карточка избранного уходит в архив.
+FAVORITE_ARCHIVE_DAYS = 60
+# Статусы лотов из избранного после дедлайна перепроверяются на сайте (см.
+# watchlist), пока не появится итог, но не дольше этого срока и не чаще раза
+# в WATCH_RECHECK_HOURS.
+WATCH_DAYS = 60
+WATCH_RECHECK_HOURS = 20
+
+# Итог торгов по тексту статуса сайта. Порядок важен: "не состоялись"
+# проверяем раньше "завершены".
+OUTCOMES = (
+    ("не состоял", "failed"),
+    ("заверш", "done"),
+    ("отмен", "cancelled"),
+    ("аннулир", "cancelled"),
+    ("приостанов", "suspended"),
+)
+FINAL_OUTCOMES = {"failed", "done", "cancelled"}
 
 _cache = {"lots": None}
 _cache_lock = threading.Lock()
@@ -154,6 +190,11 @@ def _prepare(lot):
         # название лота с сайта и не кладём его в фильтр по марке.
         lot["brand_key"] = lot["model_key"] = ""
         lot["name"] = " ".join((lot.get("title") or "Мультилот").split())[:60]
+    # Ключ машины: VIN лота "одна машина" (мультилоты и лоты без VIN не связываем).
+    vin = (lot.get("vin") or "").strip().upper()
+    lot["car"] = vin if lot["kind"] == lot_metrics.LOT_CAR and len(vin) == 17 else None
+    lot["_off_etp"] = "вне этп" in (lot.get("platform") or "").lower()
+    lot["_final_deadline"] = parse_dt(lot.get("applications_end"))
     lot["search_text"] = _norm_key(" ".join(
         str(x or "") for x in (brand, model, lot.get("title"), lot.get("vin"), lot.get("plate"))
     ))
@@ -189,8 +230,21 @@ def _int(value):
 def load():
     with _cache_lock:
         if _cache["lots"] is None:
-            _cache["lots"] = [_prepare(lot) for lot in db.all_lots()]
+            prepared = [_prepare(lot) for lot in db.all_lots()]
+            cars = {}
+            for lot in prepared:
+                if lot["car"]:
+                    cars.setdefault(lot["car"], []).append(lot)
+            _cache["cars"] = cars
+            _cache["by_id"] = {lot["lot_id"]: lot for lot in prepared}
+            _cache["lots"] = prepared
         return _cache["lots"]
+
+
+def car_lots(lot):
+    """Все лоты той же машины (включая сам лот)."""
+    load()
+    return _cache["cars"].get(lot["car"], [lot]) if lot["car"] else [lot]
 
 
 def invalidate():
@@ -262,8 +316,9 @@ def summary(lot, state, now, favorites):
         "photo": _first_photo(lot),
         "damaged": bool(lot["damage"]),
         "kind": lot["kind"],
-        "favorite": lot["lot_id"] in favorites,
+        "favorite": favorites.has(lot),
         "is_open": is_open(lot, state, now),
+        "listings": 1,
     }
 
 
@@ -302,7 +357,66 @@ def detail(lot, now, favorites):
         "next_price_from": _iso(nxt["from"]) if nxt else None,
         "damage": lot["damage"],
     })
+    out["listings_list"], out["history"] = car_context(lot, now)
+    out["listings"] = max(1, len(out["listings_list"]))
     return out
+
+
+def outcome(lot, state, now):
+    """open / awaiting (приём заявок закончился, итога ещё нет) / failed /
+    done / cancelled / suspended."""
+    status = (lot.get("status") or "").lower()
+    for marker, value in OUTCOMES:
+        if marker in status:
+            return value
+    return "open" if is_open(lot, state, now) else "awaiting"
+
+
+def _primary_key(lot, state):
+    """Какой из параллельных лотов машины показывать: дешевле, потом
+    раньше дедлайн, потом площадка ЭТП, а не "вне ЭТП"."""
+    price = state["price"]
+    return (price is None, price or 0, state["deadline"] or datetime.datetime.max.replace(tzinfo=MSK),
+            lot["_off_etp"], lot["lot_id"])
+
+
+def car_context(lot, now):
+    """Для экрана лота: открытые лоты этой же машины на других площадках и
+    история всех её торгов (если лотов больше одного)."""
+    lots_ = car_lots(lot)
+    if len(lots_) < 2:
+        return [], []
+    states = [(l, current_state(l, now)) for l in lots_]
+    listings = sorted(((l, s) for l, s in states if is_open(l, s, now)), key=lambda p: _primary_key(*p))
+    listings_out = [{
+        "id": l["lot_id"], "platform": l.get("platform"), "price": s["price"],
+        "deadline": _iso(s["deadline"]), "this": l["lot_id"] == lot["lot_id"],
+    } for l, s in listings]
+    far_past = datetime.datetime.min.replace(tzinfo=MSK)
+    history = sorted(states, key=lambda p: p[1]["deadline"] or far_past, reverse=True)
+    history_out = [{
+        "id": l["lot_id"], "trade": l["trade"], "platform": l.get("platform"), "price": s["price"],
+        "deadline": _iso(s["deadline"]), "outcome": outcome(l, s, now), "this": l["lot_id"] == lot["lot_id"],
+    } for l, s in history]
+    return listings_out, history_out
+
+
+class Favs:
+    """Избранное пользователя: лоты и машины (VIN). Лот считается
+    избранным, если он сам в избранном или в избранном его машина."""
+
+    def __init__(self, rows=()):
+        self.rows = list(rows)  # [(lot_id, vin)], новые сверху
+        self.lots = {lot_id for lot_id, _ in self.rows}
+        self.cars = {vin for _, vin in self.rows if vin}
+        load()
+        for lot_id, vin in self.rows:  # записи до появления VIN в избранном
+            lot = _cache["by_id"].get(lot_id)
+            if not vin and lot and lot["car"]:
+                self.cars.add(lot["car"])
+
+    def has(self, lot):
+        return lot["lot_id"] in self.lots or (lot["car"] is not None and lot["car"] in self.cars)
 
 
 # ---------- выборка ленты ----------
@@ -390,13 +504,21 @@ def _sort_key(sort):
 
 
 def open_items(favorites, now=None):
-    """Все видимые сейчас лоты в виде (summary, lot)."""
+    """Все видимые сейчас лоты в виде (summary, lot); параллельные лоты одной
+    машины - одной карточкой (summary["listings"] - сколько площадок)."""
     now = now or now_msk()
-    out = []
+    groups = {}
     for lot in load():
         state = current_state(lot, now)
         if is_open(lot, state, now):
-            out.append((summary(lot, state, now, favorites), lot))
+            groups.setdefault(lot["car"] or ("lot", lot["lot_id"]), []).append((lot, state))
+    out = []
+    for group in groups.values():
+        group.sort(key=lambda p: _primary_key(*p))
+        lot, state = group[0]
+        item = summary(lot, state, now, favorites)
+        item["listings"] = len(group)
+        out.append((item, lot))
     return out
 
 
@@ -443,18 +565,85 @@ def facets(favorites):
 
 
 def get(lot_id):
-    return next((lot for lot in load() if lot["lot_id"] == str(lot_id)), None)
+    load()
+    return _cache["by_id"].get(str(lot_id))
 
 
-def favorites_list(ids, now=None):
-    """Избранное: открытые лоты сверху (в порядке добавления), закрытые - ниже."""
+def favorites_list(favs, now=None):
+    """Карточки избранного - по одной на машину (или лот без VIN):
+    актуальный лот машины + fav_state (open / awaiting / failed / done /
+    cancelled / suspended), relisted (машину выставили снова, а в избранное
+    добавляли прежний лот), archived (закрыт больше FAVORITE_ARCHIVE_DAYS
+    дней назад). Порядок: открытые, закрытые, архив; внутри - как добавляли."""
     now = now or now_msk()
-    fav = set(ids)
-    by_id = {lot["lot_id"]: lot for lot in load()}
-    items = []
-    for lot_id in ids:
+    load()
+    by_id = _cache["by_id"]
+    groups = {}  # ключ машины/лота -> lot_id из избранного (новые первыми)
+    for lot_id, vin in favs.rows:
         lot = by_id.get(lot_id)
-        if lot:
-            items.append(summary(lot, current_state(lot, now), now, fav))
-    items.sort(key=lambda it: not it["is_open"])
+        car = vin or (lot["car"] if lot else None)
+        key = car or ("lot", lot_id)
+        groups.setdefault(key, []).append(lot_id)
+    items = []
+    for key, fav_ids in groups.items():
+        lots_ = list(_cache["cars"].get(key, [])) if isinstance(key, str) else []
+        lots_ += [by_id[i] for i in fav_ids if i in by_id and by_id[i] not in lots_]
+        if not lots_:
+            continue
+        states = [(l, current_state(l, now)) for l in lots_]
+        opened = [p for p in states if is_open(p[0], p[1], now)]
+        if opened:
+            lot, state = min(opened, key=lambda p: _primary_key(*p))
+        else:
+            far_past = datetime.datetime.min.replace(tzinfo=MSK)
+            lot, state = max(states, key=lambda p: p[1]["deadline"] or far_past)
+        item = summary(lot, state, now, favs)
+        item["favorite"] = True
+        item["listings"] = max(1, len(opened))
+        item["fav_state"] = outcome(lot, state, now)
+        fav_states = [p for p in states if p[0]["lot_id"] in fav_ids]
+        if opened and lot["lot_id"] not in fav_ids and fav_states \
+                and not any(is_open(l, s, now) for l, s in fav_states):
+            prev = max(fav_states, key=lambda p: p[1]["deadline"] or now)
+            item["relisted"] = True
+            item["prev_price"] = prev[1]["price"]
+        closed_at = state["deadline"]
+        item["archived"] = item["fav_state"] != "open" and closed_at is not None \
+            and now - closed_at > datetime.timedelta(days=FAVORITE_ARCHIVE_DAYS)
+        items.append(item)
+    rank = lambda it: 2 if it["archived"] else (0 if it["fav_state"] == "open" else 1)
+    items.sort(key=rank)  # sort стабильный - порядок добавления внутри групп сохраняется
     return items
+
+
+def _parse_iso(value):
+    """Время, записанное сервером (isoformat с зоной), - не формат сайта."""
+    try:
+        dt = datetime.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=MSK)
+
+
+def watchlist(now=None):
+    """Лоты из избранного (и все лоты избранных машин), чей итог ещё
+    неизвестен: приём заявок закончился или лот ушёл из среза, а статус не
+    окончательный. ПК перечитывает их карточки на сайте (export_to_miniapp)."""
+    now = now or now_msk()
+    load()
+    favs = Favs(db.all_favorite_rows())
+    out = []
+    for lot in load():
+        if not favs.has(lot):
+            continue
+        state = current_state(lot, now)
+        if is_open(lot, state, now) or outcome(lot, state, now) in FINAL_OUTCOMES:
+            continue
+        end = lot["_final_deadline"] or state["deadline"]
+        if end is not None and now - end > datetime.timedelta(days=WATCH_DAYS):
+            continue
+        checked = _parse_iso(lot.get("status_checked_at"))
+        if checked is not None and now - checked < datetime.timedelta(hours=WATCH_RECHECK_HOURS):
+            continue
+        out.append({"lot_id": lot["lot_id"], "url": lot.get("url")})
+    return out

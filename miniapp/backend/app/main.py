@@ -15,6 +15,9 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   POST   /api/events             - событие для аналитики: {"type": "open"} при
                                    старте, {"type": "source_click", "lot_id"} при
                                    переходе на сайт торгов (остальное пишет сервер)
+  GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
+                                   торгов ещё неизвестен - ПК перечитывает их на сайте
+  POST   /api/lot-status         - (ключ импорта) статусы, перечитанные с сайта
   POST   /api/import             - загрузка лотов с ПК (export_to_miniapp.py),
                                    защищён ключом X-Import-Token
                                    (переменная окружения HONESTLOT_IMPORT_TOKEN)
@@ -68,13 +71,13 @@ def api_lots(request: Request, authorization: str = Header(default="")):
         limit = min(MAX_PAGE, max(0, int(params.get("limit", 20))))
     except ValueError:
         raise HTTPException(status_code=400, detail="offset/limit должны быть числами")
-    return lots.search(params, set(db.favorite_ids(uid)), offset=offset, limit=limit)
+    return lots.search(params, lots.Favs(db.favorite_rows(uid)), offset=offset, limit=limit)
 
 
 @app.get("/api/facets")
 def api_facets(authorization: str = Header(default="")):
     uid = current_user(authorization)
-    return lots.facets(set(db.favorite_ids(uid)))
+    return lots.facets(lots.Favs(db.favorite_rows(uid)))
 
 
 @app.get("/api/lots/{lot_id}")
@@ -84,21 +87,22 @@ def api_lot(lot_id: str, authorization: str = Header(default="")):
     if lot is None:
         raise HTTPException(status_code=404, detail="лот не найден")
     db.log_event(uid, "lot_view", _now_iso(), lot_id=lot_id)
-    return lots.detail(lot, lots.now_msk(), set(db.favorite_ids(uid)))
+    return lots.detail(lot, lots.now_msk(), lots.Favs(db.favorite_rows(uid)))
 
 
 @app.get("/api/favorites")
 def api_favorites(authorization: str = Header(default="")):
     uid = current_user(authorization)
-    return {"items": lots.favorites_list(db.favorite_ids(uid))}
+    return {"items": lots.favorites_list(lots.Favs(db.favorite_rows(uid)))}
 
 
 @app.put("/api/favorites/{lot_id}")
 def api_favorite_add(lot_id: str, authorization: str = Header(default="")):
     uid = current_user(authorization)
-    if lots.get(lot_id) is None:
+    lot = lots.get(lot_id)
+    if lot is None:
         raise HTTPException(status_code=404, detail="лот не найден")
-    db.add_favorite(uid, lot_id, _now_iso())
+    db.add_favorite(uid, lot_id, lot["car"], _now_iso())
     db.log_event(uid, "fav_add", _now_iso(), lot_id=lot_id)
     return {"ok": True}
 
@@ -106,7 +110,8 @@ def api_favorite_add(lot_id: str, authorization: str = Header(default="")):
 @app.delete("/api/favorites/{lot_id}")
 def api_favorite_remove(lot_id: str, authorization: str = Header(default="")):
     uid = current_user(authorization)
-    db.remove_favorite(uid, lot_id)
+    lot = lots.get(lot_id)
+    db.remove_favorite(uid, lot_id, lot["car"] if lot else None)
     return {"ok": True}
 
 
@@ -124,6 +129,30 @@ def api_event(payload: EventPayload, authorization: str = Header(default="")):
     db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id,
                  source=start_param if payload.type == "open" else None)
     return {"ok": True}
+
+
+def _check_import_token(token):
+    expected = os.environ.get("HONESTLOT_IMPORT_TOKEN", "")
+    if not expected or not hmac.compare_digest(expected, token):
+        raise HTTPException(status_code=403, detail="неверный ключ импорта")
+
+
+@app.get("/api/watchlist")
+def api_watchlist(x_import_token: str = Header(default="")):
+    _check_import_token(x_import_token)
+    return {"lots": lots.watchlist()}
+
+
+class StatusPayload(BaseModel):
+    lots: list[dict]
+
+
+@app.post("/api/lot-status")
+def api_lot_status(payload: StatusPayload, x_import_token: str = Header(default="")):
+    _check_import_token(x_import_token)
+    n = db.update_statuses([x for x in payload.lots if x.get("lot_id")], _now_iso())
+    lots.invalidate()
+    return {"updated": n}
 
 
 class ImportPayload(BaseModel):

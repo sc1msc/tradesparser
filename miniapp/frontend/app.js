@@ -7,6 +7,18 @@ const tg = window.Telegram && window.Telegram.WebApp;
 const IN_TG = !!(tg && tg.initData);
 const PAGE = 20;
 const BOT = "honestlot_bot";
+// Аккаунт поддержки в Telegram (без @). Пусто - ссылка "Написать в поддержку" не показывается.
+const SUPPORT = "";
+
+// Итог торгов (fav_state / outcome с сервера, см. lots.outcome) - как подписать.
+const OUTCOME_TEXT = {
+  awaiting: "Приём заявок завершён · ждём итогов",
+  done: "Торги завершены",
+  failed: "Торги не состоялись · следим за перевыставлением",
+  cancelled: "Торги отменены",
+  suspended: "Торги приостановлены",
+};
+const OUTCOME_SHORT = { open: "идёт приём заявок", awaiting: "ждём итогов", done: "завершены", failed: "не состоялись", cancelled: "отменены", suspended: "приостановлены" };
 
 if (tg) { tg.ready(); tg.expand(); }
 document.documentElement.classList.toggle("tg", IN_TG);
@@ -204,17 +216,27 @@ function syncHearts(id) {
 
 // ---------- карточка в ленте ----------
 
+function priceChange(price, prev) {
+  if (!price || !prev || price === prev) return "";
+  const pct = Math.round(((price - prev) / prev) * 100);
+  return pct < 0 ? ` · дешевле на ${-pct}%` : ` · дороже на ${pct}%`;
+}
+
 function card(it) {
+  if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
   const thumb = h("div", { class: "thumb", style: it.photo ? { backgroundImage: `url("${it.photo}")` } : null },
     it.photo ? null : icon("car"),
     it.damaged ? h("span", { class: "warn", title: "Возможно, повреждён" }, "⚠") : null);
   const meta = [kmText(it), regionShort(it.region)].filter(Boolean).join(" · ");
+  const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";
   const deadline = it.is_open
     ? h("div", { class: "deadline" + (isSoon(it.deadline) ? " soon" : "") },
         `Заявки до ${dShort(it.deadline)} · ${timeLeft(it.deadline, true)}`,
         it.trade === "public_offer" ? h("span", { class: "tag" }, "ПП") : null,
-        it.kind === "multilot" ? h("span", { class: "tag" }, "Мультилот") : null)
-    : h("div", { class: "deadline" }, "Приём заявок завершён");
+        it.kind === "multilot" ? h("span", { class: "tag" }, "Мультилот") : null,
+        it.listings > 1 ? h("span", { class: "tag" }, `+${it.listings - 1} площ.`) : null)
+    : h("div", { class: "deadline" }, closedText);
+  const relisted = it.relisted ? h("div", { class: "relisted" }, "Перевыставлен" + priceChange(it.price, it.prev_price)) : null;
   return h("div", { class: "card" + (it.is_open ? "" : " closed"), role: "button", onclick: () => push({ kind: "lot", id: it.id }) },
     thumb,
     h("div", { class: "info" },
@@ -222,8 +244,17 @@ function card(it) {
       h("div", { class: "priceline" }, h("span", { class: "price" }, rub(it.price)), gapBadge(it.gap),
         it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
       meta ? h("div", { class: "meta" }, meta) : null,
+      relisted,
       deadline),
     heartButton(it.id));
+}
+
+function supportLink() {
+  if (!SUPPORT) return null;
+  return h("button", { class: "support", onclick: () => {
+    const url = `https://t.me/${SUPPORT}`;
+    if (IN_TG) tg.openTelegramLink(url); else window.open(url, "_blank", "noopener");
+  } }, "Написать в поддержку");
 }
 
 // ---------- лента ----------
@@ -252,7 +283,7 @@ function buildFeed() {
         h("label", { class: "search" }, icon("search"), feed.input),
         h("button", { class: "iconbtn", "aria-label": "Фильтры", onclick: () => push({ kind: "filters" }) }, icon("filter"), feed.badge)),
       feed.sorts),
-    feed.total, feed.list, feed.more);
+    feed.total, feed.list, feed.more, supportLink());
   renderSorts();
   renderBadge();
   return feed.el;
@@ -314,9 +345,21 @@ async function renderFavs() {
   try {
     const { items } = await api("/favorites");
     state.favIds = new Set(items.map((i) => i.id));
-    const list = h("div", { class: "list" }, items.map(card));
-    favsEl.replaceChildren(favsEl.firstChild, items.length ? list :
-      h("div", { class: "empty" }, h("b", {}, "Здесь пока пусто"), "Нажмите ♡ на карточке лота, чтобы сохранить его сюда."));
+    // открытые - сверху; закрытые - ниже с итогом торгов; через 60 дней - в свёрнутый архив
+    const active = items.filter((i) => i.fav_state === "open");
+    const closed = items.filter((i) => i.fav_state !== "open" && !i.archived);
+    const archived = items.filter((i) => i.archived);
+    const archiveList = h("div", { class: "list hidden" }, archived.map(card));
+    const parts = [];
+    if (active.length) parts.push(h("div", { class: "list" }, active.map(card)));
+    if (closed.length) parts.push(h("div", { class: "fav-title" }, "Торги закончились"), h("div", { class: "list" }, closed.map(card)));
+    if (archived.length) parts.push(h("button", { class: "archive-toggle", onclick: (e) => {
+      const hidden = archiveList.classList.toggle("hidden");
+      e.currentTarget.textContent = `${hidden ? "Показать" : "Скрыть"} архив (${archived.length})`;
+    } }, `Показать архив (${archived.length})`), archiveList);
+    favsEl.replaceChildren(favsEl.firstChild, ...(items.length ? parts :
+      [h("div", { class: "empty" }, h("b", {}, "Здесь пока пусто"), "Нажмите ♡ на карточке лота, чтобы сохранить его сюда. Если машину выставят снова, новые торги появятся здесь же.")]),
+      ...[supportLink()].filter(Boolean));
   } catch (e) {
     if (e instanceof AuthError) return showStub();
     favsEl.replaceChildren(favsEl.firstChild, h("div", { class: "empty" }, h("b", {}, "Не удалось загрузить")));
@@ -445,6 +488,22 @@ async function renderLot(id) {
         h("span", { class: "k" }, `${p.begin ? dShort(p.begin) + " – " : "до "}${dShort(p.bid_end)}`, p.is_current ? " · сейчас" : ""),
         h("span", { class: "v" }, rub(p.price)))))) : null;
 
+  // эта же машина: параллельно на других площадках и история всех её торгов
+  const listingsBlock = (lot.listings_list || []).length > 1 ? h("div", { class: "block" },
+    h("h3", {}, "Эта машина на нескольких площадках"),
+    h("div", { class: "rows wrap-k" }, lot.listings_list.map((x) =>
+      h("div", { class: "row" + (x.this ? " cur" : ""), role: x.this ? null : "button",
+        onclick: x.this ? null : () => push({ kind: "lot", id: x.id }) },
+        h("span", { class: "k" }, (x.platform || "площадка не указана").slice(0, 40), x.this ? " · этот лот" : ""),
+        h("span", { class: "v" }, rub(x.price)))))) : null;
+  const historyBlock = (lot.history || []).length > 1 ? h("div", { class: "block" },
+    h("h3", {}, "История торгов этой машины"),
+    h("div", { class: "rows wrap-k" }, lot.history.map((x) =>
+      h("div", { class: "row" + (x.this ? " cur" : ""), role: x.this ? null : "button",
+        onclick: x.this ? null : () => push({ kind: "lot", id: x.id }) },
+        h("span", { class: "k" }, `${x.deadline ? "до " + dShort(x.deadline) : "—"} · ${x.trade === "public_offer" ? "публичное" : "аукцион"} · ${OUTCOME_SHORT[x.outcome] || ""}`),
+        h("span", { class: "v" }, rub(x.price)))))) : null;
+
   const vin = lot.vin ? h("button", { class: "copy", onclick: () => {
     navigator.clipboard && navigator.clipboard.writeText(lot.vin).then(() => toast("VIN скопирован"), () => {});
   } }, lot.vin) : null;
@@ -472,6 +531,8 @@ async function renderLot(id) {
       `⚠ В описании лота упоминаются повреждения: ${lot.damage.map((d) => d.toLowerCase()).join(", ")}. Процент к рынку для такого лота может вводить в заблуждение.`) : null,
     marketBlock(lot),
     periods,
+    listingsBlock,
+    historyBlock,
     h("div", { class: "block" }, h("h3", {}, "Характеристики"), rows([
       ["Год", lot.year],
       ["Пробег", mileage],

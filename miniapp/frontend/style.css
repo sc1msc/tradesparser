@@ -220,3 +220,13 @@ input { font: inherit; color: inherit; }
   background: rgba(20, 22, 26, .92); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 50;
   max-width: calc(100% - 32px);
 }
+
+/* избранное: перевыставленные, закрытые, архив; поддержка */
+.relisted { font-size: 13px; font-weight: 600; color: var(--green); }
+.fav-title { color: var(--hint); font-size: 13px; padding: 16px 16px 2px; }
+.archive-toggle { display: block; margin: 12px auto 0; color: var(--link); font-size: 14px; padding: 8px 12px; }
+.support { display: block; margin: 20px auto 8px; color: var(--hint); font-size: 14px; padding: 8px 12px; text-decoration: underline; }
+.rows .row[role="button"] { cursor: pointer; }
+/* строки с длинным текстом слева (площадки, история торгов): текст переносится, цена - в одну строку */
+.rows.wrap-k .row .k { flex: 1 1 auto; min-width: 0; }
+.rows.wrap-k .row .v { flex: none; white-space: nowrap; }
