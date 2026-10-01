@@ -34,6 +34,14 @@ DELAY_BETWEEN_LOT_REQUESTS - это десятки минут), дальше - �
 перечитываются с сайта, статусы уходят на сервер (POST /api/lot-status).
 Таких лотов единицы-десятки, перепроверка не чаще раза в сутки на лот.
 
+Лоты-призраки. Агрегатор иногда создаёт страницу лота по ошибке и потом
+удаляет её (01.10.2026 - лот 7159530, дубль Renault Logan с другой ценой).
+Такая страница отдаётся с кодом 200, но без данных лота и с общим
+заголовком "Торги России" - как страница несуществующего лота. Если так
+было при двух проверках с разницей не меньше GHOST_CONFIRM_HOURS часов,
+лот в мини-апп больше не выгружается (сервер скроет его из ленты). Две
+проверки - чтобы кратковременный сбой сайта не скрыл живые лоты.
+
 Если в local_secrets.py не заданы MINIAPP_API_URL / MINIAPP_IMPORT_TOKEN -
 шаг ничего не делает (пайплайн работает как раньше). Если сервер
 недоступен - шаг печатает ошибку и НЕ роняет пайплайн: мини-апп просто
@@ -67,6 +75,12 @@ DETAILS_CACHE_FILE = "miniapp_details_cache.json"
 PREVIEW_FILE = "miniapp_export_preview.json"
 LOT_ID_RE = re.compile(r"/lot/(\d+)")
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp"}
+GHOST_CONFIRM_HOURS = 6
+GENERIC_TITLE = "Торги России"  # заголовок страницы, когда лота на сайте нет
+
+
+class LotNotFound(Exception):
+    """Страница лота есть, но лота на ней нет (призрак или удалённый лот)."""
 
 
 def _to_int(value):
@@ -106,6 +120,9 @@ def fetch_details(url, session):
     payload = extract_combined_payload(html)
     lot, _ = find_json_value(payload, "lot", kind="object")
     if lot is None:
+        title = re.search(r"<title>(.*?)</title>", html, re.S)
+        if title and title.group(1).strip() == GENERIC_TITLE:
+            raise LotNotFound("лота нет на сайте")
         raise ValueError("на странице не найден JSON лота")
     photos = []
     for pic in lot.get("pictures") or []:
@@ -137,7 +154,28 @@ def fetch_details(url, session):
     }
 
 
+def _hours_since(value):
+    try:
+        return (datetime.datetime.now() - datetime.datetime.fromisoformat(value)).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return None
+
+
+def is_ghost(entry):
+    """Лот подтверждённо пропал с сайта: две проверки с разницей >= GHOST_CONFIRM_HOURS."""
+    if not entry or entry.get("not_found_checks", 0) < 2:
+        return False
+    since = _hours_since(entry.get("not_found_since"))
+    return since is not None and since >= GHOST_CONFIRM_HOURS
+
+
 def _needs_refresh(entry):
+    if entry and entry.get("not_found_checks"):
+        # подозрение на призрак - перепроверяем, но не чаще чем через GHOST_CONFIRM_HOURS
+        if is_ghost(entry):
+            return False
+        last = _hours_since(entry.get("not_found_checked_at"))
+        return last is None or last >= GHOST_CONFIRM_HOURS
     if not entry or entry.get("error"):
         return True
     try:
@@ -249,6 +287,9 @@ def refresh_watchlist(api_url, token, session, cache):
             cache[str(w["lot_id"])] = details
             statuses.append({"lot_id": w["lot_id"], "status": details.get("status")})
             print(f"  [{i}/{len(watch)}] {w['lot_id']}: {details.get('status')}")
+        except LotNotFound:
+            statuses.append({"lot_id": w["lot_id"], "status": "Лот удалён с сайта"})
+            print(f"  [{i}/{len(watch)}] {w['lot_id']}: лота нет на сайте")
         except Exception as e:
             print(f"  [{i}/{len(watch)}] {w['lot_id']}: не удалось перечитать: {e}")
         time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
@@ -289,6 +330,14 @@ def run(dry_run=False):
             cache[lot_id] = fetch_details(row["url"], session)
             d = cache[lot_id]
             print(f"  [{i}/{len(todo)}] {lot_id}: фото {len(d['photos'])}, периодов {len(d['periods'])}")
+        except LotNotFound:
+            entry = dict(cache.get(lot_id) or {})
+            now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+            entry["not_found_checks"] = entry.get("not_found_checks", 0) + 1
+            entry.setdefault("not_found_since", now_iso)
+            entry["not_found_checked_at"] = now_iso
+            cache[lot_id] = entry
+            print(f"  [{i}/{len(todo)}] {lot_id}: лота нет на сайте (проверка {entry['not_found_checks']})")
         except Exception as e:  # сеть/вёрстка - лот всё равно выгрузим, с данными из таблицы
             cache[lot_id] = {**(cache.get(lot_id) or {}), "error": str(e)[:200]}
             print(f"  [{i}/{len(todo)}] {lot_id}: не удалось скачать карточку: {e}")
@@ -297,7 +346,12 @@ def run(dry_run=False):
         time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
     _save_cache(cache)
 
-    payload = {"lots": [build_lot(r, cache.get(LOT_ID_RE.search(r["url"]).group(1))) for r in rows]}
+    ghosts = [r for r in rows if is_ghost(cache.get(LOT_ID_RE.search(r["url"]).group(1)))]
+    if ghosts:
+        print(f"Лоты, пропавшие с сайта (не выгружаю): {', '.join(LOT_ID_RE.search(r['url']).group(1) for r in ghosts)}")
+    ghost_ids = {id(r) for r in ghosts}
+    payload = {"lots": [build_lot(r, cache.get(LOT_ID_RE.search(r["url"]).group(1)))
+                        for r in rows if id(r) not in ghost_ids]}
 
     if dry_run:
         with open(PREVIEW_FILE, "w", encoding="utf-8") as f:

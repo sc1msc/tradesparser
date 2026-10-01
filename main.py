@@ -231,6 +231,7 @@ def run():
     page = 1
     total_new = 0
     new_lot_ids = set()
+    search_broken = False
     while page <= config.MAX_PAGES:
         url = parse_search.build_search_url(page=page, params=config.SEARCH_PARAMS)
         print(f"\nСтраница поиска {page}: {url}")
@@ -243,6 +244,16 @@ def run():
 
         result = parse_search.parse_search_html(html)
         print(f"  Найдено лотов на странице: {len(result['lots'])}")
+        if page == 1 and not result["lots"]:
+            # Первая страница выдачи пустой не бывает. 01.10.2026 агрегатор
+            # отдавал на поиск с фильтром категории страницу ошибки с кодом
+            # 200 - без этой проверки прогон молча собирал 0 лотов.
+            search_broken = True
+            print("  " + "!" * 70)
+            print("  ВНИМАНИЕ: первая страница поиска пустая - сбой на сайте агрегатора или")
+            print("  изменилась вёрстка страницы поиска. Новые лоты в этом прогоне НЕ собраны.")
+            print("  Откройте ссылку выше в браузере. Если там лоты есть - нужна правка parse_search.py.")
+            print("  " + "!" * 70)
 
         for lot_stub in result["lots"]:
             lot_id = lot_stub["lot_id"]
@@ -259,6 +270,12 @@ def run():
                 continue
 
             lot_data = parse_lot.parse_lot_html(lot_html, url=lot_stub["url"])
+            if lot_data.get("parse_error"):
+                # Нет данных лота: страница-призрак (агрегатор создал и удалил лот -
+                # 01.10.2026 так было с лотом 7159530) или сбой сайта. Пустую строку
+                # в таблицу не заносим; если лот настоящий - занесётся в следующий раз.
+                print(f"    на странице нет данных лота ({lot_data['parse_error']}) - не заношу")
+                continue
             if _final_deadline_passed(lot_data.get("applications_end"), lot_data.get("bidding_periods"),
                                       datetime.datetime.now()):
                 print(f"    приём заявок закончился {lot_data.get('applications_end')} - не заношу")
@@ -285,6 +302,8 @@ def run():
         time.sleep(config.DELAY_BETWEEN_SEARCH_PAGES)
 
     print(f"\nДобавлено новых лотов: {total_new}")
+    if search_broken:
+        print("ВНИМАНИЕ: поиск на сайте агрегатора не отдал лоты (см. выше) - новых лотов нет не потому, что их нет.")
 
     print("\nОбновляю статус и график публичных предложений...")
     checked, closed = refresh_public_offers(worksheet, sheet_state, session, new_lot_ids)

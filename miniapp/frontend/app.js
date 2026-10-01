@@ -17,8 +17,9 @@ const OUTCOME_TEXT = {
   failed: "Торги не состоялись · следим за перевыставлением",
   cancelled: "Торги отменены",
   suspended: "Торги приостановлены",
+  removed: "Лот удалён с сайта торгов",
 };
-const OUTCOME_SHORT = { open: "идёт приём заявок", awaiting: "ждём итогов", done: "завершены", failed: "не состоялись", cancelled: "отменены", suspended: "приостановлены" };
+const OUTCOME_SHORT = { open: "идёт приём заявок", awaiting: "ждём итогов", done: "завершены", failed: "не состоялись", cancelled: "отменены", suspended: "приостановлены", removed: "удалён с сайта" };
 
 if (tg) { tg.ready(); tg.expand(); }
 document.documentElement.classList.toggle("tg", IN_TG);

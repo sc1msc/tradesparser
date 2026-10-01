@@ -151,8 +151,9 @@ OUTCOMES = (
     ("отмен", "cancelled"),
     ("аннулир", "cancelled"),
     ("приостанов", "suspended"),
+    ("удал", "removed"),  # "Лот удалён с сайта" - призрак агрегатора (export_to_miniapp)
 )
-FINAL_OUTCOMES = {"failed", "done", "cancelled"}
+FINAL_OUTCOMES = {"failed", "done", "cancelled", "removed"}
 
 _cache = {"lots": None}
 _cache_lock = threading.Lock()
