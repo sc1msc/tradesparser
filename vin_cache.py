@@ -38,6 +38,7 @@ EXPIRED_LOT_DAYS после окончательного дедлайна (вм�
 """
 import datetime
 import sys
+import time
 
 import gspread
 
@@ -76,6 +77,19 @@ def _parse_dt(value):
         return datetime.datetime.fromisoformat(str(value).strip()[:19])
     except ValueError:
         return None
+
+
+def _retry_quota(call, attempts=4):
+    """Запрос к Google с повтором при 429 - квота на запись (~60 запросов в
+    минуту на пользователя): ждём минуту и повторяем."""
+    for attempt in range(attempts):
+        try:
+            return call()
+        except gspread.exceptions.APIError as e:
+            if "429" not in str(e) or attempt == attempts - 1:
+                raise
+            print("  Google: лимит запросов в минуту, жду 60 с и повторяю...")
+            time.sleep(60)
 
 
 class VinCache:
@@ -128,9 +142,11 @@ class VinCache:
 
     # ---------- запись ----------
 
-    def update(self, vin, fields):
+    def update(self, vin, fields, autoflush=True):
         """Обновляет поля VIN в памяти; на лист - при flush(). Пустые
-        значения не затирают уже известные."""
+        значения не затирают уже известные. autoflush - сбрасывать на лист
+        каждые FLUSH_EVERY машин (для шагов, где запись идёт по одному лоту);
+        массовый перенос (absorb_*) пишет одним flush() в конце."""
         vin = norm_vin(vin)
         if not vin:
             return
@@ -145,7 +161,7 @@ class VinCache:
         if changed:
             rec["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             self._dirty.add(vin)
-            if len(self._dirty) >= FLUSH_EVERY:
+            if autoflush and len(self._dirty) >= FLUSH_EVERY:
                 self.flush()
 
     def flush(self):
@@ -164,8 +180,8 @@ class VinCache:
             data.append({"range": f"A{self.row_num[vin]}:{last}", "values": [row]})
         need_rows = max(self.row_num.values())
         if need_rows > self.ws.row_count:
-            self.ws.add_rows(max(sheets_writer.ROWS_GROW_STEP, need_rows - self.ws.row_count))
-        self.ws.batch_update(data)
+            _retry_quota(lambda: self.ws.add_rows(max(sheets_writer.ROWS_GROW_STEP, need_rows - self.ws.row_count)))
+        _retry_quota(lambda: self.ws.batch_update(data))
         n = len(self._dirty)
         self._dirty.clear()
         return n
@@ -180,7 +196,7 @@ class VinCache:
             vin = norm_vin(r.get("vin"))
             status = (r.get("mileage_probeg_status") or "").strip()
             if vin and status in MILEAGE_FINAL and not self.mileage(vin):
-                self.update(vin, {f: r.get(f) for f in MILEAGE_FIELDS})
+                self.update(vin, {f: r.get(f) for f in MILEAGE_FIELDS}, autoflush=False)
                 n += 1
         return n
 
@@ -197,7 +213,7 @@ class VinCache:
             new_dt = _parse_dt(r.get("autoru_checked_at"))
             old_dt = _parse_dt(have.get("autoru_checked_at")) if (have.get("autoru_status") or "") in AUTORU_FINAL else None
             if old_dt is None or (new_dt is not None and new_dt > old_dt):
-                self.update(vin, {f: r.get(f) for f in AUTORU_FIELDS})
+                self.update(vin, {f: r.get(f) for f in AUTORU_FIELDS}, autoflush=False)
                 n += 1
         return n
 
