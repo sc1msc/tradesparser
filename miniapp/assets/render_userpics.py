@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 r"""
-Юзерпики ботов в стиле канала Honest Dealer: чёрный фон, золотой градиент,
-монограмма HL (Honest Lot), которую разрезает полоса с надписью - как у HD.
+Юзерпики ботов: монограмма HL (Honest Lot), которую разрезает полоса с
+надписью - композиция взята у логотипа канала Honest Dealer (HD), цвета -
+фирменные цвета мини-аппа: белый знак на зелёном (#179a50, как logo.svg).
+Золотой вариант на чёрном был 01.10.2026 и отклонён - бело-зелёный.
   bot_userpic     - @honestlot_bot, в полосе "HONEST LOT"
   support_userpic - @honestlot_support_bot, в полосе "ПОДДЕРЖКА"
 
@@ -19,34 +21,28 @@ from playwright.sync_api import sync_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FONT_CSS = "https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=block"
+BG = "#179a50"  # фирменный зелёный мини-аппа (frontend/logo.svg)
+FG = "#ffffff"
 
 
 def svg(band_text):
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640">
   <!-- Сгенерировано miniapp/assets/render_userpics.py - правьте там. -->
   <defs>
-    <!-- один градиент на весь знак (userSpaceOnUse), а не на каждую деталь отдельно -->
-    <linearGradient id="gold" gradientUnits="userSpaceOnUse" x1="128" y1="168" x2="512" y2="472">
-      <stop offset="0" stop-color="#9c6c0c"/>
-      <stop offset="0.3" stop-color="#f4d46c"/>
-      <stop offset="0.52" stop-color="#c6921c"/>
-      <stop offset="0.76" stop-color="#f6df88"/>
-      <stop offset="1" stop-color="#a8760f"/>
-    </linearGradient>
     <mask id="cut">
       <rect width="640" height="640" fill="#fff"/>
       <rect x="0" y="338" width="640" height="64" fill="#000"/>
     </mask>
   </defs>
-  <rect width="640" height="640" fill="#000"/>
-  <g fill="url(#gold)" mask="url(#cut)">
+  <rect width="640" height="640" fill="{BG}"/>
+  <g fill="{FG}" mask="url(#cut)">
     <rect x="128" y="168" width="62" height="304"/>
     <rect x="262" y="168" width="62" height="304"/>
     <rect x="128" y="296" width="196" height="42"/>
     <rect x="364" y="168" width="62" height="304"/>
     <rect x="364" y="410" width="148" height="62"/>
   </g>
-  <text x="320" y="390" text-anchor="middle" fill="url(#gold)"
+  <text x="320" y="390" text-anchor="middle" fill="{FG}"
         font-family="Montserrat, Arial Black, sans-serif" font-weight="800"
         font-size="50" letter-spacing="3">{band_text}</text>
 </svg>
@@ -65,7 +61,7 @@ def main(preview_path=None):
             with open(os.path.join(HERE, f"{name}.svg"), "w", encoding="utf-8", newline="\n") as f:
                 f.write(source)
             page.set_content(f"<html><head><link href='{FONT_CSS}' rel='stylesheet'></head>"
-                             f"<body style='margin:0;background:#000'>{source}</body></html>")
+                             f"<body style='margin:0;background:{BG}'>{source}</body></html>")
             page.wait_for_load_state("networkidle")
             page.evaluate("document.fonts.ready")
             if not page.evaluate("document.fonts.check('800 50px Montserrat')"):
