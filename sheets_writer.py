@@ -276,7 +276,13 @@ class SheetState:
                 self.lot_row[row[0]] = row_num
 
         self.next_row = FIRST_DATA_ROW + len(data_rows)
-        self.row_count = worksheet.row_count  # размер сетки листа (не число заполненных строк)
+        # Размер сетки листа (не число заполненных строк) - спрашиваем у
+        # Google заново, а не берём worksheet.row_count: gspread запоминает
+        # его при открытии листа и не обновляет после remove_expired_lots
+        # (удаление идёт через spreadsheet.batch_update). Со старым числом
+        # _ensure_row считал, что место ещё есть, и main.py падал на
+        # "Range (lots!A1881) exceeds grid limits. Max rows: 1880" (02.10.2026).
+        self.row_count = worksheet.spreadsheet.get_worksheet_by_id(worksheet.id).row_count
 
     def _ensure_row(self, row_num):
         """Расширяет сетку листа, если строка row_num за её пределами."""
