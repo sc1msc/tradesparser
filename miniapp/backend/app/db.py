@@ -21,15 +21,21 @@ HONESTLOT_DB, по умолчанию miniapp/backend/data/honestlot.db).
               t.me/honestlot_bot?startapp=<метка> (в initData - start_param,
               подписан Telegram). Первый известный источник не
               перезаписывается; last_source - метка последнего входа по ссылке.
+              Ссылки "Поделиться" на лот дают source = "share" (auth.split_start_param);
+              ref_code - случайный код пользователя для его ссылок "Поделиться",
+              referred_by - telegram_id того, по чьей ссылке человек пришёл
+              (только для новых: уже знакомого пользователя ссылка не "приводит").
   favorites - избранное: (telegram_id, lot_id) + vin машины - избранное
               следует за машиной (см. lots.favorites_list).
   events    - минимальная аналитика: open (открыл мини-апп), lot_view
               (открыл карточку лота), fav_add (в избранное), source_click
-              (перешёл на сайт торгов - самый сильный сигнал интереса).
+              (перешёл на сайт торгов - самый сильный сигнал интереса),
+              share (нажал "Поделиться" на экране лота).
               Сводка - python -m app.stats (miniapp/backend/app/stats.py).
 """
 import json
 import os
+import secrets
 import sqlite3
 import threading
 
@@ -77,7 +83,9 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    TEXT NOT NULL,
     last_seen_at  TEXT NOT NULL,
     source        TEXT,
-    last_source   TEXT
+    last_source   TEXT,
+    ref_code      TEXT,
+    referred_by   INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -118,10 +126,18 @@ MIGRATIONS = {
     "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0"), ("lot_kind", "TEXT"),
              ("status_checked_at", "TEXT")],
     "favorites": [("vin", "TEXT")],
-    "users": [("source", "TEXT"), ("last_source", "TEXT")],
+    "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }
+# Индексы по колонкам из MIGRATIONS - после ALTER TABLE, не в SCHEMA: на
+# старой базе SCHEMA выполняется, когда этих колонок ещё нет.
+POST_MIGRATION_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users (ref_code)"
 
-EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click"}
+EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share"}
+
+# Код для ссылок "Поделиться": без похожих 0/o, 1/l/i. 6 знаков - ~10^9
+# вариантов, совпадение при генерации всё равно проверяется (UNIQUE).
+REF_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+REF_LENGTH = 6
 
 _lock = threading.Lock()
 
@@ -142,6 +158,7 @@ def connect():
         for name, ddl in columns:
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+    conn.execute(POST_MIGRATION_SQL)
     conn.commit()
     return conn
 
@@ -204,21 +221,46 @@ def import_lots(lots, now_iso):
     return len(ids), cur.rowcount
 
 
-def touch_user(telegram_id, username, first_name, now_iso, start_param=None):
+def touch_user(telegram_id, username, first_name, now_iso, start_param=None, ref_code=None):
     """start_param - метка из ссылки ?startapp=... (None при входе через
-    кнопку меню). source - первый известный источник, не перезаписывается."""
+    кнопку меню), уже разобранная auth.split_start_param. source - первый
+    известный источник, не перезаписывается. ref_code - код из ссылки
+    "Поделиться": referred_by пишется только при создании пользователя."""
     with _lock:
         c = conn()
         with c:
+            referred_by = None
+            if ref_code:
+                row = c.execute("SELECT telegram_id FROM users WHERE ref_code = ?", (ref_code,)).fetchone()
+                if row and row["telegram_id"] != telegram_id:
+                    referred_by = row["telegram_id"]
             c.execute(
                 "INSERT INTO users (telegram_id, username, first_name, created_at, last_seen_at, "
-                "source, last_source) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(telegram_id) DO UPDATE SET "
+                "source, last_source, referred_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(telegram_id) DO UPDATE SET "
                 "username = excluded.username, first_name = excluded.first_name, "
                 "last_seen_at = excluded.last_seen_at, "
                 "source = COALESCE(users.source, excluded.source), "
                 "last_source = COALESCE(excluded.last_source, users.last_source)",
-                (telegram_id, username, first_name, now_iso, now_iso, start_param, start_param),
+                (telegram_id, username, first_name, now_iso, now_iso, start_param, start_param, referred_by),
             )
+
+
+def user_ref_code(telegram_id):
+    """Код пользователя для ссылок "Поделиться" - создаётся при первом
+    запросе и дальше не меняется (иначе разосланные ссылки потеряют автора)."""
+    with _lock:
+        c = conn()
+        row = c.execute("SELECT ref_code FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone()
+        if row and row["ref_code"]:
+            return row["ref_code"]
+        while True:
+            code = "".join(secrets.choice(REF_ALPHABET) for _ in range(REF_LENGTH))
+            try:
+                with c:
+                    c.execute("UPDATE users SET ref_code = ? WHERE telegram_id = ?", (code, telegram_id))
+                return code
+            except sqlite3.IntegrityError:  # такой код уже у кого-то есть
+                continue
 
 
 def log_event(telegram_id, event_type, now_iso, lot_id=None, source=None):

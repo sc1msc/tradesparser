@@ -12,9 +12,12 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   GET    /api/favorites          - избранное текущего пользователя
   PUT    /api/favorites/{id}     - добавить в избранное
   DELETE /api/favorites/{id}     - убрать из избранного
+  GET    /api/me                 - код пользователя для ссылок "Поделиться"
+                                   (t.me/<бот>?startapp=lot<id>_<код>, см. auth.split_start_param)
   POST   /api/events             - событие для аналитики: {"type": "open"} при
                                    старте, {"type": "source_click", "lot_id"} при
-                                   переходе на сайт торгов (остальное пишет сервер)
+                                   переходе на сайт торгов, {"type": "share", "lot_id"}
+                                   при "Поделиться" (остальное пишет сервер)
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
                                    торгов ещё неизвестен - ПК перечитывает их на сайте
   POST   /api/lot-status         - (ключ импорта) статусы, перечитанные с сайта
@@ -57,9 +60,10 @@ def current_user(authorization, with_source=False):
         user = auth.user_from_header(authorization)
     except auth.AuthError as e:
         raise HTTPException(status_code=401, detail=str(e))
+    source, ref_code = auth.split_start_param(user.get("start_param"))
     db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(),
-                  user.get("start_param"))
-    return (int(user["id"]), user.get("start_param")) if with_source else int(user["id"])
+                  source, ref_code)
+    return (int(user["id"]), source) if with_source else int(user["id"])
 
 
 @app.get("/api/lots")
@@ -115,6 +119,12 @@ def api_favorite_remove(lot_id: str, authorization: str = Header(default="")):
     return {"ok": True}
 
 
+@app.get("/api/me")
+def api_me(authorization: str = Header(default="")):
+    uid = current_user(authorization)
+    return {"ref": db.user_ref_code(uid)}
+
+
 class EventPayload(BaseModel):
     type: str
     lot_id: str | None = None
@@ -124,7 +134,7 @@ class EventPayload(BaseModel):
 def api_event(payload: EventPayload, authorization: str = Header(default="")):
     uid, start_param = current_user(authorization, with_source=True)
     # с фронта принимаем только то, что сервер сам не видит
-    if payload.type not in ("open", "source_click"):
+    if payload.type not in ("open", "source_click", "share"):
         raise HTTPException(status_code=400, detail="неизвестный тип события")
     db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id,
                  source=start_param if payload.type == "open" else None)

@@ -230,3 +230,11 @@ input { font: inherit; color: inherit; }
 /* строки с длинным текстом слева (площадки, история торгов): текст переносится, цена - в одну строку */
 .rows.wrap-k .row .k { flex: 1 1 auto; min-width: 0; }
 .rows.wrap-k .row .v { flex: none; white-space: nowrap; }
+
+/* экран лота: "Поделиться" рядом с сердечком; машина снова на торгах */
+.backbar .actions { display: flex; align-items: center; gap: 2px; }
+.backbar .actions .fav { position: static; }
+.sharebtn { width: 34px; height: 34px; display: grid; place-items: center; color: var(--hint); }
+.sharebtn svg { width: 21px; height: 21px; }
+.relisted-box { display: flex; flex-direction: column; gap: 2px; width: calc(100% - 24px); text-align: left; background: var(--green-soft); color: var(--green); margin-bottom: 8px; }
+.relisted-box span { font-size: 14px; }

@@ -72,6 +72,24 @@ def validate_init_data(init_data, bot_token, now=None):
     return user
 
 
+# Ссылка "Поделиться" с экрана лота: t.me/<бот>?startapp=lot<id>_<код>.
+# Код - users.ref_code того, кто поделился (случайный, а не telegram_id:
+# ссылку видит каждый получатель). Без кода - тоже ссылка на лот.
+SHARE_PARAM_RE = re.compile(r"^lot(\d{1,15})(?:_([a-z0-9]{4,12}))?$")
+SHARE_SOURCE = "share"
+
+
+def split_start_param(start_param):
+    """(source, ref_code) из start_param: для ссылки на лот source = "share"
+    (иначе у каждого лота была бы своя "метка" и сводка по источникам
+    рассыпалась бы), ref_code - код поделившегося или None. Остальные
+    метки возвращаются как есть."""
+    m = SHARE_PARAM_RE.match(start_param or "")
+    if not m:
+        return start_param or None, None
+    return SHARE_SOURCE, m.group(2)
+
+
 def user_from_header(authorization):
     """Разбирает заголовок Authorization. Возвращает dict пользователя."""
     init_data = ""

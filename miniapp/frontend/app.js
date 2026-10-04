@@ -58,6 +58,7 @@ const ICONS = {
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="3" y="13" width="7" height="7" rx="2"/><path d="M13 6h8M13 9h5M13 15h8M13 18h5"/></svg>',
   car: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 16H3v-4l2-5h14l2 5v4h-2M7 16h10"/><circle cx="7" cy="16.5" r="1.8"/><circle cx="17" cy="16.5" r="1.8"/></svg>',
   back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5"/><path d="M8 11H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-2"/></svg>',
 };
 const icon = (name) => h("span", { html: ICONS[name], style: { display: "contents" } });
 
@@ -135,7 +136,7 @@ async function api(path, opts = {}) {
     },
   });
   if (r.status === 401) throw new AuthError(await r.text());
-  if (!r.ok) throw new Error(`Ошибка ${r.status}`);
+  if (!r.ok) throw Object.assign(new Error(`Ошибка ${r.status}`), { status: r.status });
   return r.json();
 }
 
@@ -256,6 +257,44 @@ function supportLink() {
     const url = `https://t.me/${SUPPORT}`;
     if (IN_TG) tg.openTelegramLink(url); else window.open(url, "_blank", "noopener");
   } }, "Написать в поддержку");
+}
+
+// ---------- поделиться лотом ----------
+
+// Ссылка t.me/<бот>?startapp=lot<id>_<код> открывает мини-апп сразу на этом
+// лоте (см. start()). Код - не telegram_id, а случайный код поделившегося
+// (GET /api/me): так видно, кого кто привёл, а получатель ничего о нём не узнаёт.
+// Код берём заранее, при открытии экрана лота, - клик "Поделиться" не ждёт сети.
+let refCode = null;
+function loadRef() {
+  if (refCode === null) refCode = api("/me").then((d) => d.ref, () => { refCode = null; return null; });
+  return refCode;
+}
+const shareParam = (lotId, ref) => `lot${lotId}${ref ? "_" + ref : ""}`;
+
+async function shareLot(lot) {
+  haptic();
+  track("share", lot.id);
+  const ref = await Promise.race([loadRef(), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  const link = `https://t.me/${BOT}?startapp=${shareParam(lot.id, ref)}`;
+  const gap = lot.gap != null && lot.gap >= 0.5 ? `, на ${Math.round(lot.gap)}% ниже рынка` : "";
+  const text = `${lot.name}${lot.year ? ", " + lot.year : ""} — ${rub(lot.price)}${gap}`;
+  if (IN_TG) {
+    // стандартный выбор чата Telegram; серверу Telegram для этого не нужен
+    tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+  } else if (navigator.share) {
+    navigator.share({ text, url: link }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(`${text}\n${link}`).then(() => toast("Ссылка скопирована"), () => {});
+  }
+}
+
+// Параметр запуска: в Telegram - start_param из initData, в обычном браузере
+// (локальная проверка) - ?startapp=... в адресе страницы.
+function startLotId() {
+  const p = (IN_TG && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || new URLSearchParams(location.search).get("startapp") || "";
+  const m = /^lot(\d+)/.exec(p);
+  return m ? m[1] : null;
 }
 
 // ---------- лента ----------
@@ -465,10 +504,13 @@ function marketBlock(lot) {
 
 async function renderLot(id) {
   overlay.replaceChildren(h("div", { class: "screen no-tabs" }, backbar(), h("div", { class: "loader" }, "Загружаем лот…")));
+  loadRef();
   let lot;
   try { lot = await api(`/lots/${encodeURIComponent(id)}`); } catch (e) {
     if (e instanceof AuthError) return showStub();
-    overlay.replaceChildren(h("div", { class: "screen no-tabs" }, backbar(), h("div", { class: "empty" }, h("b", {}, "Не удалось загрузить лот"))));
+    overlay.replaceChildren(h("div", { class: "screen no-tabs" }, backbar(), e.status === 404
+      ? h("div", { class: "empty" }, h("b", {}, "Лот больше недоступен"), "Его уже нет в нашей базе. Посмотрите другие лоты в ленте.")
+      : h("div", { class: "empty" }, h("b", {}, "Не удалось загрузить лот"))));
     return;
   }
   const top = state.stack[state.stack.length - 1];
@@ -518,8 +560,18 @@ async function renderLot(id) {
     e.currentTarget.textContent = descOpen ? "Свернуть" : "Показать полностью";
   } }, "Показать полностью") : null;
 
+  // торги этого лота закончились, а машина снова выставлена (часто так и бывает
+  // со ссылкой, которой поделились неделю назад) - ведём на текущие торги
+  const current = !lot.is_open && (lot.listings_list || []).find((x) => !x.this);
+  const relistedBox = current ? h("button", { class: "block relisted-box", onclick: () => push({ kind: "lot", id: current.id }) },
+    h("b", {}, "Эта машина снова на торгах"),
+    h("span", {}, `${rub(current.price)}${current.deadline ? " · заявки до " + dShort(current.deadline) : ""} · открыть →`)) : null;
+
   overlay.replaceChildren(h("div", { class: "screen no-tabs" },
-    backbar(heartButton(lot.id)),
+    backbar(h("div", { class: "actions" },
+      h("button", { class: "sharebtn", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot) }),
+      heartButton(lot.id))),
+    relistedBox,
     gallery(lot.photos),
     h("div", { class: "block" },
       h("h2", {}, lot.name, lot.year ? `, ${lot.year}` : ""),
@@ -744,6 +796,9 @@ async function start() {
   renderTabs();
   loadFeed(true);
   track("open");
+  // открыли по ссылке "Поделиться" - сразу экран лота, "Назад" ведёт в ленту
+  const sharedId = startLotId();
+  if (sharedId) push({ kind: "lot", id: sharedId });
   try {
     const [facets, favs] = await Promise.all([api("/facets"), api("/favorites")]);
     state.facets = facets;
