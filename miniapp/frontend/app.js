@@ -249,7 +249,8 @@ function card(it) {
     thumb,
     h("div", { class: "info" },
       h("div", { class: "name" }, it.name, it.year ? h("span", { class: "yr" }, `, ${it.year}`) : null),
-      h("div", { class: "priceline" }, h("span", { class: "price" }, rub(it.price)), gapBadge(it.gap),
+      // у аукциона в ленте - начальная цена, на торгах она вырастет: подписываем
+      h("div", { class: "priceline" }, h("span", { class: "price" }, it.trade === "auction" ? h("span", { class: "pfx" }, "старт ") : null, rub(it.price)), gapBadge(it.gap),
         it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
       meta ? h("div", { class: "meta" }, meta) : null,
       relisted,
@@ -493,16 +494,19 @@ function marketBlock(lot) {
   const hi = Math.max(lot.market_high, lot.price) * 1.1;
   const pos = (v) => `${((v - lo) / (hi - lo)) * 100}%`;
   const mid = (lot.market_low + lot.market_high) / 2;
-  let verdict = "Цена на уровне рынка";
-  if (lot.gap >= 0.5) verdict = `Лот дешевле середины рынка на ${Math.round(lot.gap)}%`;
-  else if (lot.gap <= -0.5) verdict = `Лот дороже середины рынка на ${Math.round(-lot.gap)}%`;
+  const auction = lot.trade === "auction";
+  const what = auction ? "Начальная цена" : "Лот";
+  let verdict = auction ? "Начальная цена на уровне рынка" : "Цена на уровне рынка";
+  if (lot.gap >= 0.5) verdict = `${what} ${auction ? "ниже" : "дешевле"} середины рынка на ${Math.round(lot.gap)}%`;
+  else if (lot.gap <= -0.5) verdict = `${what} ${auction ? "выше" : "дороже"} середины рынка на ${Math.round(-lot.gap)}%`;
+  if (auction) verdict += ". Итоговая цена определится на торгах.";
   return h("div", { class: "block" },
     h("h3", {}, "Рыночная цена · Авто.ру"),
     h("div", {}, `${rub(lot.market_low)} — ${rub(lot.market_high)}`),
     h("div", { class: "range" },
       h("div", { class: "band", style: { left: pos(lot.market_low), width: `calc(${pos(lot.market_high)} - ${pos(lot.market_low)})` } }),
       h("div", { class: "mark", style: { left: pos(lot.price) }, title: "Цена лота" })),
-    h("div", { class: "range-labels" }, h("span", {}, "▮ цена лота"), h("span", {}, `середина ${short(Math.round(mid))} ₽`)),
+    h("div", { class: "range-labels" }, h("span", {}, auction ? "▮ начальная цена" : "▮ цена лота"), h("span", {}, `середина ${short(Math.round(mid))} ₽`)),
     h("div", { class: "sub", style: { marginTop: "8px" } }, verdict),
     lot.gap_uncertain ? h("div", { class: "sub unsure-note" },
       "Оценка может быть неточной: Авто.ру сам указывает большую погрешность для этой машины.") : null,
@@ -583,6 +587,7 @@ async function renderLot(id) {
     h("div", { class: "block" },
       h("h2", {}, lot.name, lot.year ? `, ${lot.year}` : ""),
       h("div", { class: "sub" }, [mileage, regionShort(lot.region)].filter(Boolean).join(" · ")),
+      lot.trade === "auction" ? h("div", { class: "pricecap" }, "Начальная цена · на торгах вырастет") : null,
       h("div", { class: "bigprice" }, rub(lot.price), gapBadge(lot.gap)),
       lot.next_price && lot.is_open ? h("div", { class: "nextstep" },
         `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null),
