@@ -42,7 +42,21 @@ python miniapp/run_local.py --import       # http://localhost:8000 и загру
 docker compose -f miniapp/docker-compose.yml up -d --build
 ```
 
-База лежит в `miniapp/data/honestlot.db` на сервере. Бэкап — копия этого файла.
+База лежит в `miniapp/data/honestlot.db` на сервере.
+
+Бэкап (`backend/app/backup.py`):
+- сервер сам раз в сутки (после 04:00 МСК) копирует базу в `miniapp/data/backups/honestlot-ГГГГ-ММ-ДД.db`, хранит 7 последних;
+- шаг 7 пайплайна в конце забирает свежую копию на ПК (`GET /api/backup`, ключ импорта) в `miniapp_backups/` в корне репозитория, тоже 7 последних, с проверкой целостности. Это на случай, если пропадёт сама ВМ.
+
+Восстановление на сервере:
+
+```
+cd ~/honestlot/miniapp && docker compose stop api
+cp data/backups/honestlot-ГГГГ-ММ-ДД.db data/honestlot.db && rm -f data/honestlot.db-wal data/honestlot.db-shm
+docker compose start api
+```
+
+Копию с ПК сначала загрузить на сервер: `scp miniapp_backups/honestlot-ГГГГ-ММ-ДД.db honestlot@84.201.144.182:~/honestlot/miniapp/data/backups/`.
 
 На ПК в `local_secrets.py`:
 ```

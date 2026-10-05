@@ -34,6 +34,11 @@ DELAY_BETWEEN_LOT_REQUESTS - это десятки минут), дальше - �
 перечитываются с сайта, статусы уходят на сервер (POST /api/lot-status).
 Таких лотов единицы-десятки, перепроверка не чаще раза в сутки на лот.
 
+В конце - копия базы мини-аппа на ПК (GET /api/backup) в BACKUP_DIR, хранятся
+BACKUP_KEEP последних. Сервер и сам делает копию раз в сутки, но на той же ВМ:
+если пропадёт диск, останется копия здесь. В базе невосстановимое -
+пользователи, избранное, статистика; лоты восстановимы новой выгрузкой.
+
 Лоты-призраки. Агрегатор иногда создаёт страницу лота по ошибке и потом
 удаляет её (01.10.2026 - лот 7159530, дубль Renault Logan с другой ценой).
 Такая страница отдаётся с кодом 200, но без данных лота и с общим
@@ -53,9 +58,11 @@ DELAY_BETWEEN_LOT_REQUESTS - это десятки минут), дальше - �
    miniapp_export_preview.json для проверки)
 """
 import datetime
+import glob
 import json
 import os
 import re
+import sqlite3
 import sys
 import time
 
@@ -77,6 +84,8 @@ LOT_ID_RE = re.compile(r"/lot/(\d+)")
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp"}
 GHOST_CONFIRM_HOURS = 6
 GENERIC_TITLE = "Торги России"  # заголовок страницы, когда лота на сайте нет
+BACKUP_DIR = "miniapp_backups"
+BACKUP_KEEP = 7
 
 
 class LotNotFound(Exception):
@@ -304,6 +313,41 @@ def refresh_watchlist(api_url, token, session, cache):
         print(f"  Не удалось отправить статусы: {e}")
 
 
+def download_backup(api_url, token):
+    """Копия базы мини-аппа на ПК: одна на день (повторный прогон в тот же
+    день её перезапишет), BACKUP_KEEP последних. Перед сохранением - проверка
+    целостности, чтобы битая загрузка не вытеснила хорошую копию. Ошибки
+    печатаются и не роняют пайплайн."""
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    path = os.path.join(BACKUP_DIR, f"honestlot-{datetime.date.today().isoformat()}.db")
+    tmp = path + ".tmp"
+    try:
+        with requests.get(f"{api_url}/api/backup", headers={"X-Import-Token": token}, stream=True, timeout=120) as resp:
+            resp.raise_for_status()
+            with open(tmp, "wb") as f:
+                for chunk in resp.iter_content(1 << 16):
+                    f.write(chunk)
+        con = sqlite3.connect(tmp)
+        try:
+            check = con.execute("PRAGMA integrity_check").fetchone()[0]
+            users = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            favs = con.execute("SELECT COUNT(*) FROM favorites").fetchone()[0]
+        finally:
+            con.close()
+        if check != "ok":
+            raise ValueError(f"копия повреждена: {check}")
+        os.replace(tmp, path)
+    except (requests.RequestException, sqlite3.Error, ValueError, OSError) as e:
+        print(f"  Не удалось скачать копию базы мини-аппа: {e}")
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        return
+    for old in sorted(glob.glob(os.path.join(BACKUP_DIR, "honestlot-*.db")))[:-BACKUP_KEEP]:
+        os.remove(old)
+    print(f"Копия базы мини-аппа: {path} ({os.path.getsize(path) // 1024} КБ, "
+          f"пользователей {users}, в избранном {favs})")
+
+
 def run(dry_run=False):
     api_url = (config.MINIAPP_API_URL or "").rstrip("/")
     token = config.MINIAPP_IMPORT_TOKEN
@@ -368,10 +412,12 @@ def run(dry_run=False):
         detail = getattr(getattr(e, "response", None), "text", "")
         print(f"  Не удалось выгрузить в мини-апп: {e} {detail[:300]}")
         print("  Мини-апп продолжит показывать прошлую выгрузку. Остальной пайплайн это не затрагивает.")
+        download_backup(api_url, token)  # пользователи и избранное копируются и без выгрузки
         return
     result = resp.json()
     print(f"  Готово: загружено {result.get('imported')}, ушли из листа (скрыты из ленты): {result.get('left_source')}")
     refresh_watchlist(api_url, token, session, cache)
+    download_backup(api_url, token)
 
 
 if __name__ == "__main__":

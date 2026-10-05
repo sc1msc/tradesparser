@@ -24,6 +24,8 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   POST   /api/import             - загрузка лотов с ПК (export_to_miniapp.py),
                                    защищён ключом X-Import-Token
                                    (переменная окружения HONESTLOT_IMPORT_TOKEN)
+  GET    /api/backup             - (ключ импорта) свежая копия базы для ПК;
+                                   ежедневные копии сервер делает сам (backup.py)
 
 Фронтенд (miniapp/frontend) раздаётся этим же приложением с корня "/" -
 один процесс на всё, отдельный веб-сервер для статики не нужен (на
@@ -32,6 +34,7 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
 Запуск локально (из корня репозитория, см. miniapp/README.md):
   python -m uvicorn app.main:app --app-dir miniapp/backend --reload
 """
+import contextlib
 import datetime
 import hmac
 import os
@@ -41,14 +44,20 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, db, lots
+from . import auth, backup, db, lots
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
 )
 MAX_PAGE = 50
 
-app = FastAPI(title="honestlot", docs_url=None, redoc_url=None, openapi_url=None)
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    backup.start()  # ежедневная копия базы - фоновым потоком
+    yield
+
+
+app = FastAPI(title="honestlot", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
 def _now_iso():
@@ -188,6 +197,13 @@ def api_import(payload: ImportPayload, x_import_token: str = Header(default=""))
     imported, hidden = db.import_lots(payload.lots, _now_iso())
     lots.invalidate()
     return {"imported": imported, "left_source": hidden}
+
+
+@app.get("/api/backup")
+def api_backup(x_import_token: str = Header(default="")):
+    _check_import_token(x_import_token)
+    path = backup.snapshot(os.path.join(backup.backup_dir(), "download.db"))
+    return FileResponse(path, media_type="application/octet-stream", filename="honestlot.db")
 
 
 @app.get("/api/health")
