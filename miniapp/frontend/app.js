@@ -109,18 +109,21 @@ const store = {
 };
 
 let toastTimer;
-function toast(text) {
+// action - необязательная кнопка в уведомлении: {label, onclick}. С кнопкой
+// уведомление висит дольше - чтобы успеть нажать.
+function toast(text, action) {
   document.querySelectorAll(".toast").forEach((t) => t.remove());
-  const t = h("div", { class: "toast" }, text);
+  const t = h("div", { class: "toast" + (action ? " with-action" : "") }, h("span", {}, text),
+    action ? h("button", { class: "toast-act", onclick: () => { t.remove(); action.onclick(); } }, action.label) : null);
   document.body.append(t);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.remove(), 2200);
+  toastTimer = setTimeout(() => t.remove(), action ? 4500 : 2200);
 }
 const haptic = (kind) => { try { tg && tg.HapticFeedback.impactOccurred(kind || "light"); } catch { /* вне Telegram */ } };
 function openLink(url) { if (IN_TG) tg.openLink(url); else window.open(url, "_blank", "noopener"); }
 // Аналитика: ошибки не показываем пользователю - это не его забота.
-function track(type, lotId) {
-  api("/events", { method: "POST", keepalive: true, body: JSON.stringify({ type, lot_id: lotId || null }) })
+function track(type, lotId, place) {
+  api("/events", { method: "POST", keepalive: true, body: JSON.stringify({ type, lot_id: lotId || null, place: place || null }) })
     .catch(() => {});
 }
 
@@ -184,14 +187,17 @@ function activeFilterCount(f) {
 
 // ---------- избранное ----------
 
-async function toggleFav(id) {
+// item - данные лота (карточки или экрана лота): для "Поделиться" в уведомлении.
+async function toggleFav(id, item) {
   const on = !state.favIds.has(id);
   on ? state.favIds.add(id) : state.favIds.delete(id);
   syncHearts(id);
   haptic();
   try {
     await api(`/favorites/${id}`, { method: on ? "PUT" : "DELETE" });
-    toast(on ? "Добавлено в избранное" : "Убрано из избранного");
+    // лот только что отметили как интересный - лучший момент предложить переслать его
+    if (on && item) toast("Добавлено в избранное", { label: "Поделиться ›", onclick: () => shareLot(item, "toast") });
+    else toast(on ? "Добавлено в избранное" : "Убрано из избранного");
   } catch (e) {
     on ? state.favIds.delete(id) : state.favIds.add(id);
     syncHearts(id);
@@ -199,12 +205,12 @@ async function toggleFav(id) {
   }
 }
 
-function heartButton(id, extraClass) {
+function heartButton(id, item) {
   const on = state.favIds.has(id);
   return h("button", {
-    class: `fav ${extraClass || ""} ${on ? "on" : ""}`, "data-fav": id, "aria-label": "В избранное",
+    class: `fav ${on ? "on" : ""}`, "data-fav": id, "aria-label": "В избранное",
     html: on ? ICONS.heartOn : ICONS.heart,
-    onclick: (e) => { e.stopPropagation(); toggleFav(id); },
+    onclick: (e) => { e.stopPropagation(); toggleFav(id, item); },
   });
 }
 
@@ -248,7 +254,7 @@ function card(it) {
       meta ? h("div", { class: "meta" }, meta) : null,
       relisted,
       deadline),
-    heartButton(it.id));
+    heartButton(it.id, it));
 }
 
 function supportLink() {
@@ -272,9 +278,10 @@ function loadRef() {
 }
 const shareParam = (lotId, ref) => `lot${lotId}${ref ? "_" + ref : ""}`;
 
-async function shareLot(lot) {
+// place - откуда нажали (top / bottom / toast): видно, какая кнопка работает.
+async function shareLot(lot, place) {
   haptic();
-  track("share", lot.id);
+  track("share", lot.id, place);
   const ref = await Promise.race([loadRef(), new Promise((r) => setTimeout(() => r(null), 1500))]);
   const link = `https://t.me/${BOT}?startapp=${shareParam(lot.id, ref)}`;
   const gap = lot.gap != null && lot.gap >= 0.5 ? `, на ${Math.round(lot.gap)}% ниже рынка` : "";
@@ -569,8 +576,8 @@ async function renderLot(id) {
 
   overlay.replaceChildren(h("div", { class: "screen no-tabs" },
     backbar(h("div", { class: "actions" },
-      h("button", { class: "sharebtn", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot) }),
-      heartButton(lot.id))),
+      h("button", { class: "sharebtn", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "top") }),
+      heartButton(lot.id, lot))),
     relistedBox,
     gallery(lot.photos),
     h("div", { class: "block" },
@@ -600,6 +607,7 @@ async function renderLot(id) {
     ])),
     desc ? h("div", { class: "block" }, h("h3", {}, "Описание"), desc, descToggle) : null,
     h("div", { class: "bottombar" },
+      h("button", { class: "btn share", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "bottom") }),
       h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.url); } }, "Открыть лот на сайте торгов"))));
 }
 

@@ -89,6 +89,11 @@ def run():
     shares = _q(c, "SELECT COUNT(*) n, COUNT(DISTINCT telegram_id) u FROM events WHERE type = 'share' AND created_at >= ?",
                 (start,))[0]
     print(f"\n\"Поделиться\" за 30 дней: {shares['n']} раз, {shares['u']} человек")
+    places = {"top": "иконка вверху", "bottom": "кнопка внизу", "toast": "после ♡"}
+    by_place = _q(c, "SELECT source, COUNT(*) n FROM events WHERE type = 'share' AND created_at >= ? "
+                     "GROUP BY source ORDER BY n DESC", (start,))
+    if by_place:
+        print("  откуда нажимали: " + ", ".join(f"{places.get(r['source'], r['source'] or 'не записано')} {r['n']}" for r in by_place))
     top = _q(c, "SELECT r.telegram_id, r.username, r.first_name, COUNT(*) n FROM users u "
                 "JOIN users r ON r.telegram_id = u.referred_by GROUP BY r.telegram_id ORDER BY n DESC LIMIT 10")
     if top:

@@ -16,7 +16,7 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    (t.me/<бот>?startapp=lot<id>_<код>, см. auth.split_start_param)
   POST   /api/events             - событие для аналитики: {"type": "open"} при
                                    старте, {"type": "source_click", "lot_id"} при
-                                   переходе на сайт торгов, {"type": "share", "lot_id"}
+                                   переходе на сайт торгов, {"type": "share", "lot_id", "place"}
                                    при "Поделиться" (остальное пишет сервер)
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
                                    торгов ещё неизвестен - ПК перечитывает их на сайте
@@ -128,6 +128,11 @@ def api_me(authorization: str = Header(default="")):
 class EventPayload(BaseModel):
     type: str
     lot_id: str | None = None
+    place: str | None = None
+
+
+# откуда нажали "Поделиться": иконка вверху, кнопка внизу, уведомление после ♡
+SHARE_PLACES = {"top", "bottom", "toast"}
 
 
 @app.post("/api/events")
@@ -136,8 +141,11 @@ def api_event(payload: EventPayload, authorization: str = Header(default="")):
     # с фронта принимаем только то, что сервер сам не видит
     if payload.type not in ("open", "source_click", "share"):
         raise HTTPException(status_code=400, detail="неизвестный тип события")
-    db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id,
-                 source=start_param if payload.type == "open" else None)
+    # events.source: для open - метка источника, для share - место кнопки
+    source = start_param if payload.type == "open" else None
+    if payload.type == "share" and payload.place in SHARE_PLACES:
+        source = payload.place
+    db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id, source=source)
     return {"ok": True}
 
 
