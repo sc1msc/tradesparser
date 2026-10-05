@@ -107,6 +107,17 @@ AUTORU_HEADLESS = False  # см. комментарий выше про Avito - 
 # рынок за несколько месяцев заметно меняется.
 AUTORU_ESTIMATE_TTL_DAYS = 60
 
+# --- Учёт расходов (expenses.py): журнал и сводка в папке expenses/ на ПК ---
+# Постоянные расходы - одна строка в журнал раз в месяц, при первом прогоне
+# месяца. Формат ключа "Сервис: что". Сумма - по тарифу; если счёт пришёл
+# другой - поправьте строку в expenses/ledger.csv.
+FIXED_MONTHLY_COSTS = {
+    "Yandex Cloud: ВМ + статический IP (мини-апп)": 1480,
+}
+# Предупреждать, если баланса TRONK хватит меньше чем на столько дней
+# (по среднему расходу за 30 дней).
+TRONK_LOW_BALANCE_DAYS = 5
+
 # --- Дайджест в Telegram-канал (send_digest.py) ---
 # TELEGRAM_BOT_TOKEN - в local_secrets.py, см. начало файла.
 TELEGRAM_CHANNEL_ID = "@honestlot"

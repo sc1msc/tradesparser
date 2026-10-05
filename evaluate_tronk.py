@@ -22,6 +22,7 @@ import time
 import datetime
 
 import config
+import expenses
 import sheets_writer
 import tronk_valuation
 
@@ -82,45 +83,51 @@ def run():
 
     processed = 0
     ok_count = 0
-    for r in to_process:
-        row_num = r["_row_num"]
-        vin = r["vin"].strip().upper()
-        lot_id = r.get("lot_id")
-        print(f"\n[{lot_id}] VIN={vin} ...")
+    # баланс до и после - чтобы учесть реальное списание (expenses.py)
+    balance_before = expenses.tronk_balance()
+    try:
+        for r in to_process:
+            row_num = r["_row_num"]
+            vin = r["vin"].strip().upper()
+            lot_id = r.get("lot_id")
+            print(f"\n[{lot_id}] VIN={vin} ...")
 
-        try:
-            raw = tronk_valuation.get_avg_price(
-                config.TRONK_API_KEY, vin, config.TRONK_REGION_ID
-            )
-            fields = tronk_valuation.extract_valuation(raw)
-        except Exception as e:
-            print(f"  Ошибка запроса: {e}")
-            fields = {"status": f"error: {e}", "price_avg": None, "price_min": None,
-                       "price_max": None, "mileage_avg": None}
+            try:
+                raw = tronk_valuation.get_avg_price(
+                    config.TRONK_API_KEY, vin, config.TRONK_REGION_ID
+                )
+                fields = tronk_valuation.extract_valuation(raw)
+            except Exception as e:
+                print(f"  Ошибка запроса: {e}")
+                fields = {"status": f"error: {e}", "price_avg": None, "price_min": None,
+                           "price_max": None, "mileage_avg": None}
+            processed += 1  # запрос ушёл - деньги списаны, даже если запись ниже упадёт
 
-        # Одним batch_update() на лот вместо 9 отдельных запросов - иначе
-        # даже при небольшом TRONK_MAX_PER_RUN легко упереться в лимит
-        # Google Sheets (60 write-запросов/мин на пользователя).
-        sheets_writer.batch_set_cells(worksheet, row_num, {
-            "tronk_price_avg": fields.get("price_avg"),
-            "tronk_price_min": fields.get("price_min"),
-            "tronk_price_max": fields.get("price_max"),
-            "tronk_mileage_avg": fields.get("mileage_avg"),
-            "tronk_marka": fields.get("marka"),
-            "tronk_model": fields.get("model"),
-            "tronk_year": fields.get("year"),
-            "tronk_status": fields.get("status"),
-            "tronk_checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
-        })
+            # Одним batch_update() на лот вместо 9 отдельных запросов - иначе
+            # даже при небольшом TRONK_MAX_PER_RUN легко упереться в лимит
+            # Google Sheets (60 write-запросов/мин на пользователя).
+            sheets_writer.batch_set_cells(worksheet, row_num, {
+                "tronk_price_avg": fields.get("price_avg"),
+                "tronk_price_min": fields.get("price_min"),
+                "tronk_price_max": fields.get("price_max"),
+                "tronk_mileage_avg": fields.get("mileage_avg"),
+                "tronk_marka": fields.get("marka"),
+                "tronk_model": fields.get("model"),
+                "tronk_year": fields.get("year"),
+                "tronk_status": fields.get("status"),
+                "tronk_checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            })
 
-        print(f"  -> {fields['status']} "
-              f"(avg={fields['price_avg']}, min={fields['price_min']}, max={fields['price_max']})")
+            print(f"  -> {fields['status']} "
+                  f"(avg={fields['price_avg']}, min={fields['price_min']}, max={fields['price_max']})")
 
-        processed += 1
-        if fields["status"] == "ok":
-            ok_count += 1
+            if fields["status"] == "ok":
+                ok_count += 1
 
-        time.sleep(config.DELAY_BETWEEN_TRONK_REQUESTS)
+            time.sleep(config.DELAY_BETWEEN_TRONK_REQUESTS)
+    finally:
+        expenses.record_tronk("avgpricebyvin", processed, balance_before, expenses.tronk_balance(),
+                              expenses.tronk_price("avgpricebyvin"), "evaluate_tronk")
 
     print(f"\nГотово. Отправлено запросов: {processed}, успешных оценок: {ok_count}.")
 

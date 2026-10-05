@@ -49,6 +49,7 @@ import build_lot_selections
 import build_lots_current_month
 import build_lots_processed
 import evaluate_autoru_browser
+import expenses
 import fill_missing_mileage
 import export_to_miniapp
 import main
@@ -64,7 +65,28 @@ STEPS = [
 ]
 
 
+def _expenses_start():
+    """Учёт расходов (expenses.py): постоянные расходы месяца и снимок баланса
+    TRONK. Ошибки учёта пайплайн не останавливают."""
+    try:
+        expenses.ensure_fixed_costs()
+        bal = expenses.snapshot_tronk_balance()
+        if bal is not None:
+            print(f"Баланс TRONK: {bal:.2f} руб.")
+    except Exception as e:
+        print(f"Учёт расходов: {e}")
+
+
+def _expenses_end():
+    try:
+        expenses.build_report()
+        print(expenses.summary_text())
+    except Exception as e:
+        print(f"Учёт расходов: не удалось собрать сводку ({e})")
+
+
 def run():
+    _expenses_start()
     total = len(STEPS)
     for i, (title, module) in enumerate(STEPS, start=1):
         print(f"\n{'=' * 60}")
@@ -75,10 +97,12 @@ def run():
         except Exception as e:
             print(f"\nШаг {i}/{total} ({module.__name__}.py) упал с ошибкой: {e}")
             print("Дальнейшие шаги не выполняются.")
+            _expenses_end()
             raise
 
     print(f"\n{'=' * 60}")
     print("Готово. Все шаги конвейера выполнены.")
+    _expenses_end()
     print("Данные готовы - для публикации в Telegram запустите отдельно: python send_digest.py")
     print("=" * 60)
 

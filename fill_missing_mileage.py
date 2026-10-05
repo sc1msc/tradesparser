@@ -71,6 +71,7 @@ import time
 import bidding_schedule
 import build_lots_current_month as blcm
 import config
+import expenses
 import lot_metrics
 import sheets_writer
 import tronk_mileage
@@ -236,6 +237,10 @@ def run():
     vins = list(rows_by_vin)
     to_process = vins[: config.MILEAGE_MAX_PER_RUN]
     skipped_by_limit = len(vins) - len(to_process)
+    # цена - по прайсу TRONK (бесплатный метод profile), если он ответил;
+    # баланс до - чтобы учесть реальное списание (expenses.py)
+    price_per_request = expenses.tronk_price(method, price_per_request)
+    balance_before = expenses.tronk_balance()
     cost = len(to_process) * price_per_request
 
     print(f"\nМетод (config.MILEAGE_METHOD): {method}")
@@ -255,41 +260,46 @@ def run():
     processed = 0
     filled = 0
     suspicious = 0
-    for vin in to_process:
-        vin_rows = rows_by_vin[vin]
-        lot_ids = ", ".join(str(r.get("lot_id")) for r in vin_rows)
-        print(f"\n[{lot_ids}] VIN={vin} ...")
+    try:
+        for vin in to_process:
+            vin_rows = rows_by_vin[vin]
+            lot_ids = ", ".join(str(r.get("lot_id")) for r in vin_rows)
+            print(f"\n[{lot_ids}] VIN={vin} ...")
 
-        try:
-            raw = tronk_mileage.get_mileage_history(config.TRONK_API_KEY, vin, method)
-            fields = tronk_mileage.extract_latest_mileage(raw)
-        except Exception as e:
-            print(f"  Ошибка запроса: {e}")
-            fields = {"status": f"error: {e}", "mileage_km": None, "mileage_date": None,
-                       "mileage_date_obj": None, "mileage_source": None}
+            try:
+                raw = tronk_mileage.get_mileage_history(config.TRONK_API_KEY, vin, method)
+                fields = tronk_mileage.extract_latest_mileage(raw)
+            except Exception as e:
+                print(f"  Ошибка запроса: {e}")
+                fields = {"status": f"error: {e}", "mileage_km": None, "mileage_date": None,
+                           "mileage_date_obj": None, "mileage_source": None}
+            processed += 1  # запрос ушёл - деньги списаны, даже если запись ниже упадёт
 
-        updates = updates_from_tronk(fields, datetime.datetime.now().isoformat(timespec="seconds"))
-        estimated = updates.get("mileage_km")
-        if estimated is not None:
-            filled += 1
-            if fields["mileage_date_obj"] is None:
-                print(f"  ВНИМАНИЕ: не разобрал дату показания ({fields['mileage_date']!r}) - "
-                      f"беру пробег как есть, без пересчёта на сегодня")
-        if updates["mileage_probeg_status"] == "suspicious":
-            suspicious += 1
-            print(f"  ВНИМАНИЕ: пробег {fields['mileage_km']} км неправдоподобен - не записываю, "
-                  f"оценка пойдёт по году выпуска")
+            updates = updates_from_tronk(fields, datetime.datetime.now().isoformat(timespec="seconds"))
+            estimated = updates.get("mileage_km")
+            if estimated is not None:
+                filled += 1
+                if fields["mileage_date_obj"] is None:
+                    print(f"  ВНИМАНИЕ: не разобрал дату показания ({fields['mileage_date']!r}) - "
+                          f"беру пробег как есть, без пересчёта на сегодня")
+            if updates["mileage_probeg_status"] == "suspicious":
+                suspicious += 1
+                print(f"  ВНИМАНИЕ: пробег {fields['mileage_km']} км неправдоподобен - не записываю, "
+                      f"оценка пойдёт по году выпуска")
 
-        for r in vin_rows:
-            sheets_writer.batch_set_cells(worksheet, r["_row_num"], updates)
-        if updates["mileage_probeg_status"] in vin_cache.MILEAGE_FINAL:
-            cache.update(vin, {f: updates.get(f) for f in vin_cache.MILEAGE_FIELDS})
+            for r in vin_rows:
+                sheets_writer.batch_set_cells(worksheet, r["_row_num"], updates)
+            if updates["mileage_probeg_status"] in vin_cache.MILEAGE_FINAL:
+                cache.update(vin, {f: updates.get(f) for f in vin_cache.MILEAGE_FIELDS})
 
-        print(f"  -> {updates['mileage_probeg_status']} (TRONK: {fields['mileage_km']} на {fields['mileage_date']}, "
-              f"на сегодня: {estimated}, источник: {fields['mileage_source']})")
+            print(f"  -> {updates['mileage_probeg_status']} (TRONK: {fields['mileage_km']} на {fields['mileage_date']}, "
+                  f"на сегодня: {estimated}, источник: {fields['mileage_source']})")
 
-        processed += 1
-        time.sleep(config.DELAY_BETWEEN_MILEAGE_REQUESTS)
+            time.sleep(config.DELAY_BETWEEN_MILEAGE_REQUESTS)
+    finally:
+        # и при падении посреди цикла: что уже оплачено - в учёт расходов
+        expenses.record_tronk(method, processed, balance_before, expenses.tronk_balance(),
+                              price_per_request, "fill_missing_mileage")
 
     cache.flush()
     print(f"\nГотово. Отправлено запросов: {processed}, заполнено пробегов: {filled}, "
