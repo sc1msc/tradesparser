@@ -13,3 +13,6 @@ SPREADSHEET_ID = "ВСТАВЬТЕ_ID_ТАБЛИЦЫ"
 # Необязательные: без них export_to_miniapp.py просто ничего не делает.
 MINIAPP_API_URL = ""
 MINIAPP_IMPORT_TOKEN = ""
+# Ключ Claude API (check_damage_photos.py, проверка фото) - console.anthropic.com.
+# Необязательный: без него SDK возьмёт переменную окружения ANTHROPIC_API_KEY.
+ANTHROPIC_API_KEY = ""

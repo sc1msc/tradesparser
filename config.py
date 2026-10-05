@@ -20,6 +20,13 @@ except ImportError:
     MINIAPP_API_URL = ""
     MINIAPP_IMPORT_TOKEN = ""
 
+# Ключ Claude API (check_damage_photos.py). Необязательный: без него в
+# local_secrets.py SDK ищет ключ сам (переменная ANTHROPIC_API_KEY).
+try:
+    from local_secrets import ANTHROPIC_API_KEY
+except ImportError:
+    ANTHROPIC_API_KEY = ""
+
 # --- Google Sheets ---
 SERVICE_ACCOUNT_FILE = "service_account.json"   # путь к скачанному ключу
 # SPREADSHEET_ID - в local_secrets.py (см. блок секретов выше)
@@ -106,6 +113,19 @@ AUTORU_HEADLESS = False  # см. комментарий выше про Avito - 
 # для того же автомобиля в новом лоте. Старше - лот оценивается заново:
 # рынок за несколько месяцев заметно меняется.
 AUTORU_ESTIMATE_TTL_DAYS = 60
+
+# --- Проверка фото подозрительно дешёвых лотов через Claude (check_damage_photos.py) ---
+# Платно (Claude API). Проверяются только лоты "одна машина" с оценкой Авто.ру,
+# у которых цена ниже середины рынка хотя бы на DAMAGE_CHECK_MIN_GAP процентов:
+# огромный дисконт бывает от сгоревшей/разбитой машины (BAIC X35 2023 за 87 тыс.).
+DAMAGE_CHECK_MIN_GAP = 40
+DAMAGE_CHECK_PHOTOS = 4            # сколько фото лота смотреть (берутся по всей галерее)
+DAMAGE_CHECK_MAX_PER_RUN = 200     # лимит лотов за запуск - защита бюджета
+DAMAGE_CHECK_MODEL = "claude-opus-5-5"
+# Цена модели, $ за 1 млн токенов (для оценки перед запуском и учёта расходов).
+DAMAGE_CHECK_PRICE_USD = {"input": 4.0, "output": 20.0}
+# Курс для учёта расходов в рублях - поправьте, если сильно ушёл.
+USD_RUB = 85.0
 
 # --- Учёт расходов (expenses.py): журнал и сводка в папке expenses/ на ПК ---
 # Постоянные расходы - одна строка в журнал раз в месяц, при первом прогоне

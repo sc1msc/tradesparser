@@ -24,3 +24,6 @@ miniapp/backend/data/
 miniapp/data/
 miniapp_backups/
 expenses/
+damage_check_cache.json
+damage_check_cache.json.tmp
+damage_check_report.html

@@ -6,3 +6,5 @@ google-api-python-client
 playwright
 pandas
 openpyxl
+anthropic
+pillow
