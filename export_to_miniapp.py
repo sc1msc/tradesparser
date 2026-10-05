@@ -242,6 +242,12 @@ def build_lot(row, details):
         # фразы - только как запасной вариант. Дочистка - в бэкенде (lots.py).
         "brand": row.get("autoru_mark") or row.get("brand"),
         "model": row.get("autoru_model") or row.get("name"),
+        # откуда марка/модель и что было разобрано из названия: бэкенд по лотам
+        # с Авто.ру собирает словарь моделей и привязывает к нему модели лотов
+        # без оценки ("Фокус", "219010 Granta" -> Focus, Granta), см. lots.py
+        "model_source": "autoru" if row.get("autoru_mark") else "title",
+        "title_brand": row.get("brand") or None,
+        "title_model": row.get("name") or None,
         "year": _to_int(row.get("year")) or _to_int(row.get("autoru_year")),
         "vin": row.get("vin") or None,
         "plate": row.get("plate") or None,

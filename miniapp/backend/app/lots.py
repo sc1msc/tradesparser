@@ -45,6 +45,7 @@ r"""
 выборка/сортировка идёт в памяти по кэшу лотов: это проще SQL-конструктора
 фильтров и заведомо быстро. Кэш сбрасывается после каждого импорта.
 """
+import collections
 import datetime
 import json
 import re
@@ -127,6 +128,10 @@ BRAND_RE = re.compile(r"^[A-ZА-Я][A-ZА-Я0-9\- ]{0,19}$")
 # Хвосты, после которых в модели из разбора title идёт уже не модель:
 # "Atlas года выпуска", "Largus VIN", "s-max 2006 Wfos...", "H-100 г.в.".
 MODEL_JUNK_RE = re.compile(r"(\s|^)(VIN|ГОДА|Г\.В|ГОД|МОДЕЛЬ|19\d\d|20\d\d)(\W|$).*", re.IGNORECASE)
+
+PLATE_RE = re.compile(r"\s*[АВЕКМНОРСТУХABEKMHOPCTYX]\d{3}[АВЕКМНОРСТУХABEKMHOPCTYX]{2}\d{2,3}(?:RUS)?(?![0-9A-ZА-Я])", re.IGNORECASE)
+KLASSE_RE = re.compile(r"^([A-Z0-9]+) KLASSE( AMG)?$", re.IGNORECASE)
+BMW_SERIES_RE = re.compile(r"^(\d)ER$", re.IGNORECASE)
 
 CYR_LOOKALIKES = str.maketrans("АВЕКМНОРСТУХаеокрсух", "ABEKMHOPCTYXaeokpcyx")
 
@@ -244,6 +249,7 @@ def clean_model(value, brand_label):
     if brand_label and _norm_key(model).startswith(_norm_key(brand_label) + " "):
         model = model[len(brand_label):].strip()
     model = MODEL_JUNK_RE.sub("", model).strip(" ,.:;-")
+    model = PLATE_RE.sub("", model).strip(" ,.:;-")  # "220695-04 У668МЕ797" - госномер не модель
     # непарная скобка от обрезанной фразы ("Pajero)"), парные ("2131 (4X4)") не трогаем
     if model.endswith(")") and model.count("(") < model.count(")"):
         model = model[:-1].strip()
@@ -251,14 +257,109 @@ def clean_model(value, brand_label):
         model = model[1:].strip()
     if len(model) > 25:
         return ""
+    # коды Авто.ру: "M_KLASSE" -> "M-класс", "GL_KLASSE_AMG" -> "GL-класс AMG", "5ER" -> "5 серии"
+    m = KLASSE_RE.match(model)
+    if m:
+        return f"{m.group(1).upper()}-класс" + (" AMG" if m.group(2) else "")
+    m = BMW_SERIES_RE.match(model)
+    if m:
+        return f"{m.group(1)} серии"
     return pretty_name(model)
 
 
-def _prepare(lot):
+# ---------- каталог моделей Авто.ру ----------
+# Марку и модель большинству лотов даёт Авто.ру (по VIN, вместе с оценкой) -
+# коды вида FORD / FOCUS, BMW / 5ER: у модели одно написание. У лотов без
+# оценки (нет VIN, Авто.ру не определил машину - ~11% на 06.10.2026) модель
+# разобрана из названия лота: "Фокус", "Focus CB4", "219010 Granta", "Jb/rio".
+# Такие модели привязываем к словарю Авто.ру (build_catalog): модели всех
+# лотов с оценкой плюс выученные написания - у лота с оценкой есть и модель,
+# разобранная из названия (title_model): "Солярис" у Hyundai -> SOLARIS.
+
+_TRANSLIT = str.maketrans({
+    "А": "A", "Б": "B", "В": "V", "Г": "G", "Д": "D", "Е": "E", "Ё": "E", "Ж": "ZH", "З": "Z",
+    "И": "I", "Й": "Y", "К": "K", "Л": "L", "М": "M", "Н": "N", "О": "O", "П": "P", "Р": "R",
+    "С": "S", "Т": "T", "У": "U", "Ф": "F", "Х": "H", "Ц": "TS", "Ч": "CH", "Ш": "SH", "Щ": "SCH",
+    "Ъ": "", "Ы": "Y", "Ь": "", "Э": "E", "Ю": "YU", "Я": "YA",
+})
+
+
+def _skeleton(value):
+    """Только латинские буквы и цифры, кириллица - транслитом: "219010 Granta" ->
+    "219010GRANTA", "Гранта" -> "GRANTA"."""
+    return re.sub(r"[^A-Z0-9]", "", (value or "").upper().translate(_TRANSLIT))
+
+
+def _consonants(skeleton):
+    """Согласные - для написаний на слух: "Солярис"/SOLARIS -> SLRS,
+    "Октавия"/OCTAVIA -> KTV, "Туарег"/TOUAREG -> TRG."""
+    s = skeleton.replace("PH", "F").replace("C", "K").replace("Q", "K").replace("W", "V")
+    return re.sub(r"[AEIOUY]", "", s)
+
+
+def build_catalog(raw_lots):
+    """Словарь из лотов с моделью от Авто.ру: {"codes": {марка: {код модели}},
+    "alias": {(марка, скелет модели из названия): код}}."""
+    codes = {}
+    alias = {}
+    for lot in raw_lots:
+        if lot.get("model_source") != "autoru" or not lot.get("model"):
+            continue
+        key, _ = clean_brand(lot.get("brand"))
+        if not key:
+            continue
+        code = lot["model"].strip().upper()
+        codes.setdefault(key, set()).add(code)
+        tkey, tlabel, traw = resolve_brand_model(lot.get("title_brand"), lot.get("title_model"), lot.get("title"))
+        sk = _skeleton(clean_model(traw, tlabel)) if tkey == key else ""
+        if sk and sk != _skeleton(code):
+            alias.setdefault((key, sk), collections.Counter())[code] += 1
+    return {"codes": codes, "alias": {k: c.most_common(1)[0][0] for k, c in alias.items()}}
+
+
+def snap_model(brand_key, model, text, catalog):
+    """Код модели Авто.ру для модели, разобранной из названия, или None."""
+    codes = (catalog or {}).get("codes", {}).get(brand_key)
+    if not codes:
+        return None
+    sk = _skeleton(model)
+    if sk:
+        exact = [c for c in codes if _skeleton(c) == sk]  # "Golf" - это GOLF, а не GOLF_R из выученных
+        if exact:
+            return exact[0]
+        hit = catalog["alias"].get((brand_key, sk))
+        if hit:
+            return hit
+        # код - часть разобранной модели ("Focus CB4", "219010 Granta", "Passat CC" -> PASSAT_CC)
+        found = [c for c in codes if len(_skeleton(c)) >= 2 and _skeleton(c) in sk]
+        if found:
+            return max(found, key=lambda c: len(_skeleton(c)))
+        # на слух - всей моделью или первым словом ("Солярис 1.6 GI АТ" -> SOLARIS)
+        for part in (sk, _skeleton(model.split()[0])):
+            cons = _consonants(part)
+            found = [c for c in codes if len(cons) >= 3 and _consonants(_skeleton(c)) == cons]
+            if len(found) == 1:
+                return found[0]
+        return None
+    # модели нет - ищем код модели отдельным словом в тексте (название, описание)
+    words = {_skeleton(w) for w in re.findall(r"[A-Za-zА-Яа-яЁё0-9]+", text or "")}
+    found = [c for c in codes if len(_skeleton(c)) >= 3 and _skeleton(c) in words]
+    return found[0] if len(found) == 1 else None
+
+
+def _prepare(lot, catalog=None):
     """Статичные (не зависящие от времени) производные поля - один раз на
-    загрузку кэша."""
+    загрузку кэша. catalog - словарь моделей Авто.ру (build_catalog)."""
     brand_key, brand, raw_model = resolve_brand_model(lot.get("brand"), lot.get("model"), lot.get("title"))
+    if not brand_key:  # название вида "Автомобиль" - марку ищем в описании
+        found, rest = find_brand(lot.get("description"))
+        if found:
+            brand_key, brand, raw_model = found, BRAND_LABELS.get(found) or pretty_name(found), _model_tail(found, rest)
     model = clean_model(raw_model, brand) if brand else ""
+    if brand_key and lot.get("model_source") != "autoru":
+        code = snap_model(brand_key, model, f"{lot.get('title') or ''} {lot.get('description') or ''}", catalog)
+        if code:
+            model = clean_model(code, brand)
     lot["brand_label"] = brand
     lot["model_label"] = model
     lot["brand_key"] = brand_key
@@ -315,7 +416,9 @@ def _int(value):
 def load():
     with _cache_lock:
         if _cache["lots"] is None:
-            prepared = [_prepare(lot) for lot in db.all_lots()]
+            raw = db.all_lots()
+            catalog = build_catalog(raw)
+            prepared = [_prepare(lot, catalog) for lot in raw]
             cars = {}
             for lot in prepared:
                 if lot["car"]:

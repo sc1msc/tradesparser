@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS lots (
     estimate_uncertain INTEGER NOT NULL DEFAULT 0,
     lot_kind          TEXT,
     status_checked_at TEXT,
+    model_source      TEXT,
+    title_brand       TEXT,
+    title_model       TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -115,7 +118,7 @@ LOT_FIELDS = [
     "region", "trade_form", "is_public_offer", "status", "platform",
     "applications_end", "bidding_start", "periods", "photos", "description",
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
-    "lot_kind",
+    "lot_kind", "model_source", "title_brand", "title_model",
 ]
 JSON_FIELDS = {"periods", "photos"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
@@ -124,7 +127,8 @@ FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 # EXISTS их в существующую базу не добавит - досоздаём ALTER TABLE.
 MIGRATIONS = {
     "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0"), ("lot_kind", "TEXT"),
-             ("status_checked_at", "TEXT")],
+             ("status_checked_at", "TEXT"), ("model_source", "TEXT"), ("title_brand", "TEXT"),
+             ("title_model", "TEXT")],
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }
