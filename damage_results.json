@@ -115,5 +115,116 @@
     "signs": [],
     "comment": "Машина целая с вмятиной на капоте",
     "photos_seen": 3
+  },
+  {
+    "lot_id": "7152351",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, припаркована",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7195345",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, припаркована в снегу",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7185930",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, припаркована",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7138501",
+    "verdict": "total",
+    "signs": [
+      "разукомплектована, открыт капот"
+    ],
+    "comment": "Открыт капот, видны внутренние компоненты, машина разобрана",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7210746",
+    "verdict": "unclear",
+    "signs": [],
+    "comment": "На фото только документы (свидетельство регистрации), машина не видна",
+    "photos_seen": 3
+  },
+  {
+    "lot_id": "7182272",
+    "verdict": "unclear",
+    "signs": [],
+    "comment": "Машина укрыта тряпкой, неясно видно",
+    "photos_seen": 2
+  },
+  {
+    "lot_id": "7221735",
+    "verdict": "total",
+    "signs": [
+      "смят передок, возможно пожар"
+    ],
+    "comment": "Передняя часть полностью разбита, видна закопченность, возможен пожар",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7181114",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, припаркована",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7199338",
+    "verdict": "unclear",
+    "signs": [],
+    "comment": "Машина укрыта брезентом, неясно видно",
+    "photos_seen": 3
+  },
+  {
+    "lot_id": "7181933",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, припаркована",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7196557",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, припаркована в снегу",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7073272",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, разбита только решётка радиатора",
+    "photos_seen": 3
+  },
+  {
+    "lot_id": "7200122",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Машина целая, в мастерской с открытым капотом",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7069618",
+    "verdict": "total",
+    "signs": [
+      "смят передок"
+    ],
+    "comment": "Передняя часть разбита и деформирована",
+    "photos_seen": 1
+  },
+  {
+    "lot_id": "7134732",
+    "verdict": "unclear",
+    "signs": [],
+    "comment": "На фото документы, машина не видна",
+    "photos_seen": 4
   }
 ]
