@@ -50,6 +50,7 @@ import time
 import datetime
 import requests
 
+import automation
 import bidding_schedule
 import config
 import nextjs_json
@@ -303,7 +304,8 @@ def run():
 
     print(f"\nДобавлено новых лотов: {total_new}")
     if search_broken:
-        print("ВНИМАНИЕ: поиск на сайте агрегатора не отдал лоты (см. выше) - новых лотов нет не потому, что их нет.")
+        automation.alert("Поиск на сайте агрегатора не отдал лоты (пустая первая страница) - новых лотов "
+                         "за этот прогон нет не потому, что их нет. Если повторится завтра - смотреть сайт.")
 
     print("\nОбновляю статус и график публичных предложений...")
     checked, closed = refresh_public_offers(worksheet, sheet_state, session, new_lot_ids)

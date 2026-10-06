@@ -16,3 +16,6 @@ MINIAPP_IMPORT_TOKEN = ""
 # Ключ Claude API (check_damage_photos.py, проверка фото) - console.anthropic.com.
 # Необязательный: без него SDK возьмёт переменную окружения ANTHROPIC_API_KEY.
 ANTHROPIC_API_KEY = ""
+# Telegram id получателя уведомлений автоматического режима (run_pipeline.py --auto).
+# Получатель должен хотя бы раз нажать "Старт" у бота TELEGRAM_BOT_TOKEN.
+NOTIFY_CHAT_ID = None

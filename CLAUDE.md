@@ -17,12 +17,16 @@ pip install -r requirements.txt
 playwright install chromium           # browser for evaluate_autoru_browser.py / evaluate_avito_browser.py
 python sheets_writer.py               # check the Google Sheets connection
 python run_pipeline.py                # full data pipeline (see order below)
+python run_pipeline.py --auto         # same, unattended: what the daily Windows task runs
+python run_pipeline.py --test-notify  # send a test Telegram notification
 python main.py                        # any single step can also run on its own
 python send_digest.py                 # publish to Telegram (manual, interactive choice of selection)
 python tronk_valuation.py <VIN>       # one-off paid TRONK test, does not write to the sheet
 ```
 
-Several steps prompt for `yes`/`да` confirmation on stdin (paid API calls, launching the browser). They cannot run non-interactively without that input. Playwright scripts run with `headless=False` on purpose (anti-bot) and may pause so a human can solve a captcha.
+Several steps prompt for `yes`/`да` confirmation on stdin (paid API calls, launching the browser) through `automation.confirm`. Playwright scripts run with `headless=False` on purpose (anti-bot); on an Auto.ru captcha the step waits `AUTORU_CAPTCHA_WAIT_MIN` minutes for a human, then stops.
+
+**Daily automatic run** (since 2026-10-07): Windows Task Scheduler task `\HonestLot\Pipeline` runs `run_pipeline_auto.bat` (`run_pipeline.py --auto`) every day at 07:00 on the user's PC (catches up when the PC is turned on). Confirmations pass automatically; money is capped by the per-run limits and `TRONK_MONTHLY_BUDGET_RUB` (1000, month spend from the expenses ledger, applies to manual runs too). Problems go through `automation.alert` and are sent as one Telegram message at the end of the run (bot `TELEGRAM_BOT_TOKEN` = @honest_torgi_bot, recipient `NOTIFY_CHAT_ID` in `local_secrets.py`); a short summary every `PIPELINE_SUMMARY_DAYS`. Logs: `logs/pipeline-*.log` (30 days), run history `logs/runs.jsonl`. It runs on the PC, not the Yandex VM: from the VM Auto.ru shows a captcha right away and Telegram and the Claude API are unreachable (checked 2026-10-06). New problems a human should know about: call `automation.alert(...)`, not just `print`.
 
 ## Data flow (sheets = pipeline stages)
 

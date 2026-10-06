@@ -185,6 +185,26 @@ def _rub(x):
     return f"{x:,.0f}".replace(",", " ") + " ₽" if abs(x) >= 100 else f"{x:.2f}".replace(".", ",") + " ₽"
 
 
+def month_spent(service, now=None):
+    """Сколько потрачено на сервис в текущем месяце (руб.) - для месячного
+    бюджета (config.TRONK_MONTHLY_BUDGET_RUB)."""
+    month = (now or datetime.datetime.now()).strftime("%Y-%m")
+    return sum(r["_amount"] for r in _spends(_rows())
+               if r["сервис"] == service and r["_when"].strftime("%Y-%m") == month)
+
+
+def low_balance_text(now=None):
+    """Предупреждение, если баланса TRONK осталось меньше чем на
+    config.TRONK_LOW_BALANCE_DAYS дней, иначе None."""
+    rows = _rows()
+    bal, burn = last_tronk_balance(rows), tronk_burn_per_day(rows, now)
+    low_days = getattr(config, "TRONK_LOW_BALANCE_DAYS", 5)
+    if bal is not None and burn > 0 and bal / burn < low_days:
+        return (f"Баланс TRONK {_rub(bal)} - хватит примерно на {bal / burn:.0f} дн. Пополните "
+                f"(lk.tronk.info), иначе пробег перестанет заполняться.")
+    return None
+
+
 def summary_text(now=None):
     now = now or datetime.datetime.now()
     rows = _rows()

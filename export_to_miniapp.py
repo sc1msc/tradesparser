@@ -70,6 +70,7 @@ import gspread
 import requests
 from google.oauth2.service_account import Credentials
 
+import automation
 import bidding_schedule
 import config
 import lot_metrics
@@ -349,7 +350,7 @@ def download_backup(api_url, token):
             raise ValueError(f"копия повреждена: {check}")
         os.replace(tmp, path)
     except (requests.RequestException, sqlite3.Error, ValueError, OSError) as e:
-        print(f"  Не удалось скачать копию базы мини-аппа: {e}")
+        automation.alert(f"Копия базы мини-аппа не скачалась: {e}")
         if os.path.exists(tmp):
             os.remove(tmp)
         return
@@ -426,7 +427,7 @@ def run(dry_run=False):
         resp.raise_for_status()
     except requests.RequestException as e:
         detail = getattr(getattr(e, "response", None), "text", "")
-        print(f"  Не удалось выгрузить в мини-апп: {e} {detail[:300]}")
+        automation.alert(f"Выгрузка в мини-апп не прошла: {e} {detail[:200]}".strip())
         print("  Мини-апп продолжит показывать прошлую выгрузку. Остальной пайплайн это не затрагивает.")
         download_backup(api_url, token)  # пользователи и избранное копируются и без выгрузки
         return

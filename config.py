@@ -20,6 +20,13 @@ except ImportError:
     MINIAPP_API_URL = ""
     MINIAPP_IMPORT_TOKEN = ""
 
+# Куда слать уведомления автоматического режима (automation.py): Telegram id
+# получателя. Необязательный: без него уведомления только печатаются.
+try:
+    from local_secrets import NOTIFY_CHAT_ID
+except ImportError:
+    NOTIFY_CHAT_ID = None
+
 # Ключ Claude API (check_damage_photos.py). Необязательный: без него в
 # local_secrets.py SDK ищет ключ сам (переменная ANTHROPIC_API_KEY).
 try:
@@ -126,6 +133,19 @@ DAMAGE_CHECK_MODEL = "claude-opus-5-5"
 DAMAGE_CHECK_PRICE_USD = {"input": 4.0, "output": 20.0}
 # Курс для учёта расходов в рублях - поправьте, если сильно ушёл.
 USD_RUB = 85.0
+
+# --- Автоматический режим: run_pipeline.py --auto (Планировщик заданий, automation.py) ---
+# Месячный бюджет TRONK, руб.: платный шаг оплачивает не больше остатка
+# (траты месяца - из expenses/ledger.csv). Кончился - шаг пропускается и
+# приходит уведомление. Действует и при ручном запуске.
+TRONK_MONTHLY_BUDGET_RUB = 1000
+# Авто.ру показал капчу: столько минут ждём, что её решат в окне браузера,
+# потом шаг останавливается (оставшиеся лоты - в следующий прогон).
+AUTORU_CAPTCHA_WAIT_MIN = 10
+# Столько ошибок Авто.ру подряд - шаг останавливается (сайт лежит или блокирует).
+AUTORU_MAX_ERRORS_IN_ROW = 5
+PIPELINE_LOG_DAYS = 30          # сколько дней хранить логи прогонов (logs/)
+PIPELINE_SUMMARY_DAYS = 7       # раз во сколько дней присылать сводку
 
 # --- Учёт расходов (expenses.py): журнал и сводка в папке expenses/ на ПК ---
 # Постоянные расходы - одна строка в журнал раз в месяц, при первом прогоне

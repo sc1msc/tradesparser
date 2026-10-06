@@ -43,6 +43,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from playwright.sync_api import sync_playwright
 
+import automation
 import config
 import lot_metrics
 import autoru_valuation
@@ -163,13 +164,13 @@ def run():
         title_preview = row[col["title"]][:60] if "title" in col else ""
         print(f"  - vin={row[col['vin']]} | {title_preview}")
 
-    answer = input("\nЗапустить браузер и начать оценку? (yes / нет): ").strip().lower()
-    if answer not in ("yes", "y", "да"):
+    if not automation.confirm("\nЗапустить браузер и начать оценку? (yes / нет): "):
         print("Отменено.")
         return
 
     processed = 0
     ok_count = 0
+    errors_in_row = 0
     # Готовые оценки - ещё и в справочник по VIN: переживут выпадение лота
     # из среза и пригодятся, если машину выставят снова (vin_cache.py).
     cache = vin_cache.VinCache(spreadsheet)
@@ -241,19 +242,52 @@ def run():
                 )
             except Exception as e:
                 print(f"  Ошибка: {e}")
+                if "showcaptcha" in page.url:
+                    # капча: лот не портим ошибкой (проверится в следующий раз),
+                    # ждём человека; не решили - останавливаем шаг
+                    if not _wait_captcha(page):
+                        automation.alert(f"Авто.ру просит капчу, её не решили за {config.AUTORU_CAPTCHA_WAIT_MIN} мин. "
+                                         f"Оценено {ok_count} лотов, остальные {len(to_process) - processed} - "
+                                         f"в следующий прогон.")
+                        break
+                    continue
                 updates["autoru_status"] = f"error: {e}"[:200]
+                errors_in_row += 1
+                last_error = str(e)[:150]
+            else:
+                errors_in_row = 0
 
             updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             _batch_write(worksheet, row_num, col, updates)
             if updates.get("autoru_status") in vin_cache.AUTORU_FINAL:
                 cache.update(vin, updates)
             processed += 1
+            if errors_in_row >= config.AUTORU_MAX_ERRORS_IN_ROW:
+                automation.alert(f"Авто.ру: {errors_in_row} ошибок подряд (последняя: {last_error}). Шаг "
+                                 f"остановлен, оценено {ok_count}, остальные - в следующий прогон.")
+                break
             time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
 
         browser.close()
     cache.flush()
 
     print(f"\nГотово. Обработано: {processed}, успешно: {ok_count}.")
+
+
+def _wait_captcha(page):
+    """Авто.ру показал капчу: ждём до config.AUTORU_CAPTCHA_WAIT_MIN минут,
+    что её решат в открытом окне браузера. -> True, если капча ушла."""
+    print(f"  Авто.ру просит капчу - решите её в окне браузера (жду до {config.AUTORU_CAPTCHA_WAIT_MIN} мин)...")
+    deadline = time.time() + config.AUTORU_CAPTCHA_WAIT_MIN * 60
+    while time.time() < deadline:
+        time.sleep(5)
+        try:
+            if "showcaptcha" not in page.url:
+                print("  Капча решена, продолжаю.")
+                return True
+        except Exception:
+            return False
+    return False
 
 
 if __name__ == "__main__":

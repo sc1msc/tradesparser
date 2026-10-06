@@ -70,6 +70,7 @@ import time
 
 import bidding_schedule
 import build_lots_current_month as blcm
+import automation
 import config
 import expenses
 import lot_metrics
@@ -241,6 +242,20 @@ def run():
     # баланс до - чтобы учесть реальное списание (expenses.py)
     price_per_request = expenses.tronk_price(method, price_per_request)
     balance_before = expenses.tronk_balance()
+    # Месячный бюджет (config.TRONK_MONTHLY_BUDGET_RUB, траты - из учёта расходов):
+    # оплачиваем не больше остатка, остальные VIN ждут следующего месяца.
+    budget = getattr(config, "TRONK_MONTHLY_BUDGET_RUB", None)
+    if budget:
+        left = budget - expenses.month_spent("TRONK")
+        allowed = max(0, int(left // price_per_request))
+        if allowed < len(to_process):
+            automation.alert(f"TRONK: месячный бюджет {budget} руб. - осталось {max(left, 0):.0f} руб., "
+                             f"оплачиваю {allowed} из {len(to_process)} VIN. Остальные ждут нового месяца "
+                             f"(или поднимите TRONK_MONTHLY_BUDGET_RUB в config.py).")
+            skipped_by_limit += len(to_process) - allowed
+            to_process = to_process[:allowed]
+            if not to_process:
+                return
     cost = len(to_process) * price_per_request
 
     print(f"\nМетод (config.MILEAGE_METHOD): {method}")
@@ -250,10 +265,7 @@ def run():
     if skipped_by_limit > 0:
         print(f"Ещё {skipped_by_limit} лотов ждут следующего запуска (не будут обработаны сейчас).")
 
-    answer = input(
-        f"\nПодтвердите отправку {len(to_process)} ПЛАТНЫХ запросов к TRONK (yes / нет): "
-    ).strip().lower()
-    if answer not in ("yes", "y", "да"):
+    if not automation.confirm(f"\nПодтвердите отправку {len(to_process)} ПЛАТНЫХ запросов к TRONK (yes / нет): "):
         print("Отменено, ни одного запроса не отправлено.")
         return
 
