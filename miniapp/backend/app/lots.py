@@ -367,6 +367,11 @@ def _prepare(lot, catalog=None):
     lot["name"] = " ".join(x for x in (brand, model) if x) or (lot.get("title") or "Лот")[:60]
     lot["trade"] = TRADE_PUBLIC_OFFER if lot.get("is_public_offer") else TRADE_AUCTION
     lot["damage"] = lot_metrics.damage_keywords(lot.get("title"))
+    # Тотальные повреждения (сгорела, на запчасти, разобрана): по тексту или по
+    # проверке фото (check_damage_photos.py, вердикт total). Такие лоты прячет
+    # галочка "Скрыть битые" - она в ленте включена по умолчанию.
+    lot["photo_damage"] = (lot.get("photo_signs") or []) if lot.get("photo_verdict") == "total" else []
+    lot["total_damage"] = bool(lot_metrics.total_damage_keywords(lot.get("title"))) or lot.get("photo_verdict") == "total"
     # тип лота (lot_metrics.lot_kind): мультилот - без процента к рынку и
     # с меткой; права требования/доли в ленту не попадают вовсе
     lot["kind"] = lot.get("lot_kind") or lot_metrics.LOT_CAR
@@ -502,7 +507,8 @@ def summary(lot, state, now, favorites):
         "trade": lot["trade"],
         "region": lot.get("region"),
         "photo": _first_photo(lot),
-        "damaged": bool(lot["damage"]),
+        "damaged": bool(lot["damage"]) or lot["total_damage"],
+        "total_damage": lot["total_damage"],
         "kind": lot["kind"],
         "favorite": favorites.has(lot),
         "is_open": is_open(lot, state, now),
@@ -544,6 +550,7 @@ def detail(lot, now, favorites):
         "next_price": nxt["price"] if nxt else None,
         "next_price_from": _iso(nxt["from"]) if nxt else None,
         "damage": lot["damage"],
+        "photo_damage": lot["photo_damage"],
     })
     out["listings_list"], out["history"] = car_context(lot, now)
     out["listings"] = max(1, len(out["listings_list"]))
@@ -642,6 +649,7 @@ def parse_filters(params):
         "kinds": set(_split(params.get("kinds"))),
         "trade": set(_split(params.get("trade"))),
         "gap_min": _num(params.get("gap_min")),
+        "hide_damaged": params.get("hide_damaged") == "1",
     }
 
 
@@ -653,7 +661,10 @@ def _between(value, lo, hi):
     return (lo is None or value >= lo) and (hi is None or value <= hi)
 
 
-def _matches(item, lot, f):
+def _matches(item, lot, f, skip_damage=False):
+    """skip_damage - не применять "Скрыть битые" (чтобы посчитать, сколько скрыто)."""
+    if f["hide_damaged"] and lot["total_damage"] and not skip_damage:
+        return False
     if f["q"] and not all(tok in lot["search_text"] for tok in f["q"].split()):
         return False
     if f["brands"] and lot["brand_key"] not in f["brands"]:
@@ -713,9 +724,12 @@ def open_items(favorites, now=None):
 def search(params, favorites, offset=0, limit=20):
     f = parse_filters(params)
     sort = params.get("sort") if params.get("sort") in SORTS else "gap"
-    items = [it for it, lot in open_items(favorites) if _matches(it, lot, f)]
+    pairs = open_items(favorites)
+    items = [it for it, lot in pairs if _matches(it, lot, f)]
     items.sort(key=_sort_key(sort))
-    return {"total": len(items), "items": items[offset:offset + limit]}
+    # сколько битых спрятала галочка "Скрыть битые" среди подходящих под остальные фильтры
+    hidden = sum(1 for it, lot in pairs if lot["total_damage"] and _matches(it, lot, f, skip_damage=True))         if f["hide_damaged"] else 0
+    return {"total": len(items), "hidden_damaged": hidden, "items": items[offset:offset + limit]}
 
 
 def facets(favorites):

@@ -79,6 +79,7 @@ from nextjs_json import extract_combined_payload, find_json_value, resolve_text_
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SOURCE_SHEET = "lots_current_month"
 DETAILS_CACHE_FILE = "miniapp_details_cache.json"
+DAMAGE_CACHE_FILE = "damage_check_cache.json"  # вердикты проверки фото (check_damage_photos.py)
 PREVIEW_FILE = "miniapp_export_preview.json"
 LOT_ID_RE = re.compile(r"/lot/(\d+)")
 IMAGE_EXTS = {"jpg", "jpeg", "png", "webp"}
@@ -213,7 +214,7 @@ def _sheet_periods(text):
     return [p for p in pairs if isinstance(p, list) and len(p) == 2]
 
 
-def build_lot(row, details):
+def build_lot(row, details, damage=None):
     lot_id = LOT_ID_RE.search(row.get("url") or "").group(1)
     # Пробег больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника:
     # показываем оценку по году (как и оценивает такой лот Авто.ру).
@@ -278,6 +279,10 @@ def build_lot(row, details):
         # нет - считаем сами по title и описанию из карточки
         "lot_kind": row.get("lot_kind") or lot_metrics.lot_kind(
             (row.get("title") or "") + " " + (d.get("description") or "")),
+        # проверка фото (check_damage_photos.py): total - тотальные повреждения,
+        # мини-апп прячет такие лоты галочкой "Скрыть битые"
+        "photo_verdict": (damage or {}).get("verdict"),
+        "photo_signs": (damage or {}).get("signs") or [],
     }
 
 
@@ -400,7 +405,12 @@ def run(dry_run=False):
     if ghosts:
         print(f"Лоты, пропавшие с сайта (не выгружаю): {', '.join(LOT_ID_RE.search(r['url']).group(1) for r in ghosts)}")
     ghost_ids = {id(r) for r in ghosts}
-    payload = {"lots": [build_lot(r, cache.get(LOT_ID_RE.search(r["url"]).group(1)))
+    damage = {}
+    if os.path.exists(DAMAGE_CACHE_FILE):
+        with open(DAMAGE_CACHE_FILE, encoding="utf-8") as f:
+            damage = json.load(f)
+    payload = {"lots": [build_lot(r, cache.get(LOT_ID_RE.search(r["url"]).group(1)),
+                                  damage.get(LOT_ID_RE.search(r["url"]).group(1)))
                         for r in rows if id(r) not in ghost_ids]}
 
     if dry_run:

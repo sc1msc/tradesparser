@@ -247,3 +247,9 @@ input { font: inherit; color: inherit; }
 .price .pfx { font-weight: 500; font-size: 12px; color: var(--hint); }
 .pricecap { font-size: 13px; color: var(--hint); margin-top: 10px; }
 .pricecap + .bigprice { margin-top: 2px; }
+
+/* фильтры: галочка "Скрыть битые" */
+.togglerow { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; }
+.togglerow input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--green); flex: none; }
+.togglerow b { display: block; font-size: 15px; font-weight: 600; }
+.togglerow .sub { display: block; font-size: 13px; color: var(--hint); margin-top: 2px; }

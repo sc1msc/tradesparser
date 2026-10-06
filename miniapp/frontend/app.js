@@ -145,7 +145,8 @@ async function api(path, opts = {}) {
 
 // ---------- состояние ----------
 
-const emptyFilters = () => ({ brands: [], models: {}, year: null, price: null, mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [] });
+// hideDamaged - "Скрыть битые" (тотальные повреждения), по умолчанию включена и в счётчик фильтров не входит
+const emptyFilters = () => ({ brands: [], models: {}, year: null, price: null, mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [], hideDamaged: true });
 const SORTS = [["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
 
 const state = {
@@ -177,6 +178,7 @@ function queryString(filters, q, sort) {
   if (filters.regions.length) p.set("regions", filters.regions.join(","));
   if (filters.trade.length) p.set("trade", filters.trade.join(","));
   if ((filters.kinds || []).length) p.set("kinds", filters.kinds.join(","));
+  if (filters.hideDamaged !== false) p.set("hide_damaged", "1");
   return p.toString();
 }
 
@@ -363,7 +365,8 @@ async function loadFeed(reset) {
     state.total = data.total;
     if (reset) { feed.list.replaceChildren(); window.scrollTo(0, 0); }
     feed.list.append(...data.items.map(card));
-    feed.total.textContent = `${nf.format(data.total)} ${plural(data.total, "лот", "лота", "лотов")}`;
+    feed.total.textContent = `${nf.format(data.total)} ${plural(data.total, "лот", "лота", "лотов")}` +
+      (data.hidden_damaged ? ` · битых скрыто: ${data.hidden_damaged}` : "");
     if (!state.items.length) {
       feed.list.replaceChildren(h("div", { class: "empty" }, h("b", {}, "Ничего не нашлось"),
         activeFilterCount(state.filters) || state.q ? "Попробуйте ослабить фильтры или изменить запрос." : "Лотов пока нет."));
@@ -592,8 +595,7 @@ async function renderLot(id) {
       lot.next_price && lot.is_open ? h("div", { class: "nextstep" },
         `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null),
     deadlineBlock,
-    lot.damage.length ? h("div", { class: "block warnbox" },
-      `⚠ В описании лота упоминаются повреждения: ${lot.damage.map((d) => d.toLowerCase()).join(", ")}. Процент к рынку для такого лота может вводить в заблуждение.`) : null,
+    damageBox(lot),
     marketBlock(lot),
     periods,
     listingsBlock,
@@ -614,6 +616,18 @@ async function renderLot(id) {
     h("div", { class: "bottombar" },
       h("button", { class: "btn share", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "bottom") }),
       h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.url); } }, "Открыть лот на сайте торгов"))));
+}
+
+// Предупреждение о повреждениях: тотальные (сгорела, на запчасти - по тексту или по
+// проверке фото) и просто упоминания в тексте (после ДТП, битая).
+function damageBox(lot) {
+  const words = lot.damage || [], photo = lot.photo_damage || [];
+  if (!lot.total_damage && !words.length) return null;
+  const parts = [];
+  if (photo.length || lot.total_damage && !words.length) parts.push(`по фото: ${photo.length ? photo.join(", ") : "тотальные повреждения"}`);
+  if (words.length) parts.push(`в описании: ${words.join(", ")}`);
+  const head = lot.total_damage ? "⚠ Похоже на тотальные повреждения, машина скорее на запчасти" : "⚠ Возможны повреждения";
+  return h("div", { class: "block warnbox" }, `${head} (${parts.join("; ")}). Процент к рынку для такого лота не показатель.`);
 }
 
 // ---------- фильтры ----------
@@ -765,6 +779,11 @@ function renderFilters(initial) {
   const tradeChips = chipGroup(TRADES, (v) => draft.trade.includes(v), (v) => { draft.trade = toggleIn(draft.trade, v); });
   draft.kinds = draft.kinds || [];
   const kindChips = chipGroup(KINDS, (v) => draft.kinds.includes(v), (v) => { draft.kinds = toggleIn(draft.kinds, v); });
+  const damageToggle = h("label", { class: "togglerow" },
+    h("input", { type: "checkbox", checked: draft.hideDamaged !== false,
+      onchange: (e) => { draft.hideDamaged = e.target.checked; refreshCount(); } }),
+    h("span", {}, h("b", {}, "Скрыть битые"),
+      h("span", { class: "sub" }, "Сгоревшие, разобранные, на запчасти — по описанию и фото лота")));
 
   const reset = h("button", { class: "btn secondary", onclick: () => renderFilters(emptyFilters()) }, "Сбросить");
   showBtn.addEventListener("click", () => {
@@ -784,6 +803,7 @@ function renderFilters(initial) {
     h("div", { class: "fsec" }, h("h3", {}, "Регион"), regionChips),
     h("div", { class: "fsec" }, h("h3", {}, "Форма торгов"), tradeChips),
     h("div", { class: "fsec" }, h("h3", {}, "Тип лота"), kindChips),
+    h("div", { class: "fsec" }, damageToggle),
     h("div", { class: "bottombar" }, reset, showBtn)));
   refreshCount();
 }
