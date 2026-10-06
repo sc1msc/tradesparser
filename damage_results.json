@@ -226,5 +226,98 @@
     "signs": [],
     "comment": "На фото документы, машина не видна",
     "photos_seen": 4
+  },
+  {
+    "lot_id": "7184825",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Красный грузовой фургон, структурно целый, припаркован",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7193939",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Белый микроавтобус, целый и чистый, структурно целый",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7187371",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Новая Лада Гранта 2023, чёрная, целая и неповреждённая",
+    "photos_seen": 1
+  },
+  {
+    "lot_id": "6953629",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Ford Focus 2010, синий, с открытым капотом, структурно целый",
+    "photos_seen": 1
+  },
+  {
+    "lot_id": "7160307",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Audi A6 1998, старая машина с грязью и ржавчиной, но структурно целая",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7226569",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "SKODA Superb 2012, серебристая, целая и функциональная",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7188743",
+    "verdict": "total",
+    "signs": [
+      "смят передок со стойкой и крышей"
+    ],
+    "comment": "Audi A3 2013, передняя часть полностью разбита, капот отсутствует, видна деформация лонжеронов",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7191224",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "OMODA S5 2024, новая белая машина, целая с небольшими царапинами на капоте",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7193818",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Ford Focus 2004, белая, с вмятиной двери и спущенным колесом, но структурно целая",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7200701",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Cadillac SRX 2013, в мастерской с видимыми повреждениями, но структурно целая",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7181220",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Toyota Previa 1998, старая машина грязная, припаркована, но структурно целая",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7219230",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Ford Explorer 2013, чёрный внедорожник, целый и функциональный",
+    "photos_seen": 4
+  },
+  {
+    "lot_id": "7178263",
+    "verdict": "not_total",
+    "signs": [],
+    "comment": "Компактный автомобиль (Kia), чёрный, целый и функциональный",
+    "photos_seen": 3
   }
 ]
