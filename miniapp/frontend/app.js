@@ -251,7 +251,7 @@ function card(it) {
     thumb,
     h("div", { class: "info" },
       h("div", { class: "name" }, it.name, it.year ? h("span", { class: "yr" }, `, ${it.year}`) : null),
-      // у аукциона в ленте - начальная цена, на торгах она вырастет: подписываем
+      // у аукциона в ленте - начальная цена (итоговая определится на торгах): подписываем
       h("div", { class: "priceline" }, h("span", { class: "price" }, it.trade === "auction" ? h("span", { class: "pfx" }, "старт ") : null, rub(it.price)), gapBadge(it.gap),
         it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
       meta ? h("div", { class: "meta" }, meta) : null,
@@ -590,7 +590,7 @@ async function renderLot(id) {
     h("div", { class: "block" },
       h("h2", {}, lot.name, lot.year ? `, ${lot.year}` : ""),
       h("div", { class: "sub" }, [mileage, regionShort(lot.region)].filter(Boolean).join(" · ")),
-      lot.trade === "auction" ? h("div", { class: "pricecap" }, "Начальная цена · на торгах вырастет") : null,
+      lot.trade === "auction" ? h("div", { class: "pricecap" }, "Начальная цена") : null,
       h("div", { class: "bigprice" }, rub(lot.price), gapBadge(lot.gap)),
       lot.next_price && lot.is_open ? h("div", { class: "nextstep" },
         `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null),
