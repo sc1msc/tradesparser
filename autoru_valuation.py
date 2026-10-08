@@ -41,11 +41,21 @@ _VIN_LABEL_TEXT = "Госномер или VIN"
 # захэшированы CSS-модулями и могут отличаться от сборки к сборке).
 SUBMIT_BUTTON_TEXT = "Оценить бесплатно"
 
+# Город продажи - обязательное поле с 07.10.2026: без него форма не
+# отправляется (getStatsPredictByCarIdentifier не уходит, шаг падал по
+# таймауту). Лоты - Москва и область, рынок один: для всех лотов "Москва"
+# (решение пользователя). Поле - ввод с подсказками; выбрать нужно пункт
+# подсказки, просто текст в поле форма не принимает.
+CITY_INPUT_SELECTOR = 'input[name="city-information"]'
+CITY_NAME = "Москва"
+CITY_SUGGEST_ITEM_SELECTOR = 'li[class*="Dropdown2Item"]'
+
 
 def _fill_vin(page, vin):
     """Пробуем несколько стратегий по очереди - на случай, если какая-то
     не сработает из-за особенностей вёрстки (не проверено вживую)."""
     strategies = [
+        lambda: page.locator('input[name="vehicle-id"]'),  # так поле называется с 10.2026
         lambda: page.locator(
             f'xpath=//div[contains(text(),"{_VIN_LABEL_TEXT}")]/following::input[1]'
         ),
@@ -64,6 +74,30 @@ def _fill_vin(page, vin):
             last_error = e
             continue
     raise RuntimeError(f"Не удалось найти поле VIN ни одним из известных способов: {last_error}")
+
+
+def _fill_city(page, city=CITY_NAME):
+    """Город продажи: ввести название и выбрать пункт подсказки. Если поля
+    нет (старая форма) или город уже выбран - ничего не делаем."""
+    field = page.locator(CITY_INPUT_SELECTOR)
+    if not field.count():
+        return
+    if field.input_value().strip().startswith(city):
+        return
+    field.click()
+    field.fill("")
+    field.press_sequentially(city, delay=random.randint(80, 150))
+    item = page.locator(CITY_SUGGEST_ITEM_SELECTOR).filter(has_text=city).first
+    try:
+        item.wait_for(state="visible", timeout=5000)
+        item.click()
+    except Exception:
+        # запасной путь - выбрать первую подсказку с клавиатуры
+        field.press("ArrowDown")
+        field.press("Enter")
+    time.sleep(random.uniform(0.3, 0.6))
+    if not field.input_value().strip().startswith(city):
+        raise RuntimeError(f"Не удалось выбрать город продажи \"{city}\" (в поле: {field.input_value()!r})")
 
 
 def parse_prediction_response(data):
@@ -109,6 +143,8 @@ def evaluate_by_vin(page, vin, mileage_km):
 
     page.locator(MILEAGE_INPUT_SELECTOR).fill(str(mileage_km))
     time.sleep(random.uniform(0.3, 0.7))
+
+    _fill_city(page)
 
     with page.expect_response(
         lambda r: STATS_PREDICT_URL_PART in r.url, timeout=20000
