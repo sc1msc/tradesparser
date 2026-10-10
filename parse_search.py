@@ -22,6 +22,7 @@ URL-схема поиска НЕ изменилась при редизайне 
 """
 import re
 from urllib.parse import urlencode
+import lot_metrics
 from nextjs_json import extract_combined_payload, find_json_value
 
 BASE_DOMAIN = "https://xn----etbpba5admdlad.xn--p1ai"
@@ -64,10 +65,8 @@ def _extract_plate(text):
 
 
 def _extract_vin(text):
-    if not text:
-        return None
-    m = VIN_RE.search(text)
-    return m.group(1).upper() if m else None
+    # и VIN, набранный русскими буквами-двойниками (lot_metrics.find_vin)
+    return lot_metrics.find_vin(text)
 
 
 def _extract_year(text):

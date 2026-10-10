@@ -164,6 +164,8 @@ def run():
         return row[idx] if idx is not None and idx < len(row) else ""
 
     now = datetime.datetime.now()
+    vin_idx = header.index("vin")
+    vin_filled = 0
     year_filled = 0
     by_schedule = 0
     for row in data_rows:
@@ -177,7 +179,15 @@ def run():
             else:
                 out_row.append(get_cell(row, letter))
         periods = by_idx(row, periods_idx)
-        kind = lot_metrics.lot_kind(by_idx(row, title_idx) + " " + by_idx(row, desc_idx))
+        lot_text = by_idx(row, title_idx) + " " + by_idx(row, desc_idx)
+        if not out_row[vin_idx].strip():
+            # VIN в тексте лота, которого парсер не увидел (например, набран
+            # русскими буквами-двойниками - так записаны лоты до 11.10.2026)
+            vin = lot_metrics.find_vin(lot_text)
+            if vin:
+                out_row[vin_idx] = vin
+                vin_filled += 1
+        kind = lot_metrics.lot_kind(lot_text)
         out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods, kind]
         if periods:
             price, deadline = bidding_schedule.effective_price_and_deadline(
@@ -202,7 +212,8 @@ def run():
     target.clear()
     target.update(range_name="A1", values=out_rows)
 
-    print(f"Готово. Строк: {len(data_rows)}, год определён для {year_filled} из них.")
+    print(f"Готово. Строк: {len(data_rows)}, год определён для {year_filled} из них, "
+          f"VIN найден в тексте лота: {vin_filled}.")
     print(f"Цена/дедлайн взяты из текущего периода графика (публичное предложение): {by_schedule}")
     if fill_stats:
         print("Доливка brand/name/year из title:")

@@ -16,6 +16,7 @@ BeautifulSoup - вместо этого из страницы вытаскива
 import re
 
 import bidding_schedule
+import lot_metrics
 from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
 
 # Госномер РФ: буква + 3 цифры + 2 буквы + 2-3 цифры региона.
@@ -39,10 +40,8 @@ def _extract_plate(text):
 
 
 def _extract_vin_from_text(text):
-    if not text:
-        return None
-    m = VIN_RE.search(text)
-    return m.group(1).upper() if m else None
+    # и VIN, набранный русскими буквами-двойниками (lot_metrics.find_vin)
+    return lot_metrics.find_vin(text)
 
 
 def _extract_mileage_from_text(text):
