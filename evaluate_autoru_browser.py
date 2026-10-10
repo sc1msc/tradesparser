@@ -52,6 +52,10 @@ import vin_cache
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SHEET_NAME = "lots_current_month"
 CURRENT_YEAR = datetime.datetime.now().year
+# Условный пробег для запроса "какой это год" (у лота нет ни года, ни пробега):
+# цена из этого ответа не используется, нужен только год, который Авто.ру
+# определяет по VIN.
+PROBE_MILEAGE_KM = 100000
 
 # Колонки, которые скрипт сам добавляет в шапку, если их ещё нет -
 # именно в этом порядке (дописываются в конец листа).
@@ -205,6 +209,23 @@ def run():
                     updates["estimated_mileage"] = mileage
 
             print(f"\n[{vin}] пробег={mileage} (источник: {mileage_source}) ...")
+
+            if mileage is None:
+                # Ни пробега, ни года в листе (раньше год давал декодер Autodoc - он
+                # с 10.2026 не отвечает, а год из 10-го символа VIN верен лишь в
+                # половине случаев). Год спрашиваем у самого Авто.ру: он определяет
+                # машину по VIN. Первый запрос - с условным пробегом, только ради года;
+                # второй, ниже, - уже с пробегом по этому году, ради цены.
+                try:
+                    probe = autoru_valuation.evaluate_by_vin(page, vin, PROBE_MILEAGE_KM)
+                    if probe.get("year"):
+                        mileage = _estimate_mileage(str(probe["year"]))
+                        mileage_source = f"estimated_mileage (год {probe['year']} - от Авто.ру)"
+                        updates["estimated_mileage"] = mileage
+                        print(f"  Года нет - Авто.ру определил по VIN: {probe['year']} г., пробег по году {mileage}")
+                        time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
+                except Exception as e:
+                    print(f"  Не удалось узнать год у Авто.ру: {e}")
 
             if mileage is None:
                 print("  Ни пробега, ни года - взять пробег неоткуда, пропускаю")
