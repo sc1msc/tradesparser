@@ -14,7 +14,8 @@ build_lots_missing_info.py и остальных build_*.py). В самом
   2) lots_budget_1m        - price_current <= 1 000 000
   3) lots_one_owner        - autoru_owners_count == 1
   4) lots_heavy_luxury     - price_current > 5 000 000
-  5) lots_polo_rio_solyaris- модель Polo/Rio/Solaris, year >= текущий-10
+  5) lots_polo_rio_solyaris- модель Polo/Rio/Solaris (по name или
+                             autoru_model), year >= текущий-10
 
 Цена берётся из price_current (текущая цена торгов, а не стартовая) -
 так актуальнее для "интересности" прямо сейчас. У публичного предложения
@@ -222,11 +223,18 @@ def build_polo_rio_solyaris(header, data_rows, cache):
         # проверка "RIO" in model пропускала PRIORA и PATRIOT (в обоих
         # внутри есть буквы RIO). Слова режем по всему, что не буква/цифра -
         # так "RIO X-LINE" и "POLO SEDAN" по-прежнему проходят.
-        words = set(re.split(r"[\W_]+", _get(row, header, cache, "name").upper()))
+        # Кроме name смотрим autoru_model - модель, которую Авто.ру определил
+        # по VIN (POLO, RIO, SOLARIS): name разобран из текста лота и бывает
+        # пустым или замусоренным, и 11.10.2026 подборка из-за этого теряла
+        # 7 лотов, которые Авто.ру узнал (у двух не было и года - он тоже
+        # берётся у Авто.ру).
+        model_text = _get(row, header, cache, "name") + " " + _get(row, header, cache, "autoru_model")
+        words = set(re.split(r"[\W_]+", model_text.upper()))
         words |= {w.translate(CYR_LOOKALIKES) for w in words}
         if not words & TARGET_MODELS:
             continue
-        year = _to_int(_get(row, header, cache, "year"))
+        # год из текста лота, а если его нет - от Авто.ру
+        year = _to_int(_get(row, header, cache, "year")) or _to_int(_get(row, header, cache, "autoru_year"))
         if year is None or year < CURRENT_YEAR - MODEL_MAX_AGE_YEARS:
             continue
         selected.append(row)
