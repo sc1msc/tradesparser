@@ -44,7 +44,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, db, lots
+from . import auth, backup, db, lots, watchdog
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -53,7 +53,8 @@ MAX_PAGE = 50
 
 @contextlib.asynccontextmanager
 async def lifespan(_app):
-    backup.start()  # ежедневная копия базы - фоновым потоком
+    backup.start()    # ежедневная копия базы - фоновым потоком
+    watchdog.start()  # давно нет выгрузки с ПК - сообщение администратору
     yield
 
 

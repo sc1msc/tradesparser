@@ -380,13 +380,16 @@ def run(dry_run=False):
     todo = [r for r in rows if _needs_refresh(cache.get(LOT_ID_RE.search(r["url"]).group(1)))]
     print(f"Карточек лотов для скачивания (новые + устаревший кэш): {len(todo)}")
     session = requests.Session()
+    cards = main.CardFailures("Мини-апп, карточки лотов")
     for i, row in enumerate(todo, start=1):
         lot_id = LOT_ID_RE.search(row["url"]).group(1)
         try:
             cache[lot_id] = fetch_details(row["url"], session)
             d = cache[lot_id]
+            cards.ok()
             print(f"  [{i}/{len(todo)}] {lot_id}: фото {len(d['photos'])}, периодов {len(d['periods'])}")
         except LotNotFound:
+            cards.ok()  # сайт ответил - лота на нём нет
             entry = dict(cache.get(lot_id) or {})
             now_iso = datetime.datetime.now().isoformat(timespec="seconds")
             entry["not_found_checks"] = entry.get("not_found_checks", 0) + 1
@@ -397,10 +400,16 @@ def run(dry_run=False):
         except Exception as e:  # сеть/вёрстка - лот всё равно выгрузим, с данными из таблицы
             cache[lot_id] = {**(cache.get(lot_id) or {}), "error": str(e)[:200]}
             print(f"  [{i}/{len(todo)}] {lot_id}: не удалось скачать карточку: {e}")
+            if cards.fail(e):
+                # сайт лежит: остальные лоты уйдут с данными таблицы и старого кэша,
+                # их карточки скачаются в следующий прогон
+                print("  карточки не читаются - дальше не качаю")
+                break
         if i % 20 == 0:
             _save_cache(cache)  # чтобы прерванный первый прогон не начинать заново
         time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
     _save_cache(cache)
+    cards.report(len(todo))
 
     ghosts = [r for r in rows if is_ghost(cache.get(LOT_ID_RE.search(r["url"]).group(1)))]
     if ghosts:
