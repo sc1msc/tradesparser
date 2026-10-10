@@ -19,24 +19,8 @@ import bidding_schedule
 import lot_metrics
 from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
 
-# Госномер РФ: буква + 3 цифры + 2 буквы + 2-3 цифры региона.
-# Буквы - только те, что совпадают по начертанию с латиницей (ГОСТ Р 50577-93):
-# А В Е К М Н О Р С Т У Х. Пробелы между частями опциональны.
-PLATE_RE = re.compile(
-    r"\b[АВЕКМНОРСТУХ]\s?\d{3}\s?[АВЕКМНОРСТУХ]{2}\s?\d{2,3}\b",
-    re.IGNORECASE,
-)
 VIN_RE = re.compile(r"\b([A-HJ-NPR-Z0-9]{17})\b")
 MILEAGE_RE = re.compile(r"пробег[а-я]*[:\s]*([\d\s]{3,10})\s*км", re.IGNORECASE)
-
-
-def _extract_plate(text):
-    if not text:
-        return None
-    m = PLATE_RE.search(text)
-    if not m:
-        return None
-    return re.sub(r"\s+", "", m.group(0)).upper()
 
 
 def _extract_vin_from_text(text):
@@ -98,7 +82,8 @@ def parse_lot_html(html, url=None):
     vins = lot.get("vins") or []
     vin = vins[0] if vins else (_extract_vin_from_text(title) or _extract_vin_from_text(description))
 
-    plate = _extract_plate(title) or _extract_plate(description)
+    # и номер латиницей или склеенный со следующим словом (lot_metrics.find_plate)
+    plate = lot_metrics.find_plate(title) or lot_metrics.find_plate(description)
     mileage = _extract_mileage_from_text(description) or _extract_mileage_from_text(title)
 
     pictures = lot.get("pictures") or []

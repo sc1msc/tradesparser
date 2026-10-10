@@ -60,17 +60,12 @@ PROBE_MILEAGE_KM = 100000
 # Госномер - когда у лота нет VIN: поле формы Авто.ру называется "Госномер или
 # VIN" и принимает и то и другое (с 11.10.2026 так оцениваются ~2% лотов, раньше
 # они оставались без оценки). Номер - из колонки plate, иначе из названия лота.
-_PLATE_LETTERS = "АВЕКМНОРСТУХABEKMHOPCTYX"
-_PLATE_RE = re.compile(
-    rf"(?<![0-9A-ZА-Я])([{_PLATE_LETTERS}])\s*(\d{{3}})\s*([{_PLATE_LETTERS}]{{2}})\s*(\d{{2,3}})(?!\d)",
-    re.IGNORECASE)
-_LAT_TO_CYR = str.maketrans("ABEKMHOPCTYX", "АВЕКМНОРСТУХ")
-
-
-def _plate(text):
-    """Госномер вида "Р131КТ77" из текста (кириллицей, без пробелов) или None."""
-    m = _PLATE_RE.search((text or "").upper())
-    return "".join(m.groups()).translate(_LAT_TO_CYR) if m else None
+def _lot_plate(row, col):
+    """Госномер лота ("Р131КТ77") для формы Авто.ру или None: тот же разбор,
+    что у парсера (lot_metrics.find_plate - и латиница, и номер, склеенный со
+    следующим словом)."""
+    return lot_metrics.find_plate(row[col["plate"]] if "plate" in col else "") or \
+        lot_metrics.find_plate(row[col["title"]] if "title" in col else "")
 
 # Колонки, которые скрипт сам добавляет в шапку, если их ещё нет -
 # именно в этом порядке (дописываются в конец листа).
@@ -166,8 +161,7 @@ def run():
         # VIN, а без него - госномер (Авто.ру принимает и то и другое)
         vin = row[col["vin"]].strip()
         if len(vin) != 17:
-            vin = _plate(row[col["plate"]] if "plate" in col else "") or \
-                  _plate(row[col["title"]] if "title" in col else "")
+            vin = _lot_plate(row, col)
         if not vin:
             continue
         # Мультилот (несколько машин одним лотом) не оцениваем: вилка одной
@@ -216,8 +210,7 @@ def run():
         for row_num, row in to_process:
             vin = row[col["vin"]].strip().upper()
             if len(vin) != 17:  # нет VIN - оцениваем по госномеру (см. отбор кандидатов)
-                vin = _plate(row[col["plate"]] if "plate" in col else "") or \
-                      _plate(row[col["title"]] if "title" in col else "")
+                vin = _lot_plate(row, col)
             raw_mileage = _clean_mileage(row[col["mileage_km"]])
             # Больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника
             # (TRONK/текст лота): считаем, что пробега нет, и оцениваем по году.

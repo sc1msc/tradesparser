@@ -39,10 +39,6 @@ DEFAULT_SEARCH_PARAMS = {
     "history_only": 0,
 }
 
-PLATE_RE = re.compile(
-    r"\b[АВЕКМНОРСТУХ]\s?\d{3}\s?[АВЕКМНОРСТУХ]{2}\s?\d{2,3}\b",
-    re.IGNORECASE,
-)
 VIN_RE = re.compile(r"\b([A-HJ-NPR-Z0-9]{17})\b")
 YEAR_RE = re.compile(r"\b(19[5-9]\d|20[0-4]\d)\b")
 MILEAGE_RE = re.compile(r"([\d\s]{3,10})\s*км\b", re.IGNORECASE)
@@ -55,13 +51,6 @@ def build_search_url(page=1, params=None):
         query.update(params)
     query["page"] = page
     return f"{BASE_DOMAIN}/search?{urlencode(query)}"
-
-
-def _extract_plate(text):
-    if not text:
-        return None
-    m = PLATE_RE.search(text)
-    return re.sub(r"\s+", "", m.group(0)).upper() if m else None
 
 
 def _extract_vin(text):
@@ -110,7 +99,7 @@ def _parse_item(item):
         "trade_kind": item.get("trade_form"),
         "status": item.get("status"),
         "vin": _extract_vin(title),
-        "plate": _extract_plate(title),
+        "plate": lot_metrics.find_plate(title),
         "year": _extract_year(title),
         "mileage_km": _extract_mileage(title),
     }

@@ -165,7 +165,9 @@ def run():
 
     now = datetime.datetime.now()
     vin_idx = header.index("vin")
+    plate_idx = header.index("plate")
     vin_filled = 0
+    plate_filled = 0
     year_filled = 0
     by_schedule = 0
     for row in data_rows:
@@ -187,6 +189,14 @@ def run():
             if vin:
                 out_row[vin_idx] = vin
                 vin_filled += 1
+        if not out_row[plate_idx].strip():
+            # госномер, которого парсер не увидел: набран латиницей ("X707HX197")
+            # или склеен со следующим словом ("У466НХ797Идентификационный") -
+            # так записаны лоты до 11.10.2026 (lot_metrics.find_plate)
+            plate = lot_metrics.find_plate(lot_text)
+            if plate:
+                out_row[plate_idx] = plate
+                plate_filled += 1
         kind = lot_metrics.lot_kind(lot_text)
         out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods, kind]
         if periods:
@@ -213,7 +223,7 @@ def run():
     target.update(range_name="A1", values=out_rows)
 
     print(f"Готово. Строк: {len(data_rows)}, год определён для {year_filled} из них, "
-          f"VIN найден в тексте лота: {vin_filled}.")
+          f"VIN найден в тексте лота: {vin_filled}, госномер: {plate_filled}.")
     print(f"Цена/дедлайн взяты из текущего периода графика (публичное предложение): {by_schedule}")
     if fill_stats:
         print("Доливка brand/name/year из title:")
