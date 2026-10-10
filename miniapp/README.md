@@ -20,6 +20,7 @@
 - Машина и лоты: параллельные лоты одной машины (один VIN) в ленте — одна карточка; на экране лота — другие площадки и история торгов. Избранное следует за машиной: если её выставят снова, в избранном появится новый лот с пометкой «Перевыставлен».
 - Итоги торгов для избранного: шаг 7 берёт у сервера `GET /api/watchlist` и отправляет статусы в `POST /api/lot-status` (оба — с ключом импорта).
 - `backend/app/auth.py` — проверка подписи Telegram initData токеном бота.
+- `backend/app/bot.py` — бот @honestlot_bot, отдельный сервис `bot`: сам забирает сообщения из Telegram (long polling) и отвечает приветствием с кнопкой мини-аппа. `backend/app/telegram.py` — вызовы Bot API через релей (см. «Бот и релей Telegram»).
 - `frontend/` — чистый HTML/CSS/JS без сборки. После правок увеличьте `?v=` в `index.html`, иначе Telegram может показать старую версию из кэша.
 
 Лоты, пропавшие из листа, из базы не удаляются: они скрываются из ленты, но остаются в избранном с пометкой «Приём заявок завершён».
@@ -36,7 +37,7 @@ python miniapp/run_local.py --import       # http://localhost:8000 и загру
 
 ## Сервер
 
-Настройки — в `miniapp/.env` (шаблон `.env.example`): `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_IMPORT_TOKEN`.
+Настройки — в `miniapp/.env` (шаблон `.env.example`): `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_TELEGRAM_API`, `HONESTLOT_IMPORT_TOKEN`.
 
 ```
 docker compose -f miniapp/docker-compose.yml up -d --build
@@ -63,6 +64,24 @@ docker compose start api
 MINIAPP_API_URL = "https://<DOMAIN>"
 MINIAPP_IMPORT_TOKEN = "<то же, что HONESTLOT_IMPORT_TOKEN>"
 ```
+
+## Бот и релей Telegram
+
+С ВМ в Yandex Cloud `api.telegram.org` недоступен: провайдер блокирует адреса Telegram в обе стороны, вебхук тоже не доходит. Поэтому сервер ходит в Telegram через релей — VPS в Амстердаме (VDSina, `89.124.97.131`), на котором Caddy принимает HTTPS-запросы только с IP ВМ и пересылает их в `api.telegram.org`. Данные пользователей на релее не хранятся, журнал запросов выключен. Настройка релея — `relay/setup.sh` в корне репозитория.
+
+```
+ПК ─────────────────────────────────────────────> api.telegram.org   (рассылки, алерты пайплайна — напрямую)
+ВМ (api, bot) ── HTTPS ──> релей 89-124-97-131.sslip.io ──> api.telegram.org
+```
+
+- Адрес релея — `HONESTLOT_TELEGRAM_API` в `miniapp/.env` на сервере. Без переменной `telegram.py` ходит напрямую (локальный запуск на ПК).
+- Сервис `bot` сам опрашивает Telegram (`getUpdates`), вебхук при старте снимает. Журнал: `ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose logs --tail 50 bot"`.
+- Проверка связи ВМ → релей → Telegram:
+  ```
+  ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && T=$(grep ^HONESTLOT_BOT_TOKEN= .env | cut -d= -f2-) && curl -s https://89-124-97-131.sslip.io/bot$T/getMe"
+  ```
+  Ответ `{"ok":true,...}` — всё работает. Пустой ответ с кодом 403 — релей не узнал IP ВМ (сменился? в `relay/setup.sh` — `ALLOWED_IPS`).
+- IP ВМ должен быть статическим (Yandex Cloud → Virtual Private Cloud → IP-адреса), иначе после перезапуска ВМ релей перестанет её пускать.
 
 ## Ссылки с меткой источника и метрики
 

@@ -1,4 +1,4 @@
-# Сервер мини-аппа: api (FastAPI + фронтенд) и caddy (HTTPS).
+# Сервер мини-аппа: api (FastAPI + фронтенд), bot (бот через релей) и caddy (HTTPS).
 # Настройки - в miniapp/.env (шаблон: .env.example), в git не хранится.
 services:
   api:
@@ -8,6 +8,16 @@ services:
     env_file: .env
     volumes:
       - ./data:/data          # база SQLite - переживает пересборку контейнера
+    restart: unless-stopped
+
+  bot:
+    # Бот @honestlot_bot (app/bot.py): тот же образ, сам забирает сообщения из
+    # Telegram через релей (HONESTLOT_TELEGRAM_API в .env, см. relay/setup.sh).
+    build:
+      context: ..
+      dockerfile: miniapp/backend/Dockerfile
+    command: ["python", "-m", "app.bot"]
+    env_file: .env
     restart: unless-stopped
 
   caddy:

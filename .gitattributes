@@ -1,2 +1,4 @@
 # Файлы мини-аппа уезжают на Linux-сервер - всегда LF (CRLF ломает .env и shell-скрипты)
 miniapp/** text=auto eol=lf
+# Скрипты релея выполняются на Linux - тоже LF
+relay/** text=auto eol=lf
