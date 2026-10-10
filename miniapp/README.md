@@ -71,14 +71,15 @@ MINIAPP_IMPORT_TOKEN = "<то же, что HONESTLOT_IMPORT_TOKEN>"
 
 ```
 ПК ─────────────────────────────────────────────> api.telegram.org   (рассылки, алерты пайплайна — напрямую)
-ВМ (api, bot) ── HTTPS ──> релей 89-124-97-131.sslip.io ──> api.telegram.org
+ВМ (api, bot) ── HTTPS ──> релей tg.honestlot.ru ──> api.telegram.org
 ```
 
 - Адрес релея — `HONESTLOT_TELEGRAM_API` в `miniapp/.env` на сервере. Без переменной `telegram.py` ходит напрямую (локальный запуск на ПК).
 - Сервис `bot` сам опрашивает Telegram (`getUpdates`), вебхук при старте снимает. Журнал: `ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && docker compose logs --tail 50 bot"`.
 - Проверка связи ВМ → релей → Telegram:
   ```
-  ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && T=$(grep ^HONESTLOT_BOT_TOKEN= .env | cut -d= -f2-) && curl -s https://89-124-97-131.sslip.io/bot$T/getMe"
+  ssh honestlot@84.201.144.182 "cd ~/honestlot/miniapp && T=$(grep ^HONESTLOT_BOT_TOKEN= .env | cut -d= -f2-) && curl -s https://tg.honestlot.ru/bot$T/getMe"   # cmd
+  ssh honestlot@84.201.144.182 'cd ~/honestlot/miniapp && T=$(grep ^HONESTLOT_BOT_TOKEN= .env | cut -d= -f2-) && curl -s https://tg.honestlot.ru/bot$T/getMe'   # Git Bash
   ```
   Ответ `{"ok":true,...}` — всё работает. Пустой ответ с кодом 403 — релей не узнал IP ВМ (сменился? в `relay/setup.sh` — `ALLOWED_IPS`).
 - IP ВМ должен быть статическим (Yandex Cloud → Virtual Private Cloud → IP-адреса), иначе после перезапуска ВМ релей перестанет её пускать.

@@ -25,10 +25,24 @@ echo "== Пакеты"
 apt-get -o DPkg::Lock::Timeout=300 update -q
 apt-get -o DPkg::Lock::Timeout=300 install -y -q curl ca-certificates
 
-# Имя для сертификата Let's Encrypt: IP с дефисами + .sslip.io
+# Имя релея для сертификата Let's Encrypt. A-запись `tg` в DNS honestlot.ru
+# (панель SpaceWeb) должна указывать на IP этого сервера: новый VPS - сначала
+# поменять запись, потом запускать скрипт. До 10.10.2026 тут было IP с дефисами
+# + .sslip.io - ушли с чужого бесплатного сервиса на свой домен.
+DOMAIN="tg.honestlot.ru"
 IP=$(curl -4 -fsS --max-time 10 https://api.ipify.org || hostname -I | awk '{print $1}')
-DOMAIN="${IP//./-}.sslip.io"
 echo "== IP релея: $IP, имя: $DOMAIN"
+# Без верной A-записи Let's Encrypt откажет, а после 5 отказов за час на это имя
+# перестанет выдавать сертификат на час - проверяем заранее. Смотрим и местный DNS,
+# и публичный DNS Google: 10.10.2026 местный уже видел новую запись, а Google и
+# Let's Encrypt - ещё нет (у SpaceWeb несколько DNS-серверов, зона доходит не сразу).
+RESOLVED=$(getent ahostsv4 "$DOMAIN" | awk '{print $1; exit}' || true)
+PUBLIC=$(curl -fsS --max-time 10 "https://dns.google/resolve?name=${DOMAIN}&type=A" | grep -o '"data":"[0-9.]*"' | head -1 | cut -d'"' -f4 || true)
+if [ "$RESOLVED" != "$IP" ] || [ "$PUBLIC" != "$IP" ]; then
+  echo "СТОП: $DOMAIN -> местный DNS '${RESOLVED:-ничего}', DNS Google '${PUBLIC:-ничего}', а IP этого сервера - $IP."
+  echo "Поправьте A-запись в DNS (SpaceWeb) или подождите, пока она разойдётся, и запустите скрипт снова."
+  exit 1
+fi
 
 if ! command -v caddy >/dev/null; then
   echo "== Ставлю Caddy (репозиторий Ubuntu)"
