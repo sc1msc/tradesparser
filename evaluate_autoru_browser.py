@@ -57,6 +57,21 @@ CURRENT_YEAR = datetime.datetime.now().year
 # определяет по VIN.
 PROBE_MILEAGE_KM = 100000
 
+# Госномер - когда у лота нет VIN: поле формы Авто.ру называется "Госномер или
+# VIN" и принимает и то и другое (с 11.10.2026 так оцениваются ~2% лотов, раньше
+# они оставались без оценки). Номер - из колонки plate, иначе из названия лота.
+_PLATE_LETTERS = "АВЕКМНОРСТУХABEKMHOPCTYX"
+_PLATE_RE = re.compile(
+    rf"(?<![0-9A-ZА-Я])([{_PLATE_LETTERS}])\s*(\d{{3}})\s*([{_PLATE_LETTERS}]{{2}})\s*(\d{{2,3}})(?!\d)",
+    re.IGNORECASE)
+_LAT_TO_CYR = str.maketrans("ABEKMHOPCTYX", "АВЕКМНОРСТУХ")
+
+
+def _plate(text):
+    """Госномер вида "Р131КТ77" из текста (кириллицей, без пробелов) или None."""
+    m = _PLATE_RE.search((text or "").upper())
+    return "".join(m.groups()).translate(_LAT_TO_CYR) if m else None
+
 # Колонки, которые скрипт сам добавляет в шапку, если их ещё нет -
 # именно в этом порядке (дописываются в конец листа).
 NEW_COLUMNS = [
@@ -145,8 +160,15 @@ def run():
         while len(row) < len(header):
             row.append("")
         status = row[col["autoru_status"]].strip()
+        has_price = bool(row[col["autoru_price_low"]].strip() and row[col["autoru_price_high"]].strip())
+        if status in ("ambiguous", "no_price") or (status == "ok" and has_price):
+            continue
+        # VIN, а без него - госномер (Авто.ру принимает и то и другое)
         vin = row[col["vin"]].strip()
-        if not vin or status in ("ok", "ambiguous"):
+        if len(vin) != 17:
+            vin = _plate(row[col["plate"]] if "plate" in col else "") or \
+                  _plate(row[col["title"]] if "title" in col else "")
+        if not vin:
             continue
         # Мультилот (несколько машин одним лотом) не оцениваем: вилка одной
         # машины к цене всего лота отношения не имеет (lot_metrics.lot_kind).
@@ -193,6 +215,9 @@ def run():
 
         for row_num, row in to_process:
             vin = row[col["vin"]].strip().upper()
+            if len(vin) != 17:  # нет VIN - оцениваем по госномеру (см. отбор кандидатов)
+                vin = _plate(row[col["plate"]] if "plate" in col else "") or \
+                      _plate(row[col["title"]] if "title" in col else "")
             raw_mileage = _clean_mileage(row[col["mileage_km"]])
             # Больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника
             # (TRONK/текст лота): считаем, что пробега нет, и оцениваем по году.
@@ -218,6 +243,16 @@ def run():
                 # второй, ниже, - уже с пробегом по этому году, ради цены.
                 try:
                     probe = autoru_valuation.evaluate_by_vin(page, vin, PROBE_MILEAGE_KM)
+                    if not probe.get("year") and not probe.get("mark"):
+                        # Авто.ру машину не опознал (бывает со сменившимся госномером) -
+                        # как и прочие "не знает", не повторяем каждый день
+                        print("  -> Авто.ру не опознал машину")
+                        updates["autoru_status"] = "no_price"
+                        updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+                        _batch_write(worksheet, row_num, col, updates)
+                        processed += 1
+                        time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
+                        continue
                     if probe.get("year"):
                         mileage = _estimate_mileage(str(probe["year"]))
                         mileage_source = f"estimated_mileage (год {probe['year']} - от Авто.ру)"
@@ -252,6 +287,11 @@ def run():
                     status = "ambiguous"
                     updates["autoru_accuracy_note"] = "Оценка может быть неточной"
                     print("  -> ВНИМАНИЕ: Авто.ру не смог однозначно определить авто по VIN")
+                elif result["price_low"] is None or result["price_high"] is None:
+                    # Авто.ру не знает эту машину (грузовик, автобус, спецтехника,
+                    # американский рынок) - раньше такие лоты получали "ok" без цены
+                    status = "no_price"
+                    print("  -> Авто.ру не дал цену: машину не знает")
                 else:
                     status = "ok"
                     ok_count += 1
@@ -280,7 +320,8 @@ def run():
 
             updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
             _batch_write(worksheet, row_num, col, updates)
-            if updates.get("autoru_status") in vin_cache.AUTORU_FINAL:
+            # в справочник по VIN - только настоящий VIN, не госномер
+            if updates.get("autoru_status") in vin_cache.AUTORU_FINAL and len(vin) == 17:
                 cache.update(vin, updates)
             processed += 1
             if errors_in_row >= config.AUTORU_MAX_ERRORS_IN_ROW:

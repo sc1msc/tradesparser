@@ -81,17 +81,30 @@ def _read_existing_extra_columns(target):
     if "vin" not in header:
         return extra_names, {}  # не по чему сопоставлять - переносить нечего
     vin_idx = header.index("vin")
+    url_idx = header.index("url") if "url" in header else None
 
     by_vin = {}
     for row in values[1:]:
-        vin = row[vin_idx] if vin_idx < len(row) else ""
-        if not vin:
+        key = _carry_key(row, vin_idx, url_idx)
+        if not key:
             continue
         extras = {}
         for col_idx, name in extra_positions:
             extras[name] = row[col_idx] if col_idx < len(row) else ""
-        by_vin[vin] = extras
+        by_vin[key] = extras
     return extra_names, by_vin
+
+
+def _carry_key(row, vin_idx, url_idx):
+    """Ключ переноса хвостовых колонок между пересборками: VIN, а у лота без
+    VIN - его ссылка ("url:..."). Раньше строки без VIN не переносились вовсе:
+    с 11.10.2026 Авто.ру оценивает такие лоты по госномеру, и без переноса
+    оценка стиралась бы каждой пересборкой."""
+    vin = row[vin_idx] if vin_idx is not None and vin_idx < len(row) else ""
+    if vin:
+        return vin
+    url = row[url_idx] if url_idx is not None and url_idx < len(row) else ""
+    return f"url:{url}" if url else ""
 
 
 def _overwrite_sheet(target, out_rows):
@@ -202,12 +215,13 @@ def run():
     expired = 0
 
     vin_idx = header.index("vin") if "vin" in header else None
+    url_idx = header.index("url") if "url" in header else None
     out_header = header + extra_names
     out_rows = [out_header]
     carried_over = 0
     for row in selected_rows:
         vin = row[vin_idx] if vin_idx is not None and vin_idx < len(row) else ""
-        extras = dict(extras_by_vin.get(vin, {}))
+        extras = dict(extras_by_vin.get(_carry_key(row, vin_idx, url_idx), {}))
         if autoru_cols and vin_cache.norm_vin(vin):
             # в справочнике - самая свежая оценка этой машины (absorb выше)
             fresh = cache.autoru(vin, config.AUTORU_ESTIMATE_TTL_DAYS, now_dt)
