@@ -58,7 +58,11 @@ evaluate_tronk.py (полная оценка цены - там своя, бол�
     замера);
   - если одинаковый VIN у нескольких кандидатов - запрос один, результат
     пишется во все их строки. Лимит MILEAGE_MAX_PER_RUN - на число
-    ПЛАТНЫХ запросов (уникальных VIN).
+    ПЛАТНЫХ запросов (уникальных VIN);
+  - купленный ответ сначала кладётся в справочник vin_cache, потом в
+    строки lots, а справочник сохраняется и при падении шага: если
+    запись в лист оборвётся, следующий прогон скопирует пробег из
+    справочника, а не оплатит VIN ещё раз.
 
 Неправдоподобный пробег (больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM -
 лот 7147717, Renault Logan 2007: 2 224 050 км) в mileage_km не пишется:
@@ -180,6 +184,16 @@ def updates_from_donor(donor):
     return updates
 
 
+def _flush_cache(cache):
+    """Справочник по VIN - на лист. Вызывается и при падении посреди цикла,
+    поэтому сам не бросает: сбой здесь заменил бы собой настоящую ошибку шага."""
+    try:
+        cache.flush()
+    except Exception as e:
+        automation.alert(f"TRONK: справочник по VIN (vin_cache) не записался ({e}). Пробеги, купленные "
+                         f"в этом прогоне и не попавшие в лист lots, в следующий раз оплатятся снова.")
+
+
 def run():
     if config.TRONK_API_KEY.startswith("ВСТАВЬТЕ"):
         print("Сначала впишите настоящий TRONK_API_KEY в config.py")
@@ -299,21 +313,24 @@ def run():
                 print(f"  ВНИМАНИЕ: пробег {fields['mileage_km']} км неправдоподобен - не записываю, "
                       f"оценка пойдёт по году выпуска")
 
-            for r in vin_rows:
-                sheets_writer.batch_set_cells(worksheet, r["_row_num"], updates)
+            # Сначала в справочник, потом в лист: если запись в lots упадёт,
+            # справочник сохранится в finally ниже, и следующий прогон возьмёт
+            # купленный пробег оттуда бесплатно, а не оплатит этот VIN снова.
             if updates["mileage_probeg_status"] in vin_cache.MILEAGE_FINAL:
                 cache.update(vin, {f: updates.get(f) for f in vin_cache.MILEAGE_FIELDS})
+            for r in vin_rows:
+                sheets_writer.batch_set_cells(worksheet, r["_row_num"], updates)
 
             print(f"  -> {updates['mileage_probeg_status']} (TRONK: {fields['mileage_km']} на {fields['mileage_date']}, "
                   f"на сегодня: {estimated}, источник: {fields['mileage_source']})")
 
             time.sleep(config.DELAY_BETWEEN_MILEAGE_REQUESTS)
     finally:
-        # и при падении посреди цикла: что уже оплачено - в учёт расходов
+        # и при падении посреди цикла: что уже оплачено - в учёт расходов и в справочник
         expenses.record_tronk(method, processed, balance_before, expenses.tronk_balance(),
                               price_per_request, "fill_missing_mileage")
+        _flush_cache(cache)
 
-    cache.flush()
     print(f"\nГотово. Отправлено запросов: {processed}, заполнено пробегов: {filled}, "
           f"отброшено неправдоподобных: {suspicious} (~{processed * price_per_request:.2f} руб. потрачено).")
 

@@ -37,7 +37,7 @@ python miniapp/run_local.py --import       # http://localhost:8000 и загру
 
 ## Сервер
 
-Настройки — в `miniapp/.env` (шаблон `.env.example`): `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_TELEGRAM_API`, `HONESTLOT_IMPORT_TOKEN`.
+Настройки — в `miniapp/.env` (шаблон `.env.example`): `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_TELEGRAM_API`, `HONESTLOT_IMPORT_TOKEN`, `HONESTLOT_ADMIN_CHAT_ID`.
 
 ```
 docker compose -f miniapp/docker-compose.yml up -d --build
@@ -48,6 +48,8 @@ docker compose -f miniapp/docker-compose.yml up -d --build
 Бэкап (`backend/app/backup.py`):
 - сервер сам раз в сутки (после 04:00 МСК) копирует базу в `miniapp/data/backups/honestlot-ГГГГ-ММ-ДД.db`, хранит 7 последних;
 - шаг 7 пайплайна в конце забирает свежую копию на ПК (`GET /api/backup`, ключ импорта) в `miniapp_backups/` в корне репозитория, тоже 7 последних, с проверкой целостности. Это на случай, если пропадёт сама ВМ.
+
+Сторож выгрузок (`backend/app/watchdog.py`): если выгрузки с ПК не было больше 36 часов (ПК выключен, прогон не запустился или упал до отправки уведомлений), сервер сам пишет в `HONESTLOT_ADMIN_CHAT_ID` через @honestlot_bot, пока выгрузки нет — раз в сутки, а когда она пришла — одно сообщение. Без переменной сторож выключен. Если пайплайн остановлен нарочно, уберите переменную из `.env` и перезапустите api (`docker compose up -d api`).
 
 Восстановление на сервере:
 

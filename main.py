@@ -47,6 +47,12 @@ lots_processed и отправке дайджеста (см. bidding_schedule.py
 записывал parse_lot.py до того, как научился разворачивать длинные тексты
 (nextjs_json.resolve_text_ref). У них обновляются ещё title и description.
 
+Сбои сайта торгов не проходят молча (в автоматическом режиме человек лог не
+читает): не загрузилась страница поиска - уведомление (automation.alert);
+карточки лотов считает CardFailures - не прочиталась заметная доля -
+уведомление, много подряд - проход останавливается: сайт лежит, и повторы
+по каждой из сотен карточек растянули бы прогон на часы.
+
 Запуск:  python main.py
 """
 import time
@@ -95,6 +101,54 @@ def fetch(url, session):
             continue
         resp.raise_for_status()
         return resp.text
+
+
+class CardFailures:
+    """
+    Сбои чтения карточек лотов за один проход (новые лоты, перепроверка
+    публичных предложений, карточки для мини-аппа). Единичные сбои сайта -
+    норма. Уведомление (automation.alert) - если не прочиталась заметная
+    доля карточек (config.SITE_FAILED_SHARE_ALERT) или несколько подряд
+    (config.SITE_MAX_ERRORS_IN_ROW): тогда сайт лежит, и проход надо
+    остановить, а не ждать повторов по каждой из сотен карточек.
+    """
+
+    def __init__(self, what):
+        self.what = what  # начало текста уведомления: "Перепроверка публичных предложений"
+        self.total = 0    # карточек обработано - прочитанных и нет
+        self.failed = 0
+        self.in_row = 0
+        self.last_error = ""
+
+    @property
+    def stopped(self):
+        return self.in_row >= config.SITE_MAX_ERRORS_IN_ROW
+
+    def ok(self):
+        self.total += 1
+        self.in_row = 0
+
+    def fail(self, error):
+        """Карточка не прочиталась. -> True, если проход пора остановить."""
+        self.total += 1
+        self.failed += 1
+        self.in_row += 1
+        self.last_error = str(error)[:150]
+        return self.stopped
+
+    def report(self, planned=None):
+        """Уведомление в конце прохода, если было о чём. planned - сколько
+        карточек собирались прочитать (для "не проверено N")."""
+        if self.stopped:
+            left = planned - self.total if planned else 0
+            automation.alert(
+                f"{self.what}: {self.in_row} карточек лотов подряд не прочитались (последняя ошибка: "
+                f"{self.last_error}) - сайт торгов не отвечает или изменилась вёрстка. Проход остановлен"
+                + (f", не проверено {left} из {planned} - в следующий прогон." if left > 0 else "."))
+        elif self.failed >= 3 and self.failed > self.total * config.SITE_FAILED_SHARE_ALERT:
+            automation.alert(
+                f"{self.what}: не прочитались {self.failed} из {self.total} карточек лотов (последняя "
+                f"ошибка: {self.last_error}) - сайт торгов сбоит или изменилась вёрстка карточки.")
 
 
 def _final_deadline_passed(applications_end, periods_text, now):
@@ -197,10 +251,12 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
         pending.clear()
 
     closed_log = []  # закрывшиеся торги - печатаем после записи
+    failures = CardFailures("Перепроверка публичных предложений")
     try:
-        _refresh_loop(candidates, session, pending, flush, closed_log)
+        _refresh_loop(candidates, session, pending, flush, closed_log, failures)
     finally:
         flush()
+    failures.report(len(candidates))
     for lot_id, status in closed_log:
         closed += 1
         print(f"  {lot_id}: {status}")
@@ -210,9 +266,10 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
     return checked, closed
 
 
-def _refresh_loop(candidates, session, pending, flush, closed_log):
+def _refresh_loop(candidates, session, pending, flush, closed_log, failures):
     """Проход по карточкам: результаты копятся в pending, flush() пишет их
-    в лист пачкой; закрывшиеся торги - в closed_log."""
+    в лист пачкой; закрывшиеся торги - в closed_log; сбои чтения карточек -
+    в failures (CardFailures: много подряд - проход останавливается)."""
     for r in candidates:
         lot_id = r["lot_id"]
         time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
@@ -220,12 +277,19 @@ def _refresh_loop(candidates, session, pending, flush, closed_log):
             lot_html = fetch(r["url"], session)
         except requests.RequestException as e:
             print(f"  {lot_id}: не удалось загрузить карточку: {e}")
+            if failures.fail(e):
+                print("  карточки не читаются - перепроверку останавливаю, остальные - в следующий прогон")
+                break
             continue
 
         lot_data = parse_lot.parse_lot_html(lot_html, url=r["url"])
         if lot_data.get("lot_id") is None:
             print(f"  {lot_id}: в карточке не нашёлся JSON лота - пропускаю")
+            if failures.fail("в карточке не нашёлся JSON лота"):
+                print("  карточки не читаются - перепроверку останавливаю, остальные - в следующий прогон")
+                break
             continue
+        failures.ok()
 
         updates = {
             "status": lot_data.get("status"),
@@ -266,6 +330,7 @@ def run():
     total_new = 0
     new_lot_ids = set()
     search_broken = False
+    cards = CardFailures("Новые лоты")
     while page <= config.MAX_PAGES:
         url = parse_search.build_search_url(page=page, params=config.SEARCH_PARAMS)
         print(f"\nСтраница поиска {page}: {url}")
@@ -274,6 +339,12 @@ def run():
             html = fetch(url, session)
         except requests.RequestException as e:
             print(f"  Ошибка загрузки страницы поиска: {e}")
+            if page == 1:
+                automation.alert(f"Сайт торгов не отвечает: первая страница поиска не загрузилась "
+                                 f"({str(e)[:150]}). Новых лотов за этот прогон нет.")
+            else:
+                automation.alert(f"Поиск на сайте торгов прервался на странице {page} ({str(e)[:150]}): "
+                                 f"собраны не все новые лоты, остальные - в следующий прогон.")
             break
 
         result = parse_search.parse_search_html(html)
@@ -301,6 +372,8 @@ def run():
                 lot_html = fetch(lot_stub["url"], session)
             except requests.RequestException as e:
                 print(f"    Не удалось загрузить карточку лота: {e}")
+                if cards.fail(e):
+                    break
                 continue
 
             lot_data = parse_lot.parse_lot_html(lot_html, url=lot_stub["url"])
@@ -308,8 +381,12 @@ def run():
                 # Нет данных лота: страница-призрак (агрегатор создал и удалил лот -
                 # 01.10.2026 так было с лотом 7159530) или сбой сайта. Пустую строку
                 # в таблицу не заносим; если лот настоящий - занесётся в следующий раз.
+                # Призрак - редкость; много таких подряд - сменилась вёрстка карточки.
                 print(f"    на странице нет данных лота ({lot_data['parse_error']}) - не заношу")
+                if cards.fail(lot_data["parse_error"]):
+                    break
                 continue
+            cards.ok()
             if _final_deadline_passed(lot_data.get("applications_end"), lot_data.get("bidding_periods"),
                                       datetime.datetime.now()):
                 print(f"    приём заявок закончился {lot_data.get('applications_end')} - не заношу")
@@ -328,6 +405,9 @@ def run():
             new_lot_ids.add(lot_id)
             total_new += 1
 
+        if cards.stopped:
+            print("\nКарточки лотов не читаются - поиск останавливаю, остальное - в следующий прогон.")
+            break
         if not result["has_next"]:
             print("\nБольше страниц нет, останавливаюсь.")
             break
@@ -336,6 +416,7 @@ def run():
         time.sleep(config.DELAY_BETWEEN_SEARCH_PAGES)
 
     print(f"\nДобавлено новых лотов: {total_new}")
+    cards.report()
     if search_broken:
         automation.alert("Поиск на сайте агрегатора не отдал лоты (пустая первая страница) - новых лотов "
                          "за этот прогон нет не потому, что их нет. Если повторится завтра - смотреть сайт.")
