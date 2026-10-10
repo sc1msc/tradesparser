@@ -10,8 +10,10 @@
 и пишем явным диапазоном (например "A5") - это однозначно и предсказуемо.
 """
 import datetime
+import time
 
 import gspread
+import requests
 from google.oauth2.service_account import Credentials
 
 import bidding_schedule
@@ -234,6 +236,26 @@ def remove_expired_lots(worksheet, days):
     return len(rows_to_delete)
 
 
+# Повтор записи в Google при сетевом сбое (обрыв соединения, таймаут) и при
+# 429/5xx: обычно следующая попытка через несколько секунд проходит. 429 -
+# квота на запись (~60 запросов в минуту) - ждём минуту.
+WRITE_RETRY_PAUSES = (5, 30, 60)
+
+
+def retry_write(call):
+    for attempt in range(len(WRITE_RETRY_PAUSES) + 1):
+        try:
+            return call()
+        except (requests.ConnectionError, requests.Timeout, gspread.exceptions.APIError) as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            retryable = not isinstance(e, gspread.exceptions.APIError) or code == 429 or (code or 0) >= 500
+            if not retryable or attempt == len(WRITE_RETRY_PAUSES):
+                raise
+            pause = 60 if code == 429 else WRITE_RETRY_PAUSES[attempt]
+            print(f"  Google: запись не прошла ({type(e).__name__} {code or ''}), повтор через {pause} с...")
+            time.sleep(pause)
+
+
 # На сколько строк расширять лист, когда новые лоты упираются в конец сетки
 # (Google не расширяет лист сам при записи явных диапазонов вида A1566 -
 # отвечает "exceeds grid limits"). Пачкой, а не по строке на лот: одно
@@ -330,15 +352,8 @@ class SheetState:
             self.worksheet.batch_update(cell_updates)
         return row_num
 
-    def update_fields(self, lot_id, data):
-        """
-        Обновляет ТОЛЬКО переданные поля уже занесённого лота - одним
-        запросом к API. В отличие от upsert(), который пишет все COLUMNS
-        подряд и затёр бы пустыми строками всё, чего нет в data (оценки
-        TRONK/Auto.ru, пробег и т.д.). Нужен main.refresh_public_offers():
-        у публичных предложений обновляются статус, цена и график.
-        Шапку повторно не читаем - позиции колонок уже есть в self.col_idx.
-        """
+    def _field_cells(self, lot_id, data):
+        """Ячейки для update_fields: [{"range", "values"}] или None, если лота нет."""
         row_num = self.lot_row.get(str(lot_id))
         if row_num is None:
             return None
@@ -354,9 +369,40 @@ class SheetState:
                 "range": f"{_col_letter(col_num)}{row_num}",
                 "values": [[text]],
             })
+        return cell_updates
+
+    def update_fields(self, lot_id, data):
+        """
+        Обновляет ТОЛЬКО переданные поля уже занесённого лота - одним
+        запросом к API. В отличие от upsert(), который пишет все COLUMNS
+        подряд и затёр бы пустыми строками всё, чего нет в data (оценки
+        TRONK/Auto.ru, пробег и т.д.).
+        Шапку повторно не читаем - позиции колонок уже есть в self.col_idx.
+        """
+        cell_updates = self._field_cells(lot_id, data)
+        if cell_updates is None:
+            return None
         if cell_updates:
-            self.worksheet.batch_update(cell_updates)
-        return row_num
+            retry_write(lambda: self.worksheet.batch_update(cell_updates))
+        return self.lot_row[str(lot_id)]
+
+    def update_fields_many(self, items):
+        """
+        То же, что update_fields, но для многих лотов ОДНИМ запросом:
+        items - [(lot_id, data)]. Нужен main.refresh_public_offers(): раньше
+        там был запрос на каждый перепроверенный лот (сотни в день), и
+        10.10.2026 одна оборванная сетью запись уронила весь пайплайн.
+        Возвращает число лотов, найденных в листе.
+        """
+        cell_updates, found = [], 0
+        for lot_id, data in items:
+            cells = self._field_cells(lot_id, data)
+            if cells is not None:
+                found += 1
+                cell_updates.extend(cells)
+        if cell_updates:
+            retry_write(lambda: self.worksheet.batch_update(cell_updates))
+        return found
 
 
 def col_index(worksheet, name):

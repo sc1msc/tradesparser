@@ -34,10 +34,13 @@ applications_end и bidding_periods. Сам текущий период (цен�
 здесь НЕ пишется - он вычисляется по времени из графика при сборке
 lots_processed и отправке дайджеста (см. bidding_schedule.py): иначе
 цена в листе снова устаревала бы между запусками. Запросы к сайту
-бесплатные, но их десятки-сотни - поэтому недавно проверенные лоты
+бесплатные, но их сотни - поэтому недавно проверенные лоты
 пропускаются (см. _status_is_fresh: после ночного обновления агрегатора
 или раз в config.PUBLIC_OFFER_REFRESH_HOURS часов), а за один запуск -
-не больше config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN.
+не больше config.PUBLIC_OFFER_REFRESH_MAX_PER_RUN. В лист результаты
+пишутся пачками по REFRESH_WRITE_BATCH лотов (не запросом на лот); пачка,
+которую не удалось записать и после повторов, не роняет пайплайн - эти
+лоты просто перепроверятся в следующий запуск.
 
 Тем же шагом перечитываются карточки лотов (любой формы торгов), у которых
 вместо названия или описания в листе лежит ссылка вида "$7c" - так их
@@ -74,6 +77,7 @@ HEADERS = {
 # ничего не изменит). Таймаут раздельный: (подключение, чтение).
 FETCH_TIMEOUT = (10, 20)
 FETCH_RETRY_PAUSES = (5, 15)  # паузы перед 2-й и 3-й попыткой, секунд
+REFRESH_WRITE_BATCH = 50  # перепроверенных лотов на один запрос записи в лист
 
 
 def fetch(url, session):
@@ -178,6 +182,37 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
 
     checked = 0
     closed = 0
+    pending = []  # [(lot_id, updates)] - ждут записи в лист одной пачкой
+    failed_writes = 0
+
+    def flush():
+        nonlocal checked, failed_writes
+        if not pending:
+            return
+        try:
+            checked += sheet_state.update_fields_many(pending)
+        except Exception as e:  # сеть/Google не дали записать и после повторов
+            failed_writes += len(pending)
+            print(f"  не удалось записать статусы {len(pending)} лотов: {e}")
+        pending.clear()
+
+    closed_log = []  # закрывшиеся торги - печатаем после записи
+    try:
+        _refresh_loop(candidates, session, pending, flush, closed_log)
+    finally:
+        flush()
+    for lot_id, status in closed_log:
+        closed += 1
+        print(f"  {lot_id}: {status}")
+    if failed_writes:
+        automation.alert(f"Перепроверка публичных предложений: не записались статусы {failed_writes} лотов "
+                         f"(сбой связи с Google). Они перепроверятся в следующий запуск.")
+    return checked, closed
+
+
+def _refresh_loop(candidates, session, pending, flush, closed_log):
+    """Проход по карточкам: результаты копятся в pending, flush() пишет их
+    в лист пачкой; закрывшиеся торги - в closed_log."""
     for r in candidates:
         lot_id = r["lot_id"]
         time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
@@ -204,14 +239,12 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
         if r["_broken_text"]:
             updates["title"] = lot_data.get("title")
             updates["description"] = lot_data.get("description")
-        sheet_state.update_fields(lot_id, updates)
-        checked += 1
+        pending.append((lot_id, updates))
+        if len(pending) >= REFRESH_WRITE_BATCH:
+            flush()
 
         if bidding_schedule.is_closed_status(lot_data.get("status")):
-            closed += 1
-            print(f"  {lot_id}: {lot_data.get('status')} - {r.get('title', '')[:60]}")
-
-    return checked, closed
+            closed_log.append((lot_id, f"{lot_data.get('status')} - {r.get('title', '')[:60]}"))
 
 
 def run():
