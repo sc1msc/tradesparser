@@ -4,6 +4,8 @@
 """
 VIN -> Autodoc -> Google Sheets
 
+ВЫКЛЮЧЕН с 11.10.2026: Autodoc поменял API (см. ENABLED ниже).
+
 Что делает:
 1. Открывает Google Sheets.
 2. Берет VIN из столбца E.
@@ -88,6 +90,17 @@ AUTODOC_URL = (
 #
 # После одного запуска вернуть False.
 FORCE_REPROCESS_ALL = False
+
+# Выключен с 11.10.2026: Autodoc поменял API, модуль не работает. В
+# run_pipeline.py он не входит, флаг - защита от ручного запуска. Против
+# нового API скрипт навредит листу "lots": ответ 200 в другом формате даст
+# api_status "OK" с пустыми полями (такие VIN больше не перезапрашиваются),
+# а новые поля ответа станут колонками блока и, если их больше прежнего,
+# лягут поверх description, photo_url и других колонок правее блока.
+# Марку/модель/год без Autodoc даёт разбор title (fill_missing_from_title.py),
+# год лоту без года - Авто.ру (evaluate_autoru_browser.py).
+# Включить: True - после правки под новый API.
+ENABLED = False
 
 
 # ============================================================
@@ -1339,6 +1352,13 @@ def is_correct_schema(
 # ============================================================
 
 def main():
+
+    if not ENABLED:
+        logger.warning(
+            "autodoc_decode.py выключен (ENABLED = False): "
+            "Autodoc поменял API, лист не трогаю."
+        )
+        return
 
     start_time = time.time()
 

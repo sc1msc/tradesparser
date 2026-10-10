@@ -31,7 +31,7 @@ Several steps prompt for `yes`/`да` confirmation on stdin (paid API calls, lau
 ## Data flow (sheets = pipeline stages)
 
 ```
-main.py ──► "lots" (raw, A..AM via sheets_writer + extra cols; AZ/BA/BB = brand/name/date from autodoc_decode.py)
+main.py ──► "lots" (raw, A..AM via sheets_writer + extra cols; AZ/BA/BB = brand/name/date from autodoc_decode.py, disabled - empty for new lots)
               │  fill_missing_mileage.py (paid TRONK probeg) writes mileage back into "lots"
               ▼
 build_lots_processed.py ──► "lots_processed"   (FULL overwrite from "lots" every run; empty
@@ -52,7 +52,7 @@ send_digest.py ──► Telegram channel + Telegraph page (telegraph_publish.py
 
 Step 7 (the last) of `run_pipeline.py` is `export_to_miniapp.py`: it reads `lots_current_month`, downloads each lot card from the trade site for data the sheet lacks (all photos, the public-offer price schedule `bidding_periods`, trade form, status), caches it in `miniapp_details_cache.json` (gitignored, refreshed after `MINIAPP_DETAILS_REFRESH_DAYS`), and POSTs everything to the mini app server. It skips itself when `MINIAPP_API_URL`/`MINIAPP_IMPORT_TOKEN` are not set and never fails the pipeline.
 
-Not in the pipeline (manual/side tools): `autodoc_decode.py` (VIN → Autodoc, writes brand/model/date into `lots` from column AZ, has its own inline config), `evaluate_tronk.py` / `evaluate_avito_browser.py` (their outputs are no longer read downstream; Auto.ru is the only market price used), `filter_beautiful_plates_gspread.py` (uses `plates_series.txt`, writes a `beautiful_plates` tab + xlsx), and `temp.py` (scratch). `check_damage_photos.py` (manual, paid Claude API, model in `config.DAMAGE_CHECK_MODEL`) looks at up to 4 photos of lots priced `DAMAGE_CHECK_MIN_GAP`% (40) or more below market and labels them `total` / `not_total` / `unclear` (only `total` counts as damaged); results in `damage_check_cache.json`, a review page in `damage_check_report.html`; `--dry-run` needs no API key. `export_to_miniapp.py` sends the verdict (`photo_verdict`, `photo_signs`) to the mini app.
+Not in the pipeline (manual/side tools): `autodoc_decode.py` (VIN → Autodoc, writes brand/model/date into `lots` from column AZ, has its own inline config; **disabled since 2026-10-11** with `ENABLED = False`: Autodoc changed its API, and running it against the new one would mark rows `OK` with empty fields and could overwrite the columns right of its block. New lots get brand/name/year from the title only), `evaluate_tronk.py` / `evaluate_avito_browser.py` (their outputs are no longer read downstream; Auto.ru is the only market price used), `filter_beautiful_plates_gspread.py` (uses `plates_series.txt`, writes a `beautiful_plates` tab + xlsx), and `temp.py` (scratch). `check_damage_photos.py` (manual, paid Claude API, model in `config.DAMAGE_CHECK_MODEL`) looks at up to 4 photos of lots priced `DAMAGE_CHECK_MIN_GAP`% (40) or more below market and labels them `total` / `not_total` / `unclear` (only `total` counts as damaged); results in `damage_check_cache.json`, a review page in `damage_check_report.html`; `--dry-run` needs no API key. `export_to_miniapp.py` sends the verdict (`photo_verdict`, `photo_signs`) to the mini app.
 
 ## Key conventions and gotchas
 
