@@ -64,8 +64,8 @@ HEADER = ["vin"] + MILEAGE_FIELDS + AUTORU_FIELDS + ["updated_at"]
 MILEAGE_FINAL = {"ok", "no_data", "suspicious"}
 # Оценка Авто.ру, которую можно переиспользовать (ошибки и no_mileage - нет).
 # no_price - Авто.ру не знает машину (грузовик, автобус, спецтехника, американский
-# рынок): ответ без цены. Повторять каждый день бессмысленно - как и ok/ambiguous,
-# переоценивается по истечении AUTORU_ESTIMATE_TTL_DAYS.
+# рынок): ответ без цены. Повторять каждый день бессмысленно; шаг 5 перепроверяет его
+# через config.AUTORU_NO_PRICE_RETRY_DAYS (ответ мог быть записан в сбой Авто.ру).
 AUTORU_FINAL = {"ok", "ambiguous", "no_price"}
 
 FLUSH_EVERY = 25

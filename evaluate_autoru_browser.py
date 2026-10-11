@@ -33,8 +33,22 @@ lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM) - из estimated_mileage,
 ответе, где отдаёт вилку цены. Если need_info_for_evaluation==true -
 однозначно определить авто не удалось, цифрам доверять не стоит - статус
 "ambiguous", а не "ok".
+
+"no_price" - Авто.ру не дал цену (грузовик, автобус, американский рынок)
+или не опознал машину. Перепроверяется через config.AUTORU_NO_PRICE_RETRY_DAYS,
+сразу все - с ключом --retry-no-price. Сбой Авто.ру выглядит так же: 11.10.2026
+он не оценивал ни один VIN (ночью пострадал дата-центр), и шаг записал
+"no_price" 117 лотам. Поэтому ответ без цены у лота, который оценивается
+впервые, не пишется сразу, а копится в серию: пришла цена - серия записывается
+(эти машины Авто.ру правда не знает), набралось config.AUTORU_MAX_NO_PRICE_IN_ROW
+подряд - шаг останавливается, серия не записывается, приходит уведомление.
+Повторное "no_price" у лота, который и раньше был без цены, о сбое ничего не
+говорит - пишется сразу.
+
+Запуск: python evaluate_autoru_browser.py [--retry-no-price]
 """
 import re
+import sys
 import time
 import random
 import datetime
@@ -129,7 +143,18 @@ def _batch_write(worksheet, row_num, col, updates):
         worksheet.batch_update(data)
 
 
-def run():
+def _no_price_due(checked_at, now):
+    """Пора ли перепроверить "no_price", записанный в checked_at."""
+    try:
+        checked = datetime.datetime.fromisoformat(str(checked_at).strip()[:19])
+    except ValueError:
+        return True
+    return now - checked > datetime.timedelta(days=config.AUTORU_NO_PRICE_RETRY_DAYS)
+
+
+def run(retry_no_price=False):
+    """retry_no_price - перепроверить все "no_price" сразу, не дожидаясь
+    AUTORU_NO_PRICE_RETRY_DAYS (после сбоя Авто.ру)."""
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
     spreadsheet = client.open_by_key(config.SPREADSHEET_ID)
@@ -151,12 +176,15 @@ def run():
     data_rows = values[1:]
 
     candidates = []  # (row_num, row_list)
+    now = datetime.datetime.now()
     for i, row in enumerate(data_rows):
         while len(row) < len(header):
             row.append("")
         status = row[col["autoru_status"]].strip()
         has_price = bool(row[col["autoru_price_low"]].strip() and row[col["autoru_price_high"]].strip())
-        if status in ("ambiguous", "no_price") or (status == "ok" and has_price):
+        if status == "ambiguous" or (status == "ok" and has_price):
+            continue
+        if status == "no_price" and not retry_no_price and not _no_price_due(row[col["autoru_checked_at"]], now):
             continue
         # VIN, а без него - госномер (Авто.ру принимает и то и другое)
         vin = row[col["vin"]].strip()
@@ -194,6 +222,38 @@ def run():
     # Готовые оценки - ещё и в справочник по VIN: переживут выпадение лота
     # из среза и пригодятся, если машину выставят снова (vin_cache.py).
     cache = vin_cache.VinCache(spreadsheet)
+    # Ответы без цены подряд у лотов, которые оцениваются впервые, - ещё не
+    # записаны: может оказаться, что это сбой Авто.ру (см. докстринг).
+    no_price_streak = []  # (row_num, vin, updates)
+
+    def save(row_num, vin, updates):
+        _batch_write(worksheet, row_num, col, updates)
+        # в справочник по VIN - только настоящий VIN, не госномер
+        if updates.get("autoru_status") in vin_cache.AUTORU_FINAL and len(vin) == 17:
+            cache.update(vin, updates)
+
+    def finish(row_num, row, vin, updates):
+        """Записывает результат лота, а "no_price" лота, который оценивается
+        впервые, - придерживает в серии. -> True, если серия дошла до
+        AUTORU_MAX_NO_PRICE_IN_ROW: Авто.ру сбоит, шаг надо остановить."""
+        updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        status = updates.get("autoru_status")
+        if status == "no_price" and row[col["autoru_status"]].strip() != "no_price":
+            no_price_streak.append((row_num, vin, updates))
+            if len(no_price_streak) < config.AUTORU_MAX_NO_PRICE_IN_ROW:
+                return False
+            automation.alert(f"Авто.ру: {len(no_price_streak)} ответов подряд без цены - похоже на сбой "
+                             f"Авто.ру, а не на незнакомые машины. Шаг остановлен, эти ответы не записаны "
+                             f"(лоты оценятся в следующий прогон), оценено {ok_count}.")
+            no_price_streak.clear()
+            return True
+        if status in ("ok", "ambiguous"):
+            # Авто.ру отвечает - машины из серии он и правда не знает
+            for pending in no_price_streak:
+                save(*pending)
+            no_price_streak.clear()
+        save(row_num, vin, updates)
+        return False
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=config.AUTORU_HEADLESS)
@@ -241,9 +301,9 @@ def run():
                         # как и прочие "не знает", не повторяем каждый день
                         print("  -> Авто.ру не опознал машину")
                         updates["autoru_status"] = "no_price"
-                        updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
-                        _batch_write(worksheet, row_num, col, updates)
                         processed += 1
+                        if finish(row_num, row, vin, updates):
+                            break
                         time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
                         continue
                     if probe.get("year"):
@@ -311,18 +371,20 @@ def run():
             else:
                 errors_in_row = 0
 
-            updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
-            _batch_write(worksheet, row_num, col, updates)
-            # в справочник по VIN - только настоящий VIN, не госномер
-            if updates.get("autoru_status") in vin_cache.AUTORU_FINAL and len(vin) == 17:
-                cache.update(vin, updates)
             processed += 1
+            if finish(row_num, row, vin, updates):
+                break
             if errors_in_row >= config.AUTORU_MAX_ERRORS_IN_ROW:
                 automation.alert(f"Авто.ру: {errors_in_row} ошибок подряд (последняя: {last_error}). Шаг "
                                  f"остановлен, оценено {ok_count}, остальные - в следующий прогон.")
                 break
             time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
-
+        else:
+            # шаг дошёл до конца, а серия короче порога - это незнакомые машины,
+            # не сбой. Остановился (капча, ошибки, серия) - серию не пишем:
+            # лоты оценятся в следующий прогон
+            for pending in no_price_streak:
+                save(*pending)
         browser.close()
     cache.flush()
 
@@ -346,4 +408,4 @@ def _wait_captcha(page):
 
 
 if __name__ == "__main__":
-    run()
+    run(retry_no_price="--retry-no-price" in sys.argv)
