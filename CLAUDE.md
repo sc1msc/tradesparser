@@ -8,6 +8,8 @@ A set of standalone Python scripts that scrape bankruptcy car auction lots (Mosc
 
 Code comments, docstrings, and console output are in Russian. Every module has a long docstring explaining *why* it works the way it does. Read it before changing a script. Match that style.
 
+**Wiki (`wiki/`, Russian)** is the knowledge base for the support agent that answers users in @honestlot_support_bot, and for newcomers: product, exact UI texts, how every number is computed, FAQ with ready answers, alert runbook, infrastructure. When you change user-visible behavior, UI texts, pipeline steps, alerts, or servers, update the matching wiki page in the same commit (the code-to-page map is at the end of `wiki/README.md`). Never put secret values in the wiki.
+
 ## Commands
 
 No build, lint, or test suite. There is no git repo either. Each script runs directly and exposes a `run()` function:
