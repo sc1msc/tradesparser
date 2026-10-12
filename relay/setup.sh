@@ -63,6 +63,13 @@ cat > /etc/caddy/Caddyfile <<EOF
 # правки делать там и перезапускать скрипт.
 # Пускает только ВМ мини-аппа, остальным 403. Журнал запросов не ведём:
 # через релей идут апдейты с данными пользователей, хранить их здесь нельзя.
+{
+	# UDP 443 отдан Hysteria2 (relay/hysteria.sh) - HTTP/3 в Caddy выключен.
+	servers {
+		protocols h1 h2
+	}
+}
+
 ${DOMAIN} {
 	@denied not remote_ip ${ALLOWED_IPS}
 	respond @denied 403
