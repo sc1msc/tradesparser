@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HonestLot Pro - управление подпиской</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="pay.css?v=3">
+</head>
+<body>
+<main>
+  <div class="brand"><img src="/logo.svg" alt=""><b>Honest<span>Lot</span></b></div>
+  <h1>Управление подпиской</h1>
+  <div id="login" class="card login hidden"></div>
+  <div id="box" class="card hidden"></div>
+  <div id="error" class="err hidden"></div>
+</main>
+<script type="module">
+// Отмена автопродления: больше не списываем, идентификатор способа оплаты стираем;
+// доступ - до конца оплаченного периода (billing.cancel). Ссылка из письма (#link=...)
+// открывает эту страницу без входа через Telegram.
+import { api, showLogin, rub, date } from "./pay.js?v=3";
+const $ = (id) => document.getElementById(id);
+async function load() {
+  $("login").classList.add("hidden");
+  let s;
+  try { s = await api("/status"); } catch (e) {
+    if (e.status === 401) return showLogin($("login"), load);
+    $("error").textContent = e.status === 404 ? "Страница пока недоступна." : e.message;
+    return $("error").classList.remove("hidden");
+  }
+  const sub = s.subscription, box = $("box");
+  box.classList.remove("hidden");
+  if (!sub) { box.innerHTML = `<p>Подписки нет.</p><p><a href="./${location.hash}">Оформить HonestLot Pro</a></p>`; return; }
+  const active = s.pro;
+  box.innerHTML =
+    `<p><b>${sub.plan_title}</b>, ${rub(sub.price)}. ` +
+    (active ? `<span class="ok">Pro активен</span> до ${date(sub.period_end)}.` : `Подписка закончилась.`) + `</p>` +
+    (sub.autorenew
+      ? `<p>Автопродление включено: ${date(sub.period_end)} спишем ${rub(sub.price)}` + (sub.payment_method ? ` (${sub.payment_method})` : "") + `.</p>
+         <button id="cancel" class="btn secondary">Отключить автопродление</button>`
+      : `<p>Автопродление выключено, списаний не будет.` + (active ? ` Доступ сохранится до ${date(sub.period_end)}.` : "") + `</p>
+         <p><a href="./${location.hash}">${active ? "Оплатить следующий период" : "Оформить снова"}</a></p>`) +
+    `<p class="hint">Письма о подписке приходят на <span id="mail"></span>.</p>`;
+  $("mail").textContent = sub.email;
+  const btn = $("cancel");
+  if (btn) btn.onclick = async () => {
+    if (!confirm(`Отключить автопродление? Доступ к Pro сохранится до ${date(sub.period_end)}, дальше списаний не будет.`)) return;
+    btn.disabled = true;
+    try { await api("/cancel", { method: "POST" }); load(); }
+    catch (e) { $("error").textContent = e.message; $("error").classList.remove("hidden"); btn.disabled = false; }
+  };
+}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HonestLot Pro - подписка</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="pay.css?v=3">
+</head>
+<body>
+<main>
+  <div class="brand"><img src="/logo.svg" alt=""><b>Honest<span>Lot</span></b></div>
+  <h1>HonestLot Pro</h1>
+  <div class="sub">Подписка на HonestLot - выгодные лоты с банкротных торгов.</div>
+
+  <div id="login" class="card login hidden"></div>
+  <div id="error" class="err hidden"></div>
+
+  <div id="form" class="hidden">
+    <div id="who" class="hint" style="margin-top:14px"></div>
+    <div id="current" class="card hidden"></div>
+    <div id="plans" class="plans"></div>
+    <label class="card toggle">
+      <span class="txt"><b>Автопродление</b><span id="renewText" class="hint"></span></span>
+      <input id="autorenew" type="checkbox" role="switch" checked><span class="sw" aria-hidden="true"></span>
+    </label>
+    <div class="card">
+      <label for="email"><b>E-mail</b></label>
+      <div class="hint">Пришлём чек, напоминание перед продлением и ссылку на управление подпиской.</div>
+      <input id="email" type="email" placeholder="name@example.ru" autocomplete="email">
+      <label class="row"><input id="consent" type="checkbox">
+        <span id="consentText" class="hint"></span></label>
+      <div class="hint" style="margin-top:12px">Сейчас в HonestLot лоты Москвы и Московской области.</div>
+      <button id="pay" class="btn" disabled>Оплатить</button>
+      <div id="payError" class="err hidden"></div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { api, showLogin, rub, date, months } from "./pay.js?v=3";
+const $ = (id) => document.getElementById(id);
+let offer = null, plan = null;
+
+function fail(box, text) { box.textContent = text; box.classList.remove("hidden"); }
+
+function render() {
+  const p = offer.plans.find((x) => x.id === plan);
+  $("plans").replaceChildren(...offer.plans.map((x) => {
+    const el = document.createElement("label");
+    el.className = "plan" + (x.id === plan ? " on" : "");
+    el.innerHTML = `<input type="radio" name="plan" ${x.id === plan ? "checked" : ""}>
+      <span class="t">${x.title}${offer.early ? '<span class="tag">ранняя цена</span>' : ""}</span>
+      <span class="p">${x.price !== x.regular_price ? `<span class="old">${rub(x.regular_price)}</span>` : ""}${rub(x.price)}</span>`;
+    el.onclick = () => { plan = x.id; render(); };
+    return el;
+  }));
+  $("renewText").textContent = $("autorenew").checked
+    ? `${rub(p.price)} ${p.months === 1 ? "каждый месяц" : "каждые " + months(p.months)}, спишем автоматически в конце периода. За 3 дня напомним письмом. Отключить можно в любой момент на странице управления подпиской или по ссылке из письма.`
+    : "Подписка закончится в конце оплаченного периода, списаний больше не будет.";
+  $("pay").textContent = `Оплатить ${rub(p.price)}`;
+  $("pay").disabled = !$("consent").checked;
+}
+
+async function load() {
+  $("login").classList.add("hidden");
+  try {
+    offer = await api("/offer");
+  } catch (e) {
+    if (e.status === 401) return showLogin($("login"), load);
+    return fail($("error"), e.status === 404 ? "Оформление подписки пока недоступно." : e.message);
+  }
+  const u = offer.user;
+  $("who").textContent = u ? `Вы вошли как ${u.first_name || ""}${u.username ? " (@" + u.username + ")" : ""}.` : "";
+  const sub = offer.subscription;
+  if (sub && offer.pro) {
+    $("current").innerHTML = `<b class="ok">Pro активен</b> до ${date(sub.period_end)}. ` +
+      (sub.autorenew ? `Продлится автоматически. ` : `Автопродление выключено. `) +
+      `<a href="manage.html${location.hash}">Управление подпиской</a><br><span class="hint">Оплата ниже продлит подписку с конца текущего периода.</span>`;
+    $("current").classList.remove("hidden");
+  }
+  if (sub && sub.email) $("email").value = sub.email;
+  const terms = [offer.offer_url && `<a href="${offer.offer_url}" target="_blank">оферты</a>`,
+                 offer.privacy_url && `<a href="${offer.privacy_url}" target="_blank">политикой обработки персональных данных</a>`];
+  $("consentText").innerHTML = `Принимаю условия ${terms[0] || "оферты"} и даю согласие на обработку персональных данных в соответствии с ${terms[1] || "политикой обработки персональных данных"}.`;
+  plan = plan || "month";
+  $("form").classList.remove("hidden");
+  render();
+}
+
+$("autorenew").onchange = render;
+$("consent").onchange = render;
+$("pay").onclick = async () => {
+  $("pay").disabled = true;
+  $("payError").classList.add("hidden");
+  try {
+    const r = await api("/checkout", { method: "POST", body: JSON.stringify({ plan, email: $("email").value, autorenew: $("autorenew").checked, consent: $("consent").checked }) });
+    location.href = r.confirmation_url;
+  } catch (e) {
+    fail($("payError"), e.message);
+    $("pay").disabled = false;
+  }
+};
+load();
+</script>
+</body>
+</html>

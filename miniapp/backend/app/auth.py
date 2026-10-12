@@ -72,6 +72,35 @@ def validate_init_data(init_data, bot_token, now=None):
     return user
 
 
+# Вход на сайте через Telegram Login Widget (страница оплаты honestlot.ru/pay,
+# billing.py): другой алгоритм подписи, чем у initData мини-аппа -
+#   secret_key = SHA256(bot_token), hash = hex(HMAC_SHA256(secret_key, data_check_string)).
+# Виджет работает только на домене, заданном боту в @BotFather (/setdomain).
+LOGIN_MAX_AGE_SECONDS = 24 * 3600
+
+
+def validate_login_widget(data, bot_token, now=None):
+    """data - поля, которые виджет передал в onauth (id, first_name, username,
+    photo_url, auth_date, hash). -> dict пользователя или AuthError."""
+    if not isinstance(data, dict) or not data.get("hash"):
+        raise AuthError("нет данных входа через Telegram")
+    if not bot_token:
+        raise AuthError("на сервере не задан токен бота")
+    fields = {k: str(v) for k, v in data.items() if k != "hash" and v is not None}
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(fields.items()))
+    secret_key = hashlib.sha256(bot_token.encode()).digest()
+    expected = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, str(data["hash"])):
+        raise AuthError("неверная подпись входа через Telegram")
+    try:
+        auth_date = int(fields.get("auth_date", "0"))
+    except ValueError:
+        raise AuthError("неверный auth_date")
+    if (now or time.time()) - auth_date > LOGIN_MAX_AGE_SECONDS:
+        raise AuthError("вход устарел - войдите через Telegram ещё раз")
+    return {"id": int(fields["id"]), "username": fields.get("username"), "first_name": fields.get("first_name")}
+
+
 # Ссылка "Поделиться" с экрана лота: t.me/<бот>?startapp=lot<id>_<код>.
 # Код - users.ref_code того, кто поделился (случайный, а не telegram_id:
 # ссылку видит каждый получатель). Без кода - тоже ссылка на лот.
