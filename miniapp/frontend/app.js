@@ -146,7 +146,8 @@ async function api(path, opts = {}) {
 // ---------- состояние ----------
 
 // hideDamaged - "Скрыть битые" (тотальные повреждения), по умолчанию включена и в счётчик фильтров не входит
-const emptyFilters = () => ({ brands: [], models: {}, year: null, price: null, mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [], hideDamaged: true });
+// price: [100000, null] - по умолчанию "от 100 тыс.": ниже - в основном хлам и мусорные лоты (12.10.2026)
+const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [100e3, null], mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [], hideDamaged: true });
 const SORTS = [["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
 
 const state = {
