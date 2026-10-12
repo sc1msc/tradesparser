@@ -120,8 +120,13 @@
 2. **Postbox** (консоль Yandex Cloud, каталог, где ВМ):
    - сервисный аккаунт (например, `postbox-sender`) с ролью `postbox.sender`;
    - у него API-ключ с областью действия `yc.postbox.send`. Секретную часть Postbox показывает один
-     раз — сразу вписать на сервере в `miniapp/.env`: id ключа — `HONESTLOT_SMTP_USER`, секрет —
-     `HONESTLOT_SMTP_PASSWORD`;
+     раз — сразу вписать на сервере в `miniapp/.env` скриптом с ПК (Git Bash, корень репозитория;
+     id ключа и секрет он спросит скрытым вводом и перезапустит контейнеры):
+     ```
+     bash miniapp/set_env.sh HONESTLOT_SMTP_HOST=postbox.cloud.yandex.net HONESTLOT_SMTP_PORT=465 \
+       HONESTLOT_SMTP_FROM=info@honestlot.ru HONESTLOT_SMTP_USER HONESTLOT_SMTP_PASSWORD
+     ```
+     (`HONESTLOT_SMTP_USER` — id ключа, `HONESTLOT_SMTP_PASSWORD` — секрет);
    - Cloud Postbox → «Создать адрес» → домен `honestlot.ru`, DKIM «Простая». Адрес и сервисный
      аккаунт должны быть в одном каталоге, иначе отправка падает с ошибкой.
 3. **DNS у SpaceWeb** (DNS домена — там):
