@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HonestLot Pro - подписка</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="pay.css?v=2">
+  <link rel="stylesheet" href="pay.css?v=3">
 </head>
 <body>
 <main>
@@ -20,12 +20,14 @@
     <div id="who" class="hint" style="margin-top:14px"></div>
     <div id="current" class="card hidden"></div>
     <div id="plans" class="plans"></div>
+    <label class="card toggle">
+      <span class="txt"><b>Автопродление</b><span id="renewText" class="hint"></span></span>
+      <input id="autorenew" type="checkbox" role="switch" checked><span class="sw" aria-hidden="true"></span>
+    </label>
     <div class="card">
       <label for="email"><b>E-mail</b></label>
       <div class="hint">Пришлём чек, напоминание перед продлением и ссылку на управление подпиской.</div>
       <input id="email" type="email" placeholder="name@example.ru" autocomplete="email">
-      <label class="row"><input id="autorenew" type="checkbox" checked>
-        <span><b>Автопродление</b><br><span id="renewText" class="hint"></span></span></label>
       <label class="row"><input id="consent" type="checkbox">
         <span id="consentText" class="hint"></span></label>
       <div class="hint" style="margin-top:12px">Сейчас в HonestLot лоты Москвы и Московской области.</div>
@@ -35,7 +37,7 @@
   </div>
 </main>
 <script type="module">
-import { api, showLogin, rub, date, months } from "./pay.js?v=2";
+import { api, showLogin, rub, date, months } from "./pay.js?v=3";
 const $ = (id) => document.getElementById(id);
 let offer = null, plan = null;
 

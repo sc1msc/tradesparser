@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HonestLot Pro - оплата</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="pay.css?v=2">
+  <link rel="stylesheet" href="pay.css?v=3">
 </head>
 <body>
 <main>
@@ -15,7 +15,7 @@
 <script type="module">
 // Сюда платёжный сервис возвращает после оплаты (return_url, см. billing.checkout):
 // ждём, пока платёж станет оплачен или отменён (уведомление провайдера или опрос).
-import { api, rub, date } from "./pay.js?v=2";
+import { api, rub, date } from "./pay.js?v=3";
 const box = document.getElementById("box");
 const order = new URLSearchParams(location.search).get("order");
 let tries = 0;

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HonestLot Pro - управление подпиской</title>
   <link rel="icon" href="/logo.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="pay.css?v=2">
+  <link rel="stylesheet" href="pay.css?v=3">
 </head>
 <body>
 <main>
@@ -19,7 +19,7 @@
 // Отмена автопродления: больше не списываем, идентификатор способа оплаты стираем;
 // доступ - до конца оплаченного периода (billing.cancel). Ссылка из письма (#link=...)
 // открывает эту страницу без входа через Telegram.
-import { api, showLogin, rub, date } from "./pay.js?v=2";
+import { api, showLogin, rub, date } from "./pay.js?v=3";
 const $ = (id) => document.getElementById(id);
 async function load() {
   $("login").classList.add("hidden");
