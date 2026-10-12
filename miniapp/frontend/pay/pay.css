@@ -1,0 +1,31 @@
+/* Страницы подписки HonestLot Pro на сайте (honestlot.ru/pay) - см. billing.py */
+:root { --bg: #f4f5f7; --card: #fff; --text: #16181d; --hint: #6b7280; --line: #e3e5e9; --green: #179a50; --green-soft: rgba(23,154,80,.12); --err: #c0392b; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --card: #181b21; --text: #e8eaee; --hint: #8b919b; --line: #2a2e36; --green: #2fbf6c; --green-soft: rgba(47,191,108,.16); --err: #ff6b5e; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; margin-bottom: 18px; }
+.brand img { width: 32px; height: 32px; }
+.brand span { color: var(--green); }
+h1 { font-size: 24px; margin: 0 0 6px; }
+.sub, .hint { color: var(--hint); font-size: 14px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 14px; }
+.plans { display: grid; gap: 10px; margin-top: 14px; }
+.plan { display: flex; align-items: center; gap: 12px; background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px; cursor: pointer; }
+.plan.on { border-color: var(--green); background: var(--green-soft); }
+.plan input { accent-color: var(--green); width: 18px; height: 18px; }
+.plan .t { flex: 1; font-weight: 600; }
+.plan .p { font-weight: 700; font-size: 18px; white-space: nowrap; }
+.plan .old { color: var(--hint); text-decoration: line-through; font-weight: 400; font-size: 14px; margin-right: 6px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--green); background: var(--green-soft); border-radius: 6px; padding: 1px 8px; margin-left: 6px; }
+label.row { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; cursor: pointer; }
+label.row input[type=checkbox] { accent-color: var(--green); width: 18px; height: 18px; margin-top: 3px; flex: none; }
+input[type=email] { width: 100%; font: inherit; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); margin-top: 6px; }
+button.btn { display: block; width: 100%; margin-top: 18px; padding: 14px; font: inherit; font-weight: 700; color: #fff; background: var(--green); border: 0; border-radius: 12px; cursor: pointer; }
+button.btn:disabled { opacity: .5; cursor: default; }
+button.secondary { background: none; color: var(--err); border: 1px solid var(--line); }
+.err { color: var(--err); font-size: 14px; margin-top: 10px; }
+.ok { color: var(--green); font-weight: 600; }
+a { color: var(--green); }
+.login { text-align: center; padding: 24px 16px; }
+.hidden { display: none !important; }

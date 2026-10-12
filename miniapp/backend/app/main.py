@@ -24,6 +24,8 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   POST   /api/import             - загрузка лотов с ПК (export_to_miniapp.py),
                                    защищён ключом X-Import-Token
                                    (переменная окружения HONESTLOT_IMPORT_TOKEN)
+  /api/pay/*, /pay/             - подписка Pro: оплата на сайте, автопродление, отмена
+                                   (billing.py; выключено, пока HONESTLOT_PAYMENTS_ENABLED не "1")
   GET    /api/backup             - (ключ импорта) свежая копия базы для ПК;
                                    ежедневные копии сервер делает сам (backup.py)
 
@@ -40,11 +42,11 @@ import hmac
 import os
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, db, lots, watchdog
+from . import auth, backup, billing, db, lots, watchdog
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -55,10 +57,12 @@ MAX_PAGE = 50
 async def lifespan(_app):
     backup.start()    # ежедневная копия базы - фоновым потоком
     watchdog.start()  # давно нет выгрузки с ПК - сообщение администратору
+    billing.start()   # автопродление подписок (только если оплата включена)
     yield
 
 
 app = FastAPI(title="honestlot", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+app.include_router(billing.router)
 
 
 def _now_iso():
@@ -132,7 +136,11 @@ def api_favorite_remove(lot_id: str, authorization: str = Header(default="")):
 @app.get("/api/me")
 def api_me(authorization: str = Header(default="")):
     uid = current_user(authorization)
-    return {"ref": db.user_ref_code(uid)}
+    me = {"ref": db.user_ref_code(uid)}
+    if billing.enabled():
+        # только признак Pro: что он даёт, пока не решено (wiki/monetization.md)
+        me["pro"] = billing.is_pro(uid)
+    return me
 
 
 class EventPayload(BaseModel):
@@ -218,6 +226,24 @@ def health():
 @app.get("/")
 def index():
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
+
+
+# Страницы оплаты (frontend/pay/) - только когда оплата включена (billing.enabled).
+@app.get("/pay")
+def pay_root():
+    # без "/" на конце относительные ссылки страниц (pay.css, pay.js) ведут мимо папки
+    if not billing.enabled():
+        raise HTTPException(status_code=404)
+    return RedirectResponse("/pay/", status_code=301)
+
+
+@app.get("/pay/")
+@app.get("/pay/{name}")
+def pay_page(name: str = "index.html"):
+    path = os.path.join(FRONTEND_DIR, "pay", os.path.basename(name))
+    if not billing.enabled() or not os.path.isfile(path):
+        raise HTTPException(status_code=404)
+    return FileResponse(path, headers={"Cache-Control": "no-cache"} if path.endswith(".html") else None)
 
 
 if os.path.isdir(FRONTEND_DIR):
