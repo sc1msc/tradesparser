@@ -87,9 +87,7 @@
 3. **Ключи.** В ЮKassa взять `shopId` и секретный ключ, вписать **самому** в `miniapp/.env` на
    сервере: `YOOKASSA_SHOP_ID`, `YOOKASSA_SECRET_KEY`. Для ИП с «Чеками от ЮKassa» —
    `HONESTLOT_PAY_RECEIPTS=1`; самозанятому — пусто.
-4. **Почта.** Ящик для писем подписчикам (например, на Яндекс 360 для домена honestlot.ru или
-   Mail.ru для бизнеса), пароль приложения — в `HONESTLOT_SMTP_*`. Хостинг почты — в России
-   (152-ФЗ). Без SMTP письма не уходят, а печатаются в лог сервера.
+4. **Почта** — по разделу «Почта» ниже. Без SMTP письма не уходят, а печатаются в лог сервера.
 5. **Вход через Telegram на сайте.** В @BotFather: `/setdomain` → @honestlot_bot → `honestlot.ru`.
    Виджет грузится с telegram.org: у части пользователей в России он может не открыться без VPN.
    Тогда войти можно через ссылку из письма или открыв страницу из мини-аппа (`#init=`).
@@ -101,6 +99,53 @@
    остаются в базе.
 
 Все переменные с пояснениями — в `miniapp/.env.example`.
+
+## Почта
+
+Письма подписчикам уходят от `HonestLot <info@honestlot.ru>`. Отправка и входящие — разные сервисы:
+
+- **Отправка — Yandex Cloud Postbox.** Это сервис рассылки в том же облаке, что и ВМ. Свой почтовый
+  сервер не подходит: с ВМ Yandex Cloud закрыт исходящий порт 25, а письма с нового IP без репутации
+  попадают в спам. Первые 2000 писем в месяц бесплатны. По умолчанию лимит — 200 писем в сутки и
+  1 письмо в секунду, увеличивается через поддержку.
+- **Входящие на `info@honestlot.ru`** — обычный ящик на домене. Он нужен для оферты (контакт) и для
+  ответов на письма о списаниях. Сейчас MX домена указывают на SpaceWeb (`mx1/mx2.spaceweb.ru`).
+  Если там уже есть почта — заводим ящик `info@` в панели SpaceWeb. Если нет — VK WorkSpace
+  (почта Mail.ru на домене) или Яндекс 360 для бизнеса (бесплатного тарифа для новых клиентов
+  нет). При смене сервиса меняются MX-записи и SPF.
+
+### Шаги
+
+1. **Ящик `info@honestlot.ru`** — у выбранного сервиса входящей почты.
+2. **Postbox** (консоль Yandex Cloud, каталог, где ВМ):
+   - сервисный аккаунт (например, `postbox-sender`) с ролью `postbox.sender`;
+   - у него API-ключ с областью действия `yc.postbox.send`. Секретную часть Postbox показывает один
+     раз — сразу вписать на сервере в `miniapp/.env`: id ключа — `HONESTLOT_SMTP_USER`, секрет —
+     `HONESTLOT_SMTP_PASSWORD`;
+   - Cloud Postbox → «Создать адрес» → домен `honestlot.ru`, DKIM «Простая». Адрес и сервисный
+     аккаунт должны быть в одном каталоге, иначе отправка падает с ошибкой.
+3. **DNS у SpaceWeb** (DNS домена — там):
+   - две CNAME-записи DKIM — имена и значения со страницы адреса в Postbox (имя без `.honestlot.ru`,
+     если панель его дописывает сама);
+   - SPF — изменить существующую TXT-запись, а не добавлять вторую (две записи `v=spf1` ломают
+     проверку SPF):
+     `v=spf1 include:_spf.spaceweb.ru include:spf.postbox.yandexcloud.net ~all`
+     (если входящие уйдут со SpaceWeb — `include:_spf.spaceweb.ru` заменить на запись нового сервиса);
+   - DMARC — TXT-запись `_dmarc` со значением `v=DMARC1; p=none; rua=mailto:info@honestlot.ru`
+     (пока только отчёты; когда письма месяц проходят проверки — `p=quarantine`).
+4. **Проверка домена** — статус DKIM в Postbox станет `Success` (DNS обновляется до суток; потом
+   кнопка «Запустить проверку»).
+5. **`.env` на сервере:** `HONESTLOT_SMTP_HOST=postbox.cloud.yandex.net`, `HONESTLOT_SMTP_PORT=465`,
+   `HONESTLOT_SMTP_FROM=info@honestlot.ru` (шаблон — `miniapp/.env.example`), перезапуск
+   `docker compose up -d`.
+6. **Тестовое письмо:** `docker compose exec api python -m app.mailer test <ваш адрес>` — на ящики
+   Gmail, Яндекса и Mail.ru. Письмо должно прийти во «Входящие»; в заголовках (в Gmail — «Показать
+   оригинал») — `SPF: PASS`, `DKIM: PASS`, `DMARC: PASS`.
+
+Источники: [Postbox: начало работы](https://yandex.cloud/ru/docs/postbox/quickstart),
+[Postbox: DNS-записи](https://yandex.cloud/ru/docs/postbox/concepts/dns-records),
+[Postbox: квоты](https://yandex.cloud/ru/docs/postbox/concepts/limits),
+[Postbox: тарифы](https://yandex.cloud/ru/docs/postbox/pricing).
 
 ## Проверка без денег
 
