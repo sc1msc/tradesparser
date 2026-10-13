@@ -50,6 +50,12 @@ SELECTIONS = [
         "title": "Polo / Rio / Solaris",
         "digest_intro": "Polo, Rio и Solaris не старше 10 лет",
     },
+    {
+        "key": "beautiful_plates",
+        "sheet": "beautiful_plates",
+        "title": "Красивые номера",
+        "digest_intro": "с красивым госномером (особые серии и зеркальные номера)",
+    },
 ]
 
 

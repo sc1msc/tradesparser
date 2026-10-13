@@ -16,6 +16,8 @@ build_lots_missing_info.py и остальных build_*.py). В самом
   4) lots_heavy_luxury     - price_current > 5 000 000
   5) lots_polo_rio_solyaris- модель Polo/Rio/Solaris (по name или
                              autoru_model), year >= текущий-10
+  6) beautiful_plates      - красивый госномер по особым сериям и зеркальным
+                             шаблонам (plates_series.txt, см. ниже)
 
 Цена берётся из price_current (текущая цена торгов, а не стартовая) -
 так актуальнее для "интересности" прямо сейчас. У публичного предложения
@@ -50,6 +52,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 import config
+import filter_beautiful_plates_gspread as plates
 import lot_metrics
 import selections
 import sheets_writer
@@ -241,6 +244,17 @@ def build_polo_rio_solyaris(header, data_rows, cache):
     return _sort_by_gap(selected, header, cache)
 
 
+def build_beautiful_plates(header, data_rows, cache):
+    """Госномер совпал с особой серией или зеркальным шаблоном из
+    plates_series.txt - тот же список, что у ручного
+    filter_beautiful_plates_gspread.py. Сам номер берём из колонки plate
+    (lot_metrics.find_plate уже привёл его к кириллице)."""
+    patterns = plates.load_patterns(plates.PATTERNS_FILE)
+    selected = [row for row in data_rows
+                if plates.match_plate(_get(row, header, cache, "plate"), patterns)]
+    return _sort_by_gap(selected, header, cache)
+
+
 # Сами критерии - здесь, функциями (см. докстринг вверху файла). Имя листа,
 # заголовок и текст для дайджеста - в selections.py, чтобы не дублировать
 # между этим скриптом и send_digest.py.
@@ -250,6 +264,7 @@ BUILDERS = {
     "one_owner": build_one_owner,
     "heavy_luxury": build_heavy_luxury,
     "polo_rio_solyaris": build_polo_rio_solyaris,
+    "beautiful_plates": build_beautiful_plates,
 }
 
 

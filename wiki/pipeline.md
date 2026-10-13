@@ -115,6 +115,7 @@ python run_pipeline.py --test-notify  # проверить, что уведом�
 | `lots_one_owner` | Один владелец | по Авто.ру 1 владелец |
 | `lots_heavy_luxury` | Премиум-сегмент | цена > 5 000 000 ₽ |
 | `lots_polo_rio_solyaris` | Polo / Rio / Solaris | модель Polo, Rio или Solaris (по названию или Авто.ру), не старше 10 лет |
+| `beautiful_plates` | Красивые номера | госномер (колонка `plate`) совпал с особой серией или зеркальным шаблоном из `plates_series.txt`; серии ММР и ВМР — только на регионах 50 и 90, ЕКХ — на любом регионе Москвы и МО |
 
 Новая подборка — три правки: функция `build_XXX` и запись в `BUILDERS` в
 `build_lot_selections.py`, запись с тем же `key` в `selections.py`.
@@ -163,7 +164,7 @@ python run_pipeline.py --test-notify  # проверить, что уведом�
 | `fix_numeric_cells.py` | превращает числа, записанные текстом, в числа во всех листах и `vin_cache`; снимает процентный формат |
 | `vin_cache.py --backfill` | разовый перенос купленного пробега и оценок в справочник |
 | `fill_missing_from_title.py` | отдельный запуск заполнения марки, модели, года в `lots_processed` (в конвейере уже внутри шага 3) |
-| `filter_beautiful_plates_gspread.py` | лоты с «красивыми» госномерами по шаблонам `plates_series.txt` → лист `beautiful_plates` и `beautiful_plates.xlsx` |
+| `filter_beautiful_plates_gspread.py` | ручной срез «красивых» госномеров с колонкой `match_pattern` (та же логика, что шаг 6) → лист `beautiful_plates` и `beautiful_plates.xlsx`. Перезаписывает лист, который строит шаг 6 |
 | `tronk_valuation.py <VIN>` | разовая платная оценка TRONK одного VIN, в таблицу не пишет |
 | `evaluate_tronk.py`, `evaluate_avito_browser.py` | старые оценки TRONK и Авито — результат дальше не используется |
 | `autodoc_decode.py` | расшифровка VIN через Autodoc — **выключен** с 11.10.2026 (`ENABLED = False`): Autodoc сменил API |

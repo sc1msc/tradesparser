@@ -56,7 +56,8 @@ import config
 
 # ID таблицы хранится в local_secrets.py (не в git), берём через config
 SHEET_ID = config.SPREADSHEET_ID
-GID = 917772508  # id конкретного листа (вкладки) с исходными данными
+# вкладка с исходными данными - по имени, а не по gid: gid пересоздаваемых вкладок меняется
+SOURCE_WORKSHEET_NAME = "lots_current_month"
 
 SERVICE_ACCOUNT_FILE = Path(__file__).with_name("service_account.json")
 PATTERNS_FILE = Path(__file__).with_name("plates_series.txt")
@@ -105,13 +106,6 @@ def match_plate(plate: str, patterns: dict[str, re.Pattern]) -> str | None:
     return None
 
 
-def open_worksheet_by_gid(spreadsheet: gspread.Spreadsheet, gid: int) -> gspread.Worksheet:
-    for ws in spreadsheet.worksheets():
-        if ws.id == gid:
-            return ws
-    raise ValueError(f"Вкладка с gid={gid} не найдена в таблице")
-
-
 def main() -> None:
     if not SERVICE_ACCOUNT_FILE.exists():
         raise SystemExit(
@@ -126,7 +120,7 @@ def main() -> None:
     client = gspread.authorize(creds)
 
     spreadsheet = client.open_by_key(SHEET_ID)
-    source_ws = open_worksheet_by_gid(spreadsheet, GID)
+    source_ws = spreadsheet.worksheet(SOURCE_WORKSHEET_NAME)
 
     records = source_ws.get_all_records()  # список словарей, заголовки из первой строки
     df = pd.DataFrame(records)

@@ -13,7 +13,7 @@
 | `lots_current_month` | ~1400 | шаг 4, шаг 5 (оценка), шаг 6 (процент) | перезаписывается, оценки переносятся |
 | `lots_top_gap`, `lots_budget_1m`, `lots_one_owner`, `lots_heavy_luxury`, `lots_polo_rio_solyaris` | 20–1000 | шаг 6 | полностью перезаписываются |
 | `vin_cache` | ~1700 | шаги 2, 4, 5 | строка на VIN, пишется пачками |
-| `beautiful_plates` | ~30 | `filter_beautiful_plates_gspread.py` (вручную) | перезаписывается |
+| `beautiful_plates` | ~100 | шаг 6 (`build_lot_selections.py`); вручную — `filter_beautiful_plates_gspread.py` | полностью перезаписывается |
 
 ## `lots` — сырые лоты
 
