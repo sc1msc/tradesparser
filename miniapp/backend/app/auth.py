@@ -13,10 +13,21 @@ Telegram, открывая мини-апп, передаёт ему строку
 по ключу и склеенные через "\n". Подделать initData без токена бота нельзя,
 поэтому telegram_id из него можно считать подлинным.
 
+ВЕБ-ВЕРСИЯ (honestlot.ru в обычном браузере, с 13.10.2026). initData там нет,
+поэтому пользователь входит через Telegram Login Widget (validate_login_widget),
+а сервер выдаёт свой токен входа (make_web_token) на WEB_TOKEN_DAYS дней:
+подпись виджета действует сутки (LOGIN_MAX_AGE_SECONDS), входить каждый день
+неудобно. Токен - "<base64 json>.<HMAC>", в нём telegram_id, username и имя
+(touch_user перезаписывает их при каждом запросе - без них они бы стёрлись) и
+срок. Ключ подписи - HONESTLOT_WEB_SECRET или производный от токена бота
+(смена токена бота разлогинит веб-пользователей). Заголовок -
+"Authorization: web <токен>". Пользователь тот же, что в мини-аппе: избранное общее.
+
 Локальная разработка в обычном браузере (без Telegram): если задана
 переменная окружения HONESTLOT_DEV_USER_ID, запросы БЕЗ initData
 считаются запросами этого пользователя. На сервере её не задаём.
 """
+import base64
 import hashlib
 import hmac
 import json
@@ -121,6 +132,8 @@ def split_start_param(start_param):
 
 def user_from_header(authorization):
     """Разбирает заголовок Authorization. Возвращает dict пользователя."""
+    if authorization and authorization.lower().startswith("web "):
+        return check_web_token(authorization[4:].strip())
     init_data = ""
     if authorization and authorization.lower().startswith("tma "):
         init_data = authorization[4:].strip()
@@ -129,3 +142,44 @@ def user_from_header(authorization):
         if dev_id:
             return {"id": int(dev_id), "username": "dev", "first_name": "Dev", "start_param": None}
     return validate_init_data(init_data, os.environ.get("HONESTLOT_BOT_TOKEN", ""))
+
+
+# ---------- веб-версия: токен входа (см. докстринг модуля) ----------
+
+WEB_TOKEN_DAYS = 30
+WEB_SOURCE = "web"  # источник для новых пользователей, пришедших через сайт
+
+
+def _web_secret():
+    secret = os.environ.get("HONESTLOT_WEB_SECRET")
+    if secret:
+        return secret.encode()
+    return hashlib.sha256(b"honestlot-web:" + os.environ.get("HONESTLOT_BOT_TOKEN", "").encode()).digest()
+
+
+def _web_sign(body):
+    return hmac.new(_web_secret(), body.encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def make_web_token(user, now=None):
+    """user - dict из validate_login_widget. -> токен входа веб-версии."""
+    payload = {"id": int(user["id"]), "u": user.get("username"), "n": user.get("first_name"),
+               "exp": int((now or time.time()) + WEB_TOKEN_DAYS * 86400)}
+    body = base64.urlsafe_b64encode(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode()).decode().rstrip("=")
+    return f"{body}.{_web_sign(body)}"
+
+
+def check_web_token(token, now=None):
+    """-> dict пользователя (как у initData) или AuthError."""
+    body, _, sig = (token or "").partition(".")
+    if not body or not sig or not hmac.compare_digest(_web_sign(body), sig):
+        raise AuthError("войдите через Telegram")
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+        uid = int(payload["id"])
+    except (ValueError, KeyError, TypeError):
+        raise AuthError("войдите через Telegram")
+    if (now or time.time()) > payload.get("exp", 0):
+        raise AuthError("вход устарел - войдите через Telegram ещё раз")
+    return {"id": uid, "username": payload.get("u"), "first_name": payload.get("n"), "start_param": WEB_SOURCE}

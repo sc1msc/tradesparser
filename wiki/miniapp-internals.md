@@ -25,7 +25,8 @@
 
 ## API
 
-Все `/api/*`, кроме служебных, требуют заголовок `Authorization: tma <initData>`.
+Все `/api/*`, кроме служебных, требуют заголовок `Authorization: tma <initData>` (мини-апп в
+Telegram) или `Authorization: web <токен>` (веб-версия в браузере, см. «Авторизация»).
 
 | Метод | Путь | Что |
 |---|---|---|
@@ -54,6 +55,17 @@ Telegram передаёт мини-аппу `initData` (пользователь
 `initData` старше 7 дней не принимается — пользователь видит заглушку и должен переоткрыть
 приложение. Логинов и паролей нет. Локально без Telegram запросы идут от пользователя
 `HONESTLOT_DEV_USER_ID` (на сервере не задаётся).
+
+**Веб-версия** (honestlot.ru в обычном браузере, с 13.10.2026): `initData` нет. `app.js`
+определяет браузер по `Telegram.WebApp.platform == "unknown"` и показывает вход через Telegram
+Login Widget (домен бота в @BotFather — `honestlot.ru`). `POST /api/web-login` проверяет подпись
+виджета (`auth.validate_login_widget`, не старше суток) и выдаёт **токен входа на 30 дней**
+(`auth.make_web_token`: id, username, имя и срок, подпись HMAC ключом `HONESTLOT_WEB_SECRET` или
+производным от токена бота — смена токена бота разлогинит всех на сайте). Токен хранится в
+`localStorage` (`hl_web_token`), запросы — с `Authorization: web <токен>`. Пользователь тот же,
+что в мини-аппе: избранное общее; новым пользователям сайта `users.source = "web"`. Тот же токен
+принимает страница оплаты (`billing.user_from_header`). Главная отдаётся с `X-Robots-Tag:
+noindex` и метатегом `robots`.
 
 ## База (SQLite, `/data/honestlot.db` в контейнере, `miniapp/data/` на сервере)
 

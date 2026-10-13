@@ -86,8 +86,10 @@ def _pay_link(cls):
 def _hero_cta():
     if billing.enabled():
         return ('<a class="btn" href="/pay/">Оформить подписку</a>'
-                '<a class="btn ghost" href="https://t.me/{{APP_BOT}}">Открыть в Telegram</a>')
-    return ('<a class="btn" href="https://t.me/{{APP_BOT}}">Открыть в Telegram</a>'
+                '<a class="btn ghost" href="/">Открыть HonestLot</a>')
+    # "/" - веб-версия на этом же сайте (вход через Telegram), не переход в бота: ЮKassa
+    # требует, чтобы сайт с оплатой не уводил в Telegram
+    return ('<a class="btn" href="/">Открыть HonestLot</a>'
             '<span class="note">Оформление подписки откроется в ближайшее время.</span>')
 
 

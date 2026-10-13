@@ -253,3 +253,14 @@ input { font: inherit; color: inherit; }
 .togglerow input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--green); flex: none; }
 .togglerow b { display: block; font-size: 15px; font-weight: 600; }
 .togglerow .sub { display: block; font-size: 13px; color: var(--hint); margin-top: 2px; }
+
+/* ---------- веб-версия (honestlot.ru в обычном браузере, html.web) ---------- */
+/* колонка шириной с телефон по центру: лента и экраны сделаны под мобильный экран */
+html.web #app { max-width: 560px; margin: 0 auto; min-height: 100vh; background: var(--bg2); box-shadow: 0 0 0 1px var(--sep); }
+html.web .tabs, html.web .bottombar { left: 50%; right: auto; width: min(100%, 560px); transform: translateX(-50%); }
+.login { padding-top: 56px; }
+.login .lead { color: var(--text); font-weight: 600; margin-top: 20px; }
+.login .widget { min-height: 48px; margin: 12px 0 8px; display: flex; justify-content: center; }
+.login .hint { color: var(--hint); font-size: 13px; }
+.sitelinks { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 16px auto 8px; font-size: 13px; }
+.sitelinks a, .sitelinks button { color: var(--hint); text-decoration: underline; }

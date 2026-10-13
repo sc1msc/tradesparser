@@ -19,7 +19,7 @@
 // Отмена автопродления: больше не списываем, идентификатор способа оплаты стираем;
 // доступ - до конца оплаченного периода (billing.cancel). Ссылка из письма (#link=...)
 // открывает эту страницу без входа через Telegram.
-import { api, showLogin, rub, date } from "./pay.js?v=3";
+import { api, showLogin, rub, date } from "./pay.js?v=4";
 const $ = (id) => document.getElementById(id);
 async function load() {
   $("login").classList.add("hidden");

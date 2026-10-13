@@ -12,6 +12,8 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   GET    /api/favorites          - избранное текущего пользователя
   PUT    /api/favorites/{id}     - добавить в избранное
   DELETE /api/favorites/{id}     - убрать из избранного
+  POST   /api/web-login          - вход в веб-версию (honestlot.ru в браузере): данные
+                                   Telegram Login Widget -> токен входа (auth.py)
   GET    /api/me                 - код пользователя для ссылок "Поделиться"
                                    (t.me/<бот>?startapp=lot<id>_<код>, см. auth.split_start_param)
   POST   /api/events             - событие для аналитики: {"type": "open"} при
@@ -134,6 +136,21 @@ def api_favorite_remove(lot_id: str, authorization: str = Header(default="")):
     return {"ok": True}
 
 
+class WebLoginPayload(BaseModel):
+    user: dict  # поля, которые Telegram Login Widget передал в onauth (id, ..., auth_date, hash)
+
+
+@app.post("/api/web-login")
+def api_web_login(payload: WebLoginPayload):
+    """Вход в веб-версию: данные виджета Telegram -> токен входа на 30 дней (auth.py)."""
+    try:
+        user = auth.validate_login_widget(payload.user, os.environ.get("HONESTLOT_BOT_TOKEN", ""))
+    except auth.AuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(), auth.WEB_SOURCE)
+    return {"token": auth.make_web_token(user), "first_name": user.get("first_name"), "username": user.get("username")}
+
+
 @app.get("/api/me")
 def api_me(authorization: str = Header(default="")):
     uid = current_user(authorization)
@@ -226,7 +243,10 @@ def health():
 # сразу подхватить новые ссылки на app.js/style.css (у них ?v=... в index).
 @app.get("/")
 def index():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"), headers={"Cache-Control": "no-cache"})
+    # веб-версия закрыта от поисковиков (решение владельца 13.10.2026): лоты живут недолго,
+    # а в поиске должны быть страницы сайта (/pro, оферта), а не лента
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"),
+                        headers={"Cache-Control": "no-cache", "X-Robots-Tag": "noindex, nofollow"})
 
 
 # Страницы оплаты (frontend/pay/) - только когда оплата включена (billing.enabled).

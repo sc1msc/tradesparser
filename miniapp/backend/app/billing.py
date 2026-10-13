@@ -20,6 +20,8 @@ Telegram (правила для разработчиков, п. 6.2) и Apple (3
     страницу из мини-аппа (вариант "б" в monetization.md);
   - ссылка из письма ("link <токен>", подписанный LINK_SECRET, на 30 дней) -
     чтобы отменить подписку можно было прямо из письма, без входа.
+  - токен веб-версии ("web <токен>", auth.make_web_token) - если пользователь уже
+    вошёл на honestlot.ru, второй раз входить для оплаты не нужно.
 
 ОПЛАТА. checkout: выбранный тариф -> первый платёж у провайдера
 (pay_providers.py) с сохранением способа оплаты, если автопродление включено
@@ -234,6 +236,9 @@ def user_from_header(authorization):
         return int(user["id"]), user
     if kind == "link":
         return check_link_token(value.strip()), None
+    if kind == "web":  # вошёл в веб-версию honestlot.ru - тот же вход подходит и для оплаты
+        user = auth.check_web_token(value.strip())
+        return int(user["id"]), user
     dev = os.environ.get("HONESTLOT_DEV_USER_ID")
     if dev:  # локальная разработка, как в auth.user_from_header
         return int(dev), {"id": int(dev), "username": "dev", "first_name": "Dev"}

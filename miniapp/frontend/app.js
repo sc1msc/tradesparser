@@ -5,11 +5,17 @@
 
 const tg = window.Telegram && window.Telegram.WebApp;
 const IN_TG = !!(tg && tg.initData);
-// Вне Telegram (обычный браузер: platform "unknown") корень сайта - страница подписки /pro, а не
-// заглушка с кнопкой "Открыть бота": ЮKassa требует, чтобы сайт, где принимают оплату, не уводил
-// в Telegram (замечание менеджера 13.10.2026). localhost - локальная разработка (run_local.py).
+// Где открыто приложение:
+//   IN_TG - мини-апп в Telegram (initData);
+//   WEB   - веб-версия: honestlot.ru в обычном браузере (Telegram.WebApp.platform "unknown").
+//           Вход через Telegram Login Widget, сервер выдаёт токен на 30 дней (auth.py),
+//           без входа лоты не показываем (решение владельца 13.10.2026). Сайт, где принимают
+//           оплату, не должен уводить в Telegram - требование ЮKassa;
+//   иначе - локальная разработка на localhost (сервер с HONESTLOT_DEV_USER_ID пускает без входа;
+//           ?web=1 в адресе включает веб-режим и там).
 const OUTSIDE_TG = !(tg && tg.platform && tg.platform !== "unknown");
-const TO_SITE = OUTSIDE_TG && !["localhost", "127.0.0.1"].includes(location.hostname);
+const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+const WEB = OUTSIDE_TG && (!LOCAL || new URLSearchParams(location.search).has("web"));
 const PAGE = 20;
 const BOT = "honestlot_bot";
 // Аккаунт поддержки в Telegram (без @). Пусто - ссылка "Написать в поддержку" не показывается.
@@ -28,6 +34,7 @@ const OUTCOME_SHORT = { open: "идёт приём заявок", awaiting: "ж�
 
 if (tg) { tg.ready(); tg.expand(); }
 document.documentElement.classList.toggle("tg", IN_TG);
+document.documentElement.classList.toggle("web", WEB);
 
 function applyScheme() {
   const dark = IN_TG ? tg.colorScheme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
@@ -135,11 +142,12 @@ function track(type, lotId, place) {
 // ---------- API ----------
 
 class AuthError extends Error {}
+const webToken = () => (WEB ? store.get("web_token", null) : null);
 async function api(path, opts = {}) {
   const r = await fetch("/api" + path, {
     ...opts,
     headers: {
-      Authorization: "tma " + ((tg && tg.initData) || ""),
+      Authorization: IN_TG ? "tma " + tg.initData : webToken() ? "web " + webToken() : "tma ",
       ...(opts.body ? { "Content-Type": "application/json" } : {}),
     },
   });
@@ -339,7 +347,7 @@ function buildFeed() {
         h("label", { class: "search" }, icon("search"), feed.input),
         h("button", { class: "iconbtn", "aria-label": "Фильтры", onclick: () => push({ kind: "filters" }) }, icon("filter"), feed.badge)),
       feed.sorts),
-    feed.total, feed.list, feed.more, supportLink());
+    feed.total, feed.list, feed.more, supportLink(), webLinks());
   renderSorts();
   renderBadge();
   return feed.el;
@@ -817,7 +825,7 @@ function renderFilters(initial) {
 // ---------- заглушка вне Telegram ----------
 
 function showStub() {
-  if (OUTSIDE_TG) return location.replace("/pro");  // браузер, в том числе локальный - на сайт
+  if (WEB) return showLogin(!!webToken());  // веб-версия: вход устарел или токен не подошёл
   document.getElementById("app").replaceChildren(h("div", { class: "stub" },
     h("img", { src: "logo.svg", alt: "" }),
     h("h2", {}, "HonestLot"),
@@ -825,6 +833,59 @@ function showStub() {
     h("button", { class: "btn", style: { maxWidth: "280px", margin: "16px auto 0", display: "block" }, onclick: () => { location.href = `https://t.me/${BOT}`; } },
       `Открыть @${BOT}`)));
   if (IN_TG) tg.BackButton.hide();
+}
+
+// ---------- веб-версия: вход через Telegram ----------
+
+// Кнопка входа - Telegram Login Widget (работает только на домене, заданном боту в @BotFather:
+// /setdomain honestlot.ru). Виджет грузится с telegram.org - из части российских сетей без VPN он
+// не открывается, тогда показываем подсказку открыть приложение в Telegram.
+let loginShown = false;  // несколько запросов сразу получают 401 - экран входа рисуем один раз
+function showLogin(expired) {
+  if (loginShown) return;
+  loginShown = true;
+  store.set("web_token", null);
+  const box = h("div", { class: "widget" });
+  const fallback = h("p", { class: "hint hidden" },
+    "Кнопка входа не загрузилась? Сайт Telegram может быть недоступен без VPN. Откройте HonestLot в Telegram: ",
+    h("a", { href: `https://t.me/${BOT}`, target: "_blank", rel: "noopener" }, `@${BOT}`), ".");
+  window.onTelegramAuth = async (user) => {
+    try {
+      const r = await fetch("/api/web-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user }) });
+      if (!r.ok) throw new Error(String(r.status));
+      store.set("web_token", (await r.json()).token);
+      location.reload();
+    } catch {
+      toast("Не получилось войти, попробуйте ещё раз");
+    }
+  };
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = "https://telegram.org/js/telegram-widget.js?22";
+  Object.assign(s.dataset, { telegramLogin: BOT, size: "large", radius: "12", onauth: "onTelegramAuth(user)" });
+  s.onerror = () => fallback.classList.remove("hidden");
+  box.append(s);
+  setTimeout(() => { if (!box.querySelector("iframe")) fallback.classList.remove("hidden"); }, 6000);
+  document.getElementById("app").replaceChildren(h("div", { class: "stub login" },
+    h("img", { src: "logo.svg", alt: "" }),
+    h("h2", {}, "HonestLot"),
+    h("p", {}, "Машины с торгов по банкротству в Москве и Московской области — с рыночной оценкой каждой."),
+    h("p", { class: "lead" }, expired ? "Вход устарел — войдите через Telegram ещё раз." : "Войдите через Telegram, чтобы смотреть лоты."),
+    box, fallback,
+    h("p", { class: "hint" }, `Тем же аккаунтом, что в приложении @${BOT}: избранное общее.`),
+    siteLinks()));
+}
+
+function siteLinks(...extra) {
+  return h("div", { class: "sitelinks" },
+    h("a", { href: "/pro" }, "Подписка и цены"), h("a", { href: "/offer" }, "Оферта"),
+    h("a", { href: "/privacy" }, "Персональные данные"), ...extra);
+}
+
+// Внизу ленты в веб-версии: страницы сайта и выход.
+function webLinks() {
+  if (!WEB) return null;
+  return siteLinks(h("button", { onclick: () => { store.set("web_token", null); location.reload(); } }, "Выйти"));
 }
 
 // ---------- старт ----------
@@ -848,4 +909,4 @@ async function start() {
     if (e instanceof AuthError) showStub();
   }
 }
-if (TO_SITE) location.replace("/pro"); else start();
+if (WEB && !webToken()) showLogin(); else start();

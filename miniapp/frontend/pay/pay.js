@@ -1,5 +1,6 @@
 // Общее для страниц подписки (honestlot.ru/pay, см. billing.py): кто пользователь и запросы к API.
 // Пользователь узнаётся (по порядку): #link=<токен> из письма, #init=<initData> из мини-аппа,
+// токен веб-версии honestlot.ru (localStorage hl_web_token),
 // вход через Telegram Login Widget (данные хранятся в sessionStorage этой вкладки).
 export const BOT = "honestlot_bot";
 
@@ -7,6 +8,8 @@ export function authHeader() {
   const h = new URLSearchParams(location.hash.slice(1));
   if (h.get("link")) return "link " + h.get("link");
   if (h.get("init")) return "tma " + h.get("init");
+  // уже вошёл в веб-версию honestlot.ru (app.js, токен на 30 дней) - тот же вход
+  try { const w = JSON.parse(localStorage.getItem("hl_web_token") || "null"); if (w) return "web " + w; } catch { /* */ }
   try { const s = sessionStorage.getItem("hl_tglogin"); if (s) return "tglogin " + s; } catch { /* приватный режим */ }
   return "";
 }
