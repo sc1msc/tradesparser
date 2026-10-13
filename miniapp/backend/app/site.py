@@ -21,7 +21,8 @@ robots.txt её НЕ закрываем: поисковик, которому з
 увидит "noindex" и может проиндексировать адрес по внешним ссылкам. ФИО и ИНН есть
 только на этой странице; ссылки на неё - только из оферты и политики (не в подвале).
 
-ЦЕНЫ - из billing.PLANS (одно место для цен: страница оплаты, письма, этот сайт).
+ЦЕНЫ - из billing.PLANS (одно место для цен: страница оплаты, письма, этот сайт):
+{{PLANS}} - карточки тарифов, {{HERO_CTA}} - кнопки первого экрана /pro.
 Шаблоны - app/site_pages/*.html: общий layout.html и содержимое страниц. Подстановки
 {{ИМЯ}}; всё, что приходит из настроек, экранируется.
 """
@@ -58,19 +59,36 @@ def _rub(n):
     return f"{n:,}".replace(",", " ") + " ₽"
 
 
-def _prices():
-    """Таблица тарифов из billing.PLANS."""
-    rows = "".join(
-        f"<tr><td>{html.escape(p['title'])}</td><td>{_rub(p['price'])}</td><td>{_rub(p['early'])}</td></tr>"
-        for p in billing.PLANS.values())
-    return ('<table class="prices"><thead><tr><th>Срок</th><th>Цена</th>'
-            f'<th>Ранняя цена*</th></tr></thead><tbody>{rows}</tbody></table>')
+def _plans():
+    """Карточки тарифов из billing.PLANS: ранняя цена крупно, обычная зачёркнута, цена за месяц;
+    самый длинный срок отмечен как самый выгодный."""
+    longest = max(p["months"] for p in billing.PLANS.values())
+    cards = []
+    for pid, p in billing.PLANS.items():
+        best = p["months"] == longest
+        per_month = (f'<div class="per">≈&nbsp;{_rub(round(p["early"] / p["months"]))} в&nbsp;месяц</div>'
+                     if p["months"] > 1 else '<div class="per">помесячно</div>')
+        cards.append(
+            f'<div class="plan{" best" if best else ""}">'
+            + ('<div class="badge">Выгоднее всего</div>' if best else "")
+            + f'<div class="term">{html.escape(p["title"])}</div>'
+            f'<div class="price">{_rub(p["early"])}</div>'
+            f'<div class="regular">обычная цена <s>{_rub(p["price"])}</s></div>'
+            f'{per_month}{_pay_link("btn small" + ("" if best else " ghost"))}</div>')
+    return f'<div class="plans">{"".join(cards)}</div>'
 
 
-def _pay_block():
+def _pay_link(cls):
+    """Кнопка оформления - только когда оплата включена (иначе /pay/ отвечает 404)."""
+    return f'<a class="{cls}" href="/pay/">Оформить</a>' if billing.enabled() else ""
+
+
+def _hero_cta():
     if billing.enabled():
-        return '<a class="btn" href="/pay/">Оформить подписку</a>'
-    return '<p class="note">Оформление подписки откроется в ближайшее время.</p>'
+        return ('<a class="btn" href="/pay/">Оформить подписку</a>'
+                '<a class="btn ghost" href="https://t.me/{{APP_BOT}}">Открыть в Telegram</a>')
+    return ('<a class="btn" href="https://t.me/{{APP_BOT}}">Открыть в Telegram</a>'
+            '<span class="note">Оформление подписки откроется в ближайшее время.</span>')
 
 
 def values():
@@ -92,7 +110,7 @@ def render(page):
     name, title, noindex = PAGES[page]
     out = _read("layout.html").replace("{{CONTENT}}", _read(name))
     # готовый HTML, собранный здесь же (не из настроек)
-    out = out.replace("{{PRICES}}", _prices()).replace("{{PAY}}", _pay_block())
+    out = out.replace("{{PLANS}}", _plans()).replace("{{HERO_CTA}}", _hero_cta())
     out = out.replace("{{ROBOTS}}", f'<meta name="robots" content="{NOINDEX}">' if noindex else "")
     out = out.replace("{{TITLE}}", html.escape(title)).replace("{{PAGE}}", page)
     # значения из настроек - последними и с экранированием (во всей странице, и в подвале)
