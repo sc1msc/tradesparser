@@ -908,7 +908,7 @@ function showLogin(expired) {
     h("img", { src: "logo.svg", alt: "" }),
     h("h2", {}, "HonestLot"),
     h("p", {}, "Машины с торгов по банкротству в Москве и Московской области — с рыночной оценкой каждой."),
-    h("p", { class: "lead" }, expired ? "Вход устарел — войдите через Telegram ещё раз." : "Войдите через Telegram, чтобы смотреть лоты."),
+    h("p", { class: "lead" }, expired ? "Вход устарел — войдите через Telegram ещё раз." : "Авторизуйтесь, чтобы смотреть лоты."),
     box, fallback,
     siteLinks()));
 }
