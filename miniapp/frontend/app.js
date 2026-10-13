@@ -339,6 +339,7 @@ function buildFeed() {
   feed.input.addEventListener("keydown", (e) => { if (e.key === "Enter") feed.input.blur(); });
   feed.badge = h("span", { class: "badge hidden" });
   feed.sorts = h("div", { class: "sortrow" });
+  feed.active = h("div", { class: "activerow hidden" });
   feed.total = h("div", { class: "total" });
   feed.list = h("div", { class: "list" });
   feed.more = h("button", { class: "more hidden", onclick: () => loadFeed(false) }, "Показать ещё");
@@ -348,7 +349,7 @@ function buildFeed() {
       h("div", { class: "searchrow" },
         h("label", { class: "search" }, icon("search"), feed.input),
         h("button", { class: "iconbtn", "aria-label": "Фильтры", onclick: () => { if (!locked("filters")) push({ kind: "filters" }); } }, icon("filter"), feed.badge)),
-      feed.sorts),
+      feed.sorts, feed.active),
     feed.total, feed.list, feed.more, supportLink(), webLinks());
   renderSorts();
   renderBadge();
@@ -367,6 +368,48 @@ function renderBadge() {
   const n = activeFilterCount(state.filters);
   feed.badge.textContent = n;
   feed.badge.classList.toggle("hidden", !n);
+  renderActive();
+}
+
+// Включённые фильтры - чипами под сортировкой: видно, что именно включено. Особенно цена
+// "от 300 тыс." по умолчанию (12.10.2026) - иначе новичок видит на кнопке фильтров "1" без
+// объяснения. Нажатие на чип - экран фильтров, крестик - снять только этот фильтр.
+// "Скрыть битые" не показываем: это настройка по умолчанию, в счётчик она тоже не входит.
+function rangeText([a, b], fmt) {
+  if (a != null && b != null) return `${fmt(a)} – ${fmt(b)}`;
+  return a != null ? `от ${fmt(a)}` : `до ${fmt(b)}`;
+}
+function activeChips(f) {
+  const out = [];  // [надпись, функция, которая снимает фильтр с копии]
+  const brandLabel = (key) => ((state.facets && state.facets.brands.find((b) => b.key === key)) || {}).label || key;
+  if (f.brands.length) out.push([f.brands.length === 1 ? brandLabel(f.brands[0]) : `Марки: ${f.brands.length}`,
+    (x) => { x.brands = []; x.models = {}; }]);
+  if (f.price) out.push([`Цена ${rangeText(f.price, short)} ₽`, (x) => { x.price = null; }]);
+  if (f.year) out.push([`Год ${rangeText(f.year, String)}`, (x) => { x.year = null; }]);
+  if (f.mileageTo != null) out.push([`Пробег до ${short(f.mileageTo)} км`, (x) => { x.mileageTo = null; }]);
+  if (f.gapMin != null) out.push([f.gapMin < 1 ? "Ниже рынка" : `Ниже рынка ${GAP_OPTIONS.find(([v]) => v === f.gapMin)?.[1] || ""}`.trim(),
+    (x) => { x.gapMin = null; }]);
+  for (const r of f.regions) out.push([regionShort(r) === "МО" ? "Московская обл." : regionShort(r),
+    (x) => { x.regions = x.regions.filter((v) => v !== r); }]);
+  for (const [v, label] of TRADES) if (f.trade.includes(v)) out.push([label, (x) => { x.trade = x.trade.filter((t) => t !== v); }]);
+  for (const [v, label] of KINDS) if ((f.kinds || []).includes(v)) out.push([label, (x) => { x.kinds = x.kinds.filter((k) => k !== v); }]);
+  return out;
+}
+function renderActive() {
+  if (!feed.active) return;
+  const chips = activeChips(state.filters);
+  feed.active.classList.toggle("hidden", !chips.length);
+  feed.active.replaceChildren(...chips.map(([label, clear]) => h("span", { class: "fchip" },
+    h("button", { class: "fchip-l", onclick: () => { if (!locked("filters")) push({ kind: "filters" }); } }, label),
+    h("button", { class: "fchip-x", "aria-label": `Убрать фильтр «${label}»`, onclick: () => {
+      if (locked("filters")) return;
+      const f = JSON.parse(JSON.stringify(state.filters));
+      clear(f);
+      state.filters = f;
+      store.set("filters", f);
+      renderBadge();
+      loadFeed(true);
+    } }, "✕"))));
 }
 
 async function loadFeed(reset) {
@@ -1003,6 +1046,7 @@ async function start() {
   try {
     const [facets, favs] = await Promise.all([api("/facets"), api("/favorites")]);
     state.facets = facets;
+    renderActive();  // подписи марок в чипах - из фильтров
     state.favIds = new Set(favs.items.map((i) => i.id));
     state.items.forEach((it) => syncHearts(it.id));
   } catch (e) {

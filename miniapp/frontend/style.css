@@ -365,3 +365,12 @@ html.web .tabs, html.web .bottombar { left: 50%; right: auto; width: min(100%, 6
 .pw-box .btn { display: flex; align-items: center; justify-content: center; width: 100%; text-decoration: none; }
 .pw-box .linkbtn { display: block; margin: 12px auto 0; padding: 6px 12px; }
 @media (min-width: 600px) { .paywall { align-items: center; } .pw-box { width: 420px; border-radius: 18px; padding-bottom: 18px; } }
+
+/* включённые фильтры чипами под сортировкой (renderActive в app.js) */
+.activerow { display: flex; gap: 6px; overflow-x: auto; margin: 8px -16px 0; padding: 0 16px; scrollbar-width: none; }
+.activerow::-webkit-scrollbar { display: none; }
+.fchip { flex: none; display: inline-flex; align-items: center; height: 28px; border-radius: 14px; background: var(--green-soft); color: var(--green); font-size: 13px; font-weight: 600; }
+.fchip-l { padding: 0 4px 0 12px; height: 100%; color: inherit; white-space: nowrap; }
+.fchip-x { width: 26px; height: 100%; color: inherit; font-size: 12px; opacity: .75; }
+.fchip-x:hover { opacity: 1; }
+@media (min-width: 760px) { html.web .activerow { flex-basis: 100%; margin: 0; padding: 0; flex-wrap: wrap; } }
