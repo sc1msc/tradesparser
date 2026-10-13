@@ -226,7 +226,7 @@ function heartButton(id, item) {
   return h("button", {
     class: `fav ${on ? "on" : ""}`, "data-fav": id, "aria-label": "В избранное",
     html: on ? ICONS.heartOn : ICONS.heart,
-    onclick: (e) => { e.stopPropagation(); toggleFav(id, item); },
+    onclick: (e) => { e.stopPropagation(); if (!locked("favs")) toggleFav(id, item); },
   });
 }
 
@@ -288,11 +288,13 @@ function supportLink() {
 // лоте (см. start()). Код - не telegram_id, а случайный код поделившегося
 // (GET /api/me): так видно, кого кто привёл, а получатель ничего о нём не узнаёт.
 // Код берём заранее, при открытии экрана лота, - клик "Поделиться" не ждёт сети.
-let refCode = null;
-function loadRef() {
-  if (refCode === null) refCode = api("/me").then((d) => d.ref, () => { refCode = null; return null; });
-  return refCode;
+// GET /api/me - один раз: код для ссылок "Поделиться" и (когда оплата включена) признак Pro.
+let mePromise = null;
+function loadMe() {
+  if (mePromise === null) mePromise = api("/me").catch(() => { mePromise = null; return {}; });
+  return mePromise;
 }
+const loadRef = () => loadMe().then((d) => d.ref || null);
 const shareParam = (lotId, ref) => `lot${lotId}${ref ? "_" + ref : ""}`;
 
 // place - откуда нажали (top / bottom / toast): видно, какая кнопка работает.
@@ -345,7 +347,7 @@ function buildFeed() {
       h("div", { class: "brandline" }, h("img", { src: "logo.svg", alt: "" }), h("div", { class: "word" }, "Honest", h("span", {}, "Lot"))),
       h("div", { class: "searchrow" },
         h("label", { class: "search" }, icon("search"), feed.input),
-        h("button", { class: "iconbtn", "aria-label": "Фильтры", onclick: () => push({ kind: "filters" }) }, icon("filter"), feed.badge)),
+        h("button", { class: "iconbtn", "aria-label": "Фильтры", onclick: () => { if (!locked("filters")) push({ kind: "filters" }); } }, icon("filter"), feed.badge)),
       feed.sorts),
     feed.total, feed.list, feed.more, supportLink(), webLinks());
   renderSorts();
@@ -438,6 +440,7 @@ function renderTabs() {
   const tab = (key, label, ic) => h("button", {
     class: state.tab === key ? "on" : "",
     onclick: () => {
+      if (key === "favs" && locked("favs")) return;
       if (state.tab === key) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
       state.tab = key; renderTabs(); showTab();
     },
@@ -835,6 +838,41 @@ function showStub() {
   if (IN_TG) tg.BackButton.hide();
 }
 
+// ---------- Pro в веб-версии ----------
+
+// Пока только в веб-версии (решение владельца 13.10.2026): фильтры и избранное - для подписчиков
+// Pro, остальным по нажатию - предложение перейти на Pro. Признак - поле "pro" в /api/me: оно есть,
+// только когда оплата включена (billing.enabled), без него ничего не закрываем. Закрыто только в
+// интерфейсе: API эти функции пока не ограничивает (TODO "Разделение бесплатного и Pro").
+let webLocked = false;
+function locked(kind) {
+  if (!webLocked) return false;
+  showPaywall(kind);
+  return true;
+}
+
+const PAYWALL = {
+  filters: ["Фильтры — в подписке Pro", "Подбирайте лоты по марке и модели, году, цене, пробегу и скидке к рынку."],
+  favs: ["Избранное — в подписке Pro", "Сохраняйте лоты и следите за итогами торгов и перевыставлением машин."],
+};
+function showPaywall(kind) {
+  haptic();
+  track("paywall", null, kind);
+  const [title, text] = PAYWALL[kind];
+  const close = () => { sheet.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const sheet = h("div", { class: "paywall", onclick: (e) => { if (e.target === sheet) close(); } },
+    h("div", { class: "pw-box", role: "dialog", "aria-modal": "true", "aria-label": title },
+      h("div", { class: "pw-tag" }, "HonestLot Pro"),
+      h("h3", {}, title),
+      h("p", {}, text),
+      h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, kind) }, "Перейти на Pro"),
+      h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
+  document.addEventListener("keydown", onKey);
+  document.body.append(sheet);
+  sheet.querySelector(".btn").focus();
+}
+
 // ---------- веб-версия: вход через Telegram ----------
 
 // Кнопка входа - Telegram Login Widget (работает только на домене, заданном боту в @BotFather:
@@ -890,6 +928,12 @@ function webLinks() {
 // ---------- старт ----------
 
 async function start() {
+  if (WEB) {
+    // Pro в веб-версии - до того, как построить ленту: без Pro сохранённые раньше фильтры не применяем
+    const me = await loadMe();
+    webLocked = me.pro === false;
+    if (webLocked) state.filters = emptyFilters();
+  }
   document.getElementById("app").append(root, overlay);
   root.append(buildFeed(), favsEl, tabsEl);
   favsEl.classList.add("hidden");

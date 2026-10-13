@@ -138,7 +138,8 @@ MIGRATIONS = {
 # старой базе SCHEMA выполняется, когда этих колонок ещё нет.
 POST_MIGRATION_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users (ref_code)"
 
-EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share"}
+# paywall / paywall_go - веб-версия показала предложение Pro / человек нажал "Перейти на Pro"
+EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share", "paywall", "paywall_go"}
 
 # Код для ссылок "Поделиться": без похожих 0/o, 1/l/i. 6 знаков - ~10^9
 # вариантов, совпадение при генерации всё равно проверяется (UNIQUE).

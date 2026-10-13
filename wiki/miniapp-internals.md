@@ -67,6 +67,12 @@ Login Widget (домен бота в @BotFather — `honestlot.ru`). `POST /api/
 принимает страница оплаты (`billing.user_from_header`). Главная отдаётся с `X-Robots-Tag:
 noindex` и метатегом `robots`.
 
+**Pro в веб-версии:** без подписки фильтры и избранное закрыты окном «Перейти на Pro»
+(`app.js`: `locked`, `showPaywall`), признак — поле `pro` в `GET /api/me` (есть, только когда
+оплата включена). Закрыто только в интерфейсе: API фильтры и избранное не ограничивает. Показ окна
+и нажатие «Перейти на Pro» пишутся в `events` как `paywall` / `paywall_go` (`source` — `filters`
+или `favs`), итог — в `python -m app.stats`.
+
 ## База (SQLite, `/data/honestlot.db` в контейнере, `miniapp/data/` на сервере)
 
 | Таблица | Что |

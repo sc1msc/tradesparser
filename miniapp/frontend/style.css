@@ -264,3 +264,13 @@ html.web .tabs, html.web .bottombar { left: 50%; right: auto; width: min(100%, 5
 .login .hint { color: var(--hint); font-size: 13px; }
 .sitelinks { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 16px auto 8px; font-size: 13px; }
 .sitelinks a, .sitelinks button { color: var(--hint); text-decoration: underline; }
+
+/* предложение Pro (веб-версия, showPaywall): лист снизу на телефоне, окно по центру на компьютере */
+.paywall { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .45); }
+.pw-box { width: min(100%, 560px); background: var(--bg); color: var(--text); border-radius: 18px 18px 0 0; padding: 22px 20px calc(18px + env(safe-area-inset-bottom)); text-align: center; }
+.pw-tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-soft); border-radius: 999px; padding: 3px 10px; }
+.pw-box h3 { margin: 12px 0 6px; font-size: 19px; }
+.pw-box p { margin: 0 0 18px; color: var(--hint); }
+.pw-box .btn { display: flex; align-items: center; justify-content: center; width: 100%; text-decoration: none; }
+.pw-box .linkbtn { display: block; margin: 12px auto 0; padding: 6px 12px; }
+@media (min-width: 600px) { .paywall { align-items: center; } .pw-box { width: 420px; border-radius: 18px; padding-bottom: 18px; } }

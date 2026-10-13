@@ -19,7 +19,9 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   POST   /api/events             - событие для аналитики: {"type": "open"} при
                                    старте, {"type": "source_click", "lot_id"} при
                                    переходе на сайт торгов, {"type": "share", "lot_id", "place"}
-                                   при "Поделиться" (остальное пишет сервер)
+                                   при "Поделиться", {"type": "paywall"/"paywall_go", "place":
+                                   "filters"/"favs"} - веб-версия без Pro показала предложение Pro /
+                                   нажали "Перейти на Pro" (остальное пишет сервер)
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
                                    торгов ещё неизвестен - ПК перечитывает их на сайте
   POST   /api/lot-status         - (ключ импорта) статусы, перечитанные с сайта
@@ -175,12 +177,14 @@ SHARE_PLACES = {"top", "bottom", "toast"}
 def api_event(payload: EventPayload, authorization: str = Header(default="")):
     uid, start_param = current_user(authorization, with_source=True)
     # с фронта принимаем только то, что сервер сам не видит
-    if payload.type not in ("open", "source_click", "share"):
+    if payload.type not in ("open", "source_click", "share", "paywall", "paywall_go"):
         raise HTTPException(status_code=400, detail="неизвестный тип события")
     # events.source: для open - метка источника, для share - место кнопки
     source = start_param if payload.type == "open" else None
     if payload.type == "share" and payload.place in SHARE_PLACES:
         source = payload.place
+    if payload.type in ("paywall", "paywall_go") and payload.place in ("filters", "favs"):
+        source = payload.place  # что пытались открыть в веб-версии без Pro
     db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id, source=source)
     return {"ok": True}
 
