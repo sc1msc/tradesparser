@@ -5,13 +5,14 @@
 
 ## Что сделать
 
-Для каждого из 31 лотов ниже (список - в конце файла, JSON):
+Для каждого из 40 лотов ниже (список - в конце файла, JSON):
 
 1. Скачать его фото во временную папку (например `/tmp/p/`). В ссылках есть символы `$`, поэтому в shell ссылку
    ВСЕГДА брать в одинарные кавычки:
    `curl -sS -L -o /tmp/p/<lot_id>_1.jpg '<url>' -w '%{http_code}
 '`
-   Неудачную загрузку повторить не больше одного раза.
+   Если сайт отвечает 502/503/504 или обрывает соединение - повторить до 3 раз с паузой 5 секунд
+   (`sleep 5`): в прошлый раз сайт торгов отвечал так на часть фото. 404 - не повторять.
 2. Если доступен python3 с Pillow - уменьшить каждое фото до 800 px по длинной стороне (меньше токенов).
    Фото .webp при необходимости перевести в .jpg.
 3. Посмотреть каждое фото инструментом Read (он показывает картинки) и вынести вердикт по правилам ниже.
@@ -53,8 +54,30 @@ signs - короткие названия признаков, которые т�
 
 ## Лоты
 
+Сюда же включены лоты, которые в прошлый раз получили «unclear» - посмотри их заново.
+
 ```json
 [
+ {
+  "lot_id": "7232666",
+  "title": "Публичное предложение по реализации имущества Альдеева А.В.",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$f2geyeoUelTkO8700bmImeRva9WQYfrf5jFmEY5xUiE9YlPNtcQ.G.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Y1TFwmYYJFxhyRjc6wjly.YEebrzVyzGvgFu7ljesld9ZLsTC0O.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$BW0Kjv1E0l462tDqzAEeduxO1Uro5SgQt31cvpn2OJUazirpo10q.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$tHSwzoHcuVHcJGA488KBuuuLXbbqjEHcsh0hBrNyb8NMK7oad6.K.jpg"
+  ]
+ },
+ {
+  "lot_id": "7220427",
+  "title": "автомобиль легковой Volkswagen Polo, VIN: XW8ZZZ61ZKG023768",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$p4dydTumdg41YucMuRZzOMZc5MmtLrVQnF2R.2bbj3vpyxh6g3e.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$z8kzvZTBDg8DKHH2y2TYAOximZBk2jyWkE4NcxbvTl3YtmBfVN8Qi.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$o.QhbDjNtzpJmYJlBJVAe5ozxiG3HQWOSr76Y.FUEKcSgoB5uy.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gRXRIhdSiMLq8XylsRpOfYWE7r7Au2JbtjVdJn6MScV297Eoce.jpeg"
+  ]
+ },
  {
   "lot_id": "7229744",
   "title": "Транспортное средство HONDA ACCORD, идентификационный номер (VIN) 1HGCV1F96JA009468.",
@@ -83,13 +106,23 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7234087",
-  "title": "Автомобиль марки CHEVROLET модель Niva 2014 г.в. VIN-номер X9L212300E0532284",
+  "lot_id": "7187382",
+  "title": "ВАЗ модель LADA LARGUS,  (VIN)  - XTARS045LK1130807",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$sTG7ytwDxN97L7eEhkL37O8I0rBU4siMmrDDggP9uF.sCt7KNL6..jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$AYQ5gpAT4QJK75VumE08OAN9yho0tS7AelLmCb0eQscFCNuih89u.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rfmAK3YJ3pdL1TXCsJbGZ.skKGU4LqQcJnjQG7bUlDQCFkbiqu12.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$eM8oaJBzIaCph9lFcrqoaOjc39z.Y2eKlDNq1VtMzxsrxppJbKGPq.jpg"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZNfDfc6pRFOUmmj2V4zM3e1cx2SXq3vJO0QBmq7uQkSWfY1GHVTTK.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3nLeKPIMwAUTrD1HSv6AgefHSEWqo9wPlrKTPnWGwWJeaDpQjk9F6.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cPTxjPXx64pxqO51hkZWOeIJL0uhE1fz.lVJxZdMUdtEAVtbQRpO.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$UFPUXnfWY0NYU6B.egoi5.omAiJ0idLXWsrtHY40EX8lGXq1CeMO.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7186033",
+  "title": "Автомобиль",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ycwLpc5I3lwuX1zOVtabxeVqSWowXlv58VGAAH62a9JXROI2YdSXO.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$K22tYXQD8sxYNl2V5ibw5eoiz952oifjuqiC7fj2p97FGCsZY9cu..png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$XfI4xTdsxCF.MrmIIcCNNO8ML4D6KQ0zIdGdDN2lwd8k7gwwt8n1a.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nzoF6J349xYhzzoGvogaOe931QMZAdmz0D7N41p41jxHaHRCsPfS.png"
   ]
  },
  {
@@ -103,6 +136,26 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
+  "lot_id": "7228828",
+  "title": "Renault Duster, 2012 года, 90 лс",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iYq7wT1YHWT3kwoWTj9DE.4aTC5vhUdgNQ1o2Q0Yy4OSoHLWGu.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$XNDtOWr5InehvGG6OuSfYecP0FAVUFu6uhf6A3vmNkiqrUFQDYtFi.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$EdMT4RJReHVgjqZ66cW10.71rsOyJx.E1cRk7qEu7CzEtWaubu.7O.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$sItoa2sI5Yyrpyso3cBIUef13tuPhtUdSos63ILDJonEA5YjJ6nhC.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7179675",
+  "title": "Торги по продаже имущества Должника: Елкиной Любови Юрьевны",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$46Ip.Yu1gsw2PERFcOGYQ.ZcHTBfEeoAsN1zjN7Zx3Ld2mlc4HNbe.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rcrhb5cDcgCBEaROnYyiew46RnPPubBRLCoN0Vxd7TPHCDyZ.6C.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$bzmSNmwEekKa1a9smYiKO6.uV4wzCamjUyzaxGI91Fsdvx6G5y.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w1kYHcgOszZEeS3DuK9q.TqXq9gBItyARxqFpHPmSGqdkGf26ojK.jpeg"
+  ]
+ },
+ {
   "lot_id": "7224949",
   "title": "Легковой автомобиль, LADA 219020 LADA GRANTA, 2013 г.в., VIN: XTA219020D0148505.",
   "photos": [
@@ -111,59 +164,13 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7232714",
-  "title": "Автомобиль марки PEUGEOT модель 301 2013 г.в. VIN-номер VF3DDHMY0DJ716632",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$IT7RpZtfc6hQfLyvxtTVZOxRUnM9E5MqOitRDCY4yqfCq3iES3Tom.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$k3KYQIEoKm1hnhOLpZwPQ.a8rpajkmATuuTbbsf1VMC293fo.BY2.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZyZIOw7mHxNZnsOEeSCc8uQOccAnAx4xKVTYPebazEIXdbPQ03H5i.jpeg"
-  ]
- },
- {
-  "lot_id": "7234389",
-  "title": "Infiniti QX56, 2012 года, 405 лс, 100000 км, полный привод, АКПП",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$9ViCuO9DXvxbnw.ttkr8P.3MjvqrI5inpRrk9IUmunXn.NGO93T6.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$M6X7b8U5KeKIGgGb0o4Wq.v.Fw0lmlvS0oqGDL0mgWIEloeV0C0SK.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$uNZqZ3jvTrzexEBINVKqzuOdJNEI44m4xCY038AaqTWZqDm2KjBa.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$j0pD9bV1n6O.HFampXNH.OBdQnDCDvvZLoo6eJvQ0m4EfLGD.dxcq.jpeg"
-  ]
- },
- {
   "lot_id": "7230080",
   "title": "BMW 3 серии, 1996 года, 102 лс, 350000 км",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w2iwtNwQcMUl8oy5eeZNV.AjHfc.EXOInneUATiOiJWMfbuTJpopu.jpeg"
-  ]
- },
- {
-  "lot_id": "7221086",
-  "title": "Автомобиль легковой, марка: ШКОДА , модель: ЙЕТИ, VIN: XW8LB25L0CH700200, гос. рег. номер: У260МТ48, год изготовления: 2",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$vnLeQq4LBAUmEwXdL4ObteFP17.qH.8EUt8YsKUkh21dCYGs6x4.a.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$QHGg7.Lz6f33oamC1xQbkuWgVt0yBud8YQ1YicCdxtlJBD0fFGUK2.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Dlx8uFMIdbhvk2ohBO.IbOv4aoqjbz6ZCjxtWwOdU0Ul0aaLcRKza.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$jpEItWPA5.BunpInsEK5QurAcaAue4t6q6FgT1qLkWcM4nccmO.png"
-  ]
- },
- {
-  "lot_id": "7226473",
-  "title": "Транспортное средство БМВ X5 XDRIVE40D (вид собственности: индивидуальная, VIN...",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rAH9FEFV5MudYBbtLDgoAuLWPmsb9wjjemVl..Rf8uwqJAbpyFQLW.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$SFMPwMoJDIU6cOehHL9PM.uB9Srsaxra.XxfRq4ReZZN.ZcBOmEya.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$03iqjZbBA8gmoSZClv8e7eIYlMyr6QeqYqnbCmRH3XiJUr46gdWm.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$PM9dT48AH8EXhaR0m0os4eNF5l6Y7CXW6kkMq3DC3ZKR3JfofK.FW.png"
-  ]
- },
- {
-  "lot_id": "7227943",
-  "title": "Автомобиль марки: МЕРСЕДЕС-БЕНЦ ML320 BLUEГод выпуска:2008Государственный регистрационныйзнак: У663СН790Идентификационны",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dPZqlHN3YQU8qVjBhoUqjuBwOd.QJNOHNITvKZkWki5hrMKVPoVvu.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dEHBn2IPzHoDVnsr3.PVG.TZFXIg.LIma1wRPCPQsBpFRAF7DZoN6.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hKHvRcT6bG1SApYmsYqwCOsuHPBGgbq57pu5WBPTTbMc4ToXu0u.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$moTEGaLLZ7ICCWm0UayfeegUsVSLuSCInft8udvtKXn3EnYLjVaK.png"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w2iwtNwQcMUl8oy5eeZNV.AjHfc.EXOInneUATiOiJWMfbuTJpopu.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cQlymiEgLIL81F.AbAKx8OzQdD1sRN66.x.d1pvsDK48rEysgWntC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$tr1YnwNkuXAXSYEV4fciP.51SzfoDFOXsteXl6Id0ckJwQJw0dTLC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$eTeJdUp5G9d.oTEKMa67eHfUoRhGd7Ppjv8hUddQBciMoVKZbB0K.jpeg"
   ]
  },
  {
@@ -177,13 +184,33 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7212763",
-  "title": "транспортное средство",
+  "lot_id": "7152048",
+  "title": "Электронные торги- публичное предложение по продаже имущества Бернацкой Л.А.",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$05oaJ4VxhiNEIus8kPltRucBGysRwNgXiBr5GjZIAoBXFCTRimnya.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$0b7XHtuFN13gRgLF3x.7S.jl6f4Dv.jh1VGPpISoT7mmnwk9tE2.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$a9HRQv79kiAuBW0HduGRcOxQ7Wg41jmLIxfG1OodPZFL0Dj8HMhhm.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$C9QGk0X1IPRZgU3xha6YsOB3jEprtmVvOiiuUXXLaqLyLsGkpUHq.png"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iMMfRgZ3T.QjVHVcoRXpY.OURpm46xTAwUsjCAFKA0FR5N9C9Nrca.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ao96By0GSDPyuK9se3zDW.B8i1zTOZkgC8e44hpS9gLIrpzQ9kay.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$deeQOFPp5tlE0XZIJTnxCOu6PuwNePm2pL2Amj8kkWaVyTiBNoWFK.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$20HIJTipv.Xu7D25eoLvT.0qIB6Q3c.fNho125mHBcdAGzl051he.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7229645",
+  "title": "Бегахмедова Ф.М. Автомобиль ПЕЖО 308",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$KsB7R44ziKC8S7zeq9vtAuByUv.0Po6bhylHfv.6UAR9YpzigX6.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$E6xJss.OgEGE1SCqA0JAEO1B1MXY4UMXcmCsLD0Y9tc7EdOXZHW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Jtg4p78Z9av2W8oKty0FOb0cewH1chG.8GTxznHDEfsUW9EXtwDC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$6XzEz1fDrABswQ1tCEby2uCLmaFyg2JBaRrG1N7Km9GItLwc7ycFW.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7195602",
+  "title": "Транспортное средство: Автомобиль Пежо 308, VIN - VF34H5FWF55402964, 2009 г.в.,зарегистрированный за супругой должника – Турковой Ириной Владимировной.",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$8vxVHwDw9BmxeEkND3ucmOdv2lq2XGgNz39ZjRpSwAnzLewc9dwFu.webp",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gGnS8KmPTgvXADju2nioutguahRF7.KeDG5IRU8A9QT.z85zg7u.webp",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$10NGqe62Xge0aGpb8kEUTeK6qJaXhYhC5H7UG2Sr1bstPwHFSo4jW.webp",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$24zc.A06Rgpyg9e6efnnEeWsATmB1Kmqgis1f8exZ6VxzFgt3k8LG.webp"
   ]
  },
  {
@@ -197,13 +224,13 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7167329",
-  "title": "Автомобиль KIA JD (CEED) 2013 г.в., VIN: XWEHN512AD0004068",
+  "lot_id": "7221030",
+  "title": "Автотранспортного средства ТОЙОТА ЯРИС, 2008 года выпуска, WIN: JTBT923184027174, гос. № Т339РМ77",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fWCbwkR2YW031nk1iWdYaOOlbgXhVC1dQzWSamYuELVy8nFQT2hPa.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iq4QmydL1GZebd9Ipco6eVahU4fuuMBM.vlFUx0rukZ7bXOeSO.C.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gV83nPlS4GECNtWw9CmwGeYM2AKHoY4JZ00KOx5zhJEXWuaSIqr3..png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$n9GzX.zELBiPXCyMaqM0I.Qo7eE8bGVEpkAHVEzhhRIJGW3kjCju.png"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$GXiKEzpkvlUkGNCyeHqW3uErjYu4kiZ6KKHZiXSWqN3Lrxy3xseI6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$4vyI1LF1dykgxqATU9POpuAUvaX5r1A3hmLSbg5RZzBBec.H8TKzi.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$I3e7F2h8X2ScgYfcrYh3O4OV8q29ptqVCUbDjiY2.QN01yB6rtOG.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$c7XxLyM1KCB6Yxz4heNMrOlskjTs03.SyjiV2P8nNeiLrTSHjyiIW.png"
   ]
  },
  {
@@ -217,26 +244,18 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7226548",
-  "title": "Легковой автомобиль марки: JAGUAR, модель: X-Type, год выпуска: 2009 г., кузов №: SAJAE51349BJ58923, идентификационный н",
+  "lot_id": "7227466",
+  "title": "Легковой автомобиль марки: NISSAN, модель: PRIMERA 1.6 ELEGANCE, год выпуска: 2006 г., идентификационный номер (VIN): SJNBAAP12U2302265.",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$S1mmPeYJsPQXf0bn29KSve00JSFEurv0w4eEYF2GlxkkPea.3kJRK.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ht.r9GOn4fGuHde1BnGJOJaRHXEIwQLsr5.IPVnNCfyxcIdyb2iG.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$4tBeuSx2iy7ohjNAVPP8.tfWMNQMmLydI2K9ko4uLRLcxGeLtpGO.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$jPKPwh6PIs6e4ZtSa5NcjujtJRBMOl8DDkUKFTn3n0NNuCpohQ4C.jpeg"
-  ]
- },
- {
-  "lot_id": "7160714",
-  "title": "Легковой автомобиль марки: HONDA, модель: PILOT, год выпуска: 2008г., идентификационный номер (VIN): 5FNYF48409B404773 (",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hiYJWjAEvLOBZKqU6DwgYusSZdFqL4JXmQbm9IJNovnbNsTclzy6.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$74PoVqaOoZh4oRLWSyFtuWs1lenhSmGoT8rHINwLXqBvXxBhRo1W.jpeg"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$QWozXAkVHLhcD2FsRJP00ON.7rB3sAYIBwhuXqKUgPLlFYjolC1km.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nv7BeBPUX8sCddwSdaefD.sY0rUpuoVTvrVRBaSrVTkaIXwf6eA2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$6lZv1lrHgeqs6qc46SYuKOFD2vjTvLljYqObVS3IO.PonudMSTwCC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$9roajjzJzqEz11vEwVYMF.0nKkRUzy7OZxtSKuUyMIA8aJW1pdVr2.jpeg"
   ]
  },
  {
   "lot_id": "7225620",
-  "title": "транспортное средство: ШЕВРОЛЕ ЛАЧЕТТИ, Идентификационный номер (VIN номер): KL1NF356J7K723093, Год изготовления: 2007 г",
+  "title": "транспортное средство: ШЕВРОЛЕ ЛАЧЕТТИ, Идентификационный номер (VIN номер): KL1NF356J7K723093, Год изготовления: 2007 гос.номер Т206КЕ05",
   "photos": [
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$lDVIYBEiVeXz4mQQ9UF3Y.6vOpngJQZUpUPv8713hWhtV1l3HlfW.jpg",
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VAQ696g7GlwSkvP.BP1OYewWuZShURJViDG8tMt4.jMZ2A4gVskFW.jpg",
@@ -246,7 +265,7 @@ signs - короткие названия признаков, которые т�
  },
  {
   "lot_id": "7175452",
-  "title": "Автомобиль: марки ШЕВРОЛЕ КРУЗ, год выпуска: 2012, идентификационный номер (VIN): XUFJA696JC3050821, цвет кузова: черный",
+  "title": "Автомобиль: марки ШЕВРОЛЕ КРУЗ, год выпуска: 2012, идентификационный номер (VIN): XUFJA696JC3050821, цвет кузова: черный, модель, кузов номер: XUFJA696JC3050821, гос. регистрационный номер: Е099МО777, Москва, Зеленоград, д. 3, стр. 1",
   "photos": [
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$OC6S0UU0fwORTnMmCYtePa04KXxfmeupc21jnCrXCEkpWOd5jPy.jpeg",
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$jRBMRa7pHBhQPcJWLSm09OYhZ22ivDg0WDi.JVh4u7TCkILMZQ9zW.jpeg",
@@ -265,6 +284,14 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
+  "lot_id": "7229452",
+  "title": "Легковой автомобиль, ЛАДА 111930 КАЛИНА, 2012 г.в., VIN: XTA111930C0219558.",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$15Km.Q8Uz77d85wrJlsgIuOSsZ9cGxNmyLqwriWTwGPK7EtATKn0..png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$5CDpcjLtWnqSEgkY1ts.TujLVMIfkHI9..x4UWavL0lfz5NIS2Se.png"
+  ]
+ },
+ {
   "lot_id": "7232464",
   "title": "Audi A6, 1998 года, 165 лс, 238102 км",
   "photos": [
@@ -275,13 +302,30 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7179366",
-  "title": "Автомобиль, марки ФОЛЬКСВАГЕН ПОЛО, 2019 г. в., идентификационный номер (VIN) XW8ZZZ61ZKG031979, номер кузова (кабины) X",
+  "lot_id": "7070431",
+  "title": "Автомобиль марки FORD модель FOCUS 2007 г.в. VIN-номер WF04XXWPD47U32455",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$DbLSDK0lt2vAz.q0YkGYMOkRtWC9vHPACIpYXDDRWxIvaPzx8gf0K.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$pMBKAjZYnDwmMwMxgX64GedqQtIslIOK0ONCWwknSpewB6NI8Iq1S.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$jx4fXvV9GJEjm8hbqKSFesHRtrI90IU.OBC1cLiEUg1Ye0Bk1ES.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$z8F2bYFonqPmMoulnyPo.GROCr2Sz9nR0KuBgXgEF8WYfekr4h0..jpeg"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$GTZERtgC4MtPTTvDTcPkpOO3D.61hjcxtwBImIvatyvM3y9A2eYy.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7160721",
+  "title": "Легковой автомобиль марки: HONDA, модель: Civic, год выпуска: 2008г., идентификационный номер (VIN): SHHFK28808U037082",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fW8SPA81pRM7MyzuxK8TeOswgbdEZBriMo0A5on1pwUHy9WMZ.BVq.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$G9uOcNb5gQD0ZQyakEfDE.14jwB.VHcr8s.eg4V6U90tX.aypiVC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$wvwJXoJAUFvaR0WnZ1qwXeQAd9V65OSV0UitM7zpNlp.mk0GeLz6m.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$kR3FdWkKl7O7ndnoyrYCIujwfqc.rTJZYlH0P2Ymau8AID6FgFam.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7198560",
+  "title": "Автомобиль УАЗ Patriot",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$RynbFDsDQ62uSVcHu694beemxpGZ2shJEsUg8Gy4K5x.tcL84iLSG.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$HUmFnr6B6lBYQYsTULPTSOEU5J51BuEssnb9iMzyEA8t4kfDVOf6.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cL4hUlSu6s1IOuxVT42eY.eCIc.Rc.Z6rByZqrOwQqiBSV2j9jH76.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$.mfHeU6jMe7tND4s4Gd93Ol9ILCpX2uiyI6IjI5..oDUg6YsHDwe.jpg"
   ]
  },
  {
@@ -305,31 +349,48 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7136898",
-  "title": "Автомобиль RENAULT DUSTER, г/в 2014, г/н О 061 РМ 163, VIN Х7LHSRDJD51434935, автошина Nokian Nordman S 2 SUV R16 215/65",
+  "lot_id": "7164389",
+  "title": "SsangYong Rexton, 2012 года, 186 лс, полный привод, АКПП",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$m9IIScQAZ37KaipaGbUYjeqZxEvKj9OhrkW50IT2zBPcbyGdo3VUm.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gXJkcycxriNpkH4JDXkeyMCikFqRNLb6kd7Bl51IVhnhvH.0Ry.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$zjnQ4RMYXDxF88xrHb8be.ZdtDkcBR.IZwnWJKUPVjooieiyJBV2.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VEZpL.FHvgh7x70Wa7doO6wTjqMFW3ruXzDCc50Pb8KMdgSq1nu.jpg"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZsFBzmUV9PXoA1HAfjkuSunyWiV9FedOXxyYS9pzmi3b9N2tbsAiC.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$OhBfrMGhWcVF303ZlzggujFurX.FQw2.thwOJd0S.RQ2XHgbe.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZTK2X4UnKtJNuw3.pTffP.dFFInxB.fb44OW7oIuj0JV9l8529NG.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$1URAWvkb2CwxO0NrYXxFKe41J1DOVYIOJl4U1LcaWMwlsdHlxv9FO.png"
+  ]
+ },
+ {
+  "lot_id": "7218629",
+  "title": "Hyundai Accent, 2006 года, 75 лс, 250000 км",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iHFbvBmCJndNZkvd1fLxxeJcGWCyW358Ab9qi2hUlzHk4MTcj.Lcm.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$IkBHCDRb06plR5CBNbBXluVjJH1oWsnmu5Thhg9J7InBMgmQIW0Ze.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$WigBejqDbLww0ylTzKNUN.Exjt1.B6Zh6bAH1yJ7wtLOwSbGzfAEm.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$n3D8rXvi2MyIJ.Zf0.FEdugPzvpKyIIYaxJm6yGzs6RMY5DsTgEG.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7186432",
+  "title": "Право (требование) к ПАО «ЛК «ЕВРОПЛАН» ОГРН 1177746637584 (Лизингодатель)1 на получение в собственность Предмета лизинга по договору финансовой аренды (лизинга) №2638351-ФЛ/ОРК01-21 от 06.04.2021, а именно: Марка, модель ТС: Lada Largus, Идентификационный номер (VIN): XTAKS035LM1365730, Модель, №двигателя: –, № 11189 4545570, Шасси (рама): отсутствует, Кузов №: XTAKS035LM1365730, ГРЗ: А779УА799.",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$qZISvjgL82sFgZxYiKVduKhiNAkDtqc6B0Na4O.rJv9nQTFLBhq.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$q6MD1TjgJD1nrPasOYJlBuLd6Wt84XhAPKAPxa5Ya3P7nPdmMBIy.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VqyaMLfdKpfXEU.i98HAuBpTIuPatZe4By3U2WDduwBcPUHFd36.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$MErhsOVao6vMgGe5yNVdpexXYvmlgTRe2t2o4sAeC9vxUQUijK0a.png"
   ]
  },
  {
   "lot_id": "7149760",
-  "title": "Легковой автомобиль марки: SSANG YONG, модель: Kyron II, год выпуска: 2011 г., № шасси (рамы): KPTSOA1KSBP142776, кузов ",
+  "title": "Легковой автомобиль марки: SSANG YONG, модель: Kyron II, год выпуска: 2011 г., № шасси (рамы): KPTSOA1KSBP142776, кузов №: Z8US0A1KSB0011925, идентификационный номер (VIN): Z8US0A1KSB0011925. В залоге у ПАО «Совкомбанк».",
   "photos": [
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ssmaevIUKvjpZqeMHKFHeuRPscWMr3Ig4W72BUifvXh8klqK1GW9S.jpeg",
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$774BWg.gx3gqD.fUhLUcc.20xmYwEGTZO5c4wky83dZI2K46hWEoW.jpeg"
   ]
  },
  {
-  "lot_id": "7233531",
-  "title": "Легковой автомобиль OPEL Astra (A-H/NB), год изготовления – 2010 г.",
+  "lot_id": "7157450",
+  "title": "Volvo S60, 2013 года, 180 лс, 168761 км, АКПП",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$EFeINN8BvTWCMBi9hPcORamAImYCoHpW87AjcU4ZPqreJXncaq.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$vO.42ATY5RdhJVpoRX.cM.mv4xsa2jTawI5osG7bKi0re54HVzOy.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$.MZwcKAPic0NDxpu5au9reU1F5BL93WxYnp26HeiGe7hIURQdlzhO.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fJW7ku2TW8rZfZOtmhbr4eBoyR.Kj5q65V6QiKHAnWQffU3Ywq3G.jpeg"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$DxPZfDCT6GL8OCuMMv.qBeI0CkColcsNk5PfcaC6BM11Fotamhpq.jpeg"
   ]
  },
  {
@@ -343,13 +404,40 @@ signs - короткие названия признаков, которые т�
   ]
  },
  {
-  "lot_id": "7219814",
-  "title": "Транспортное средство: Автомобиль SKODA OCTAVIA, VIN: XW8AN2NE8LH017757, ГРЗ А508BT 761, 2019 года выпуска\n\nС имуществом",
+  "lot_id": "7199338",
+  "title": "Volkswagen Polo, 2011 года, 105 лс, 250000 км",
   "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$YDV9sZ0498vUUvpJd48KaufIwY7kMYiUTSBUCiMR9XoTvWWhVhE6S.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$GNx1o2pdiC1OZO6hBpM1QuFKxdN45NAWi6b3XVUfv58.LdA3RDoW.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Bj4fEwIXsZG9UltO4CRODf80b8j7z7PA3pVnrzoKflPq2CFn1u.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$oVUwRGAyD9qcIiHqYVyFfec5jChI.X8ZfjsDQ0vdrxlbU17Vy4Mm.jpeg"
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VXFki4UGp0Xgi.7f7pcHuIImOvCYmuhqLKfEHn0CmoXPx7Xdpc2..png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$bTKOIW7Juw0v3.PlP900ul0SvQou0ndxqWyxqVQYbAt7UzravVDG.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$X.S4s8TJ25ek46gO4t4XOuyAVZOMXIWd8qSraBE.CncdRkSUf2tu.png"
+  ]
+ },
+ {
+  "lot_id": "7182272",
+  "title": "Автомобиль марки NISSAN модель Almera 2016 г.в. VIN-номер Z8NAJL10055242528",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3zexZBsdeKTba2qPMfAHMuWBUVX6HIPTzvUerUYZXCHJ4xj4ykma.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$C41yt7dVu9Yx6BapvCXKUuamQzdpYx40R.B95oYaHQQ2VXfumQeDy.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7227943",
+  "title": "Автомобиль марки: МЕРСЕДЕС-БЕНЦ ML320 BLUEГод выпуска:2008Государственный регистрационныйзнак: У663СН790Идентификационный номер:4JGBB25E29A489426Тип ТС: Легковой универсалШасси (рама) №: отсутствуетКузов: 4JGBB25E29A489426Цвет кузова: КрасныйРазрешенная максимальная масса, кг:2830Масса без нагрузки, кг: 2256",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dPZqlHN3YQU8qVjBhoUqjuBwOd.QJNOHNITvKZkWki5hrMKVPoVvu.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dEHBn2IPzHoDVnsr3.PVG.TZFXIg.LIma1wRPCPQsBpFRAF7DZoN6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hKHvRcT6bG1SApYmsYqwCOsuHPBGgbq57pu5WBPTTbMc4ToXu0u.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$moTEGaLLZ7ICCWm0UayfeegUsVSLuSCInft8udvtKXn3EnYLjVaK.png"
+  ]
+ },
+ {
+  "lot_id": "7136898",
+  "title": "Автомобиль RENAULT DUSTER, г/в 2014, г/н О 061 РМ 163, VIN Х7LHSRDJD51434935, автошина Nokian Nordman S 2 SUV R16 215/65 (4 шт.) (г. Москва).",
+  "photos": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$m9IIScQAZ37KaipaGbUYjeqZxEvKj9OhrkW50IT2zBPcbyGdo3VUm.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gXJkcycxriNpkH4JDXkeyMCikFqRNLb6kd7Bl51IVhnhvH.0Ry.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$zjnQ4RMYXDxF88xrHb8be.ZdtDkcBR.IZwnWJKUPVjooieiyJBV2.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VEZpL.FHvgh7x70Wa7doO6wTjqMFW3ruXzDCc50Pb8KMdgSq1nu.jpg"
   ]
  }
 ]
