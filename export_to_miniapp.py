@@ -274,6 +274,12 @@ def build_lot(row, details, damage=None):
         "autoru_price_low": _to_int(row.get("autoru_price_low")),
         "autoru_price_high": _to_int(row.get("autoru_price_high")),
         "autoru_owners": _to_int(row.get("autoru_owners_count")),
+        # характеристики модификации по данным оценки (autoru_valuation.parse_specs)
+        "engine_type": row.get("autoru_engine_type") or None,
+        "displacement": _to_int(row.get("autoru_displacement")),
+        "power": _to_int(row.get("autoru_power")),
+        "drive": row.get("autoru_drive") or None,
+        "transmission": row.get("autoru_transmission") or None,
         "estimate_uncertain": lot_metrics.estimate_is_uncertain(
             row.get("autoru_uncertainty_percent"), row.get("autoru_status")),
         # тип лота из листа (по title + описанию из lots); если колонки ещё

@@ -622,6 +622,9 @@ async function renderLot(id) {
     h("div", { class: "block" }, h("h3", {}, "Характеристики"), rows([
       ["Год", lot.year],
       ["Пробег", mileage],
+      ["Двигатель", engineText(lot)],
+      ["Коробка", lot.transmission],
+      ["Привод", lot.drive],
       ["VIN", vin],
       ["Госномер", lot.plate],
       ["Владельцев", lot.owners],
@@ -646,6 +649,16 @@ async function renderLot(id) {
       heartButton(lot.id, lot))),
     relistedBox,
     ...body));
+}
+
+// "1,6 л, 110 л.с., бензин" - из того, что известно (объём в см³ -> литры с одним знаком)
+function engineText(lot) {
+  const parts = [
+    lot.displacement ? `${(Math.round(lot.displacement / 100) / 10).toFixed(1).replace(".", ",")} л` : null,
+    lot.power ? `${lot.power} л.с.` : null,
+    lot.engine_type,
+  ].filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
 }
 
 // Предупреждение о повреждениях: тотальные (сгорела, на запчасти - по тексту или по

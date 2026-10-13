@@ -62,6 +62,7 @@
 | `autoru_tradein_low`, `autoru_tradein_high` | вилка trade-in (не используется в приложении) |
 | `autoru_uncertainty_percent` | погрешность Авто.ру; 90+ — «оценка может быть неточной» |
 | `autoru_mark`, `autoru_model`, `autoru_year`, `autoru_owners_count` | машина по VIN от Авто.ру |
+| `autoru_engine_type`, `autoru_displacement`, `autoru_power`, `autoru_drive`, `autoru_transmission`, `autoru_modification` | характеристики модификации от Авто.ру (с 13.10.2026): топливо, объём см³, мощность л.с., привод, коробка, название «1.6 AT (110 л.с.)» |
 | `autoru_accuracy_note` | «Оценка может быть неточной» у `ambiguous` |
 | `autoru_status` | `ok`, `ambiguous`, `no_price`, `no_mileage`, `error: …` |
 | `autoru_checked_at` | когда оценивали |

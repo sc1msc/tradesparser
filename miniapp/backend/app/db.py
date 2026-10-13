@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS lots (
     title_model       TEXT,
     photo_verdict     TEXT,
     photo_signs       TEXT,
+    engine_type       TEXT,
+    displacement      INTEGER,
+    power             INTEGER,
+    drive             TEXT,
+    transmission      TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -121,6 +126,7 @@ LOT_FIELDS = [
     "applications_end", "bidding_start", "periods", "photos", "description",
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
     "lot_kind", "model_source", "title_brand", "title_model", "photo_verdict", "photo_signs",
+    "engine_type", "displacement", "power", "drive", "transmission",
 ]
 JSON_FIELDS = {"periods", "photos", "photo_signs"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
@@ -130,7 +136,9 @@ FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 MIGRATIONS = {
     "lots": [("estimate_uncertain", "INTEGER NOT NULL DEFAULT 0"), ("lot_kind", "TEXT"),
              ("status_checked_at", "TEXT"), ("model_source", "TEXT"), ("title_brand", "TEXT"),
-             ("title_model", "TEXT"), ("photo_verdict", "TEXT"), ("photo_signs", "TEXT")],
+             ("title_model", "TEXT"), ("photo_verdict", "TEXT"), ("photo_signs", "TEXT"),
+             ("engine_type", "TEXT"), ("displacement", "INTEGER"), ("power", "INTEGER"),
+             ("drive", "TEXT"), ("transmission", "TEXT")],
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }

@@ -538,6 +538,12 @@ def detail(lot, now, favorites):
         "market_low": lot.get("autoru_price_low"),
         "market_high": lot.get("autoru_price_high"),
         "owners": lot.get("autoru_owners"),
+        # характеристики модификации (с 13.10.2026; у лотов, оценённых раньше, - после дозаполнения)
+        "engine_type": lot.get("engine_type"),
+        "displacement": lot.get("displacement"),
+        "power": lot.get("power"),
+        "drive": lot.get("drive"),
+        "transmission": lot.get("transmission"),
         "trade_form": lot.get("trade_form"),
         "platform": lot.get("platform"),
         "status": lot.get("status"),

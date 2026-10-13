@@ -58,6 +58,13 @@ AUTORU_FIELDS = [
     "autoru_year", "autoru_owners_count", "autoru_accuracy_note",
     "autoru_status", "autoru_checked_at",
 ]
+# Характеристики модификации от Авто.ру (autoru_valuation.parse_specs, с 13.10.2026):
+# хранятся вместе с оценкой и живут столько же - при переоценке обновляются.
+AUTORU_SPEC_FIELDS = [
+    "autoru_engine_type", "autoru_displacement", "autoru_power",
+    "autoru_drive", "autoru_transmission", "autoru_modification",
+]
+AUTORU_FIELDS = AUTORU_FIELDS + AUTORU_SPEC_FIELDS
 HEADER = ["vin"] + MILEAGE_FIELDS + AUTORU_FIELDS + ["updated_at"]
 
 # Результат TRONK, который повторять не нужно (см. fill_missing_mileage.SKIP_STATUSES).

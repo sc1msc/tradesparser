@@ -25,6 +25,21 @@ from playwright.sync_api import sync_playwright
 
 LANDING_URL = "https://auto.ru/evaluation/cars/"
 STATS_PREDICT_URL_PART = "getStatsPredictByCarIdentifier"
+# Сразу после оценки страница сама запрашивает getEvaluationBlocks: в нём каталог
+# модификаций этой модели (breadcrumbsPublicApi[].entities[]: id = tech_param_id,
+# name "1.6 AT (110 л.с.)", tech_params {engine_type, displacement, gear_type,
+# transmission, power}). Нужную модификацию находим по found_info.tech_param_id из
+# ответа оценки - так получаем объём, топливо и привод (в самом ответе оценки их нет,
+# только мощность и коробка). Проверено 13.10.2026 на Skoda Karoq: 1.6 AT, бензин,
+# передний - как в окне "Все параметры" на сайте.
+EVAL_BLOCKS_URL_PART = "getEvaluationBlocks"
+EVAL_BLOCKS_WAIT_SEC = 10
+
+# Коды Авто.ру -> как пишем в таблицу и показываем (неизвестный код - как есть, строчными)
+ENGINE_TYPES = {"GASOLINE": "бензин", "DIESEL": "дизель", "HYBRID": "гибрид", "ELECTRO": "электро",
+                "LPG": "газ", "GAS": "газ", "TURBO": "бензин"}
+DRIVES = {"FORWARD_CONTROL": "передний", "REAR_DRIVE": "задний", "ALL_WHEEL_DRIVE": "полный"}
+TRANSMISSIONS = {"AUTOMATIC": "автомат", "MECHANICAL": "механика", "ROBOT": "робот", "VARIATOR": "вариатор"}
 
 # Пробег - есть точный, стабильный селектор (атрибут name, не завязан на
 # захэшированные CSS-модули, которые могут поменяться при пересборке сайта).
@@ -131,7 +146,38 @@ def parse_prediction_response(data):
         "owners_count": found.get("owners_count"),
         "resolved_mileage": found.get("mileage"),
         "need_info_for_evaluation": need_info,
+        "tech_param_id": found.get("tech_param_id"),
+        # характеристики: мощность и коробка - из ответа оценки; объём, топливо,
+        # привод и название модификации - добавляет parse_specs из getEvaluationBlocks
+        "power": found.get("horse_power"),
+        "transmission": _code(TRANSMISSIONS, found.get("transmission")),
+        "engine_type": None, "displacement": None, "drive": None, "modification": None,
     }
+
+
+def _code(table, value):
+    return table.get(value, str(value).lower()) if value else None
+
+
+def parse_specs(blocks, tech_param_id):
+    """Характеристики модификации tech_param_id из ответа getEvaluationBlocks ->
+    {engine_type, displacement, power, drive, transmission, modification} или {}."""
+    if not blocks or not tech_param_id:
+        return {}
+    for crumb in blocks.get("breadcrumbsPublicApi") or []:
+        for ent in crumb.get("entities") or []:
+            if str(ent.get("id")) != str(tech_param_id):
+                continue
+            tp = ent.get("tech_params") or {}
+            return {
+                "engine_type": _code(ENGINE_TYPES, tp.get("engine_type")),
+                "displacement": tp.get("displacement"),   # см³
+                "power": tp.get("power"),                 # л.с.
+                "drive": _code(DRIVES, tp.get("gear_type")),
+                "transmission": _code(TRANSMISSIONS, tp.get("transmission")),
+                "modification": ent.get("name"),          # "1.6 AT (110 л.с.)"
+            }
+    return {}
 
 
 def evaluate_by_vin(page, vin, mileage_km):
@@ -146,16 +192,37 @@ def evaluate_by_vin(page, vin, mileage_km):
 
     _fill_city(page)
 
-    with page.expect_response(
-        lambda r: STATS_PREDICT_URL_PART in r.url, timeout=20000
-    ) as resp_info:
-        page.get_by_role("button", name=SUBMIT_BUTTON_TEXT).click()
+    # getEvaluationBlocks приходит сразу за оценкой - слушаем ответы заранее, чтобы
+    # не пропустить его, пока ждём сам ответ оценки
+    blocks = []
+    def on_response(r):
+        if EVAL_BLOCKS_URL_PART in r.url and r.status == 200:
+            blocks.append(r)
+    page.on("response", on_response)
+    try:
+        with page.expect_response(
+            lambda r: STATS_PREDICT_URL_PART in r.url, timeout=20000
+        ) as resp_info:
+            page.get_by_role("button", name=SUBMIT_BUTTON_TEXT).click()
 
-    resp = resp_info.value
-    if resp.status != 200:
-        raise RuntimeError(f"getStatsPredictByCarIdentifier вернул статус {resp.status}")
+        resp = resp_info.value
+        if resp.status != 200:
+            raise RuntimeError(f"getStatsPredictByCarIdentifier вернул статус {resp.status}")
+        result = parse_prediction_response(resp.json())
 
-    return parse_prediction_response(resp.json())
+        # характеристики - не критичны для оценки: не пришли - оценка всё равно годится
+        deadline = time.time() + EVAL_BLOCKS_WAIT_SEC
+        while not blocks and time.time() < deadline:
+            page.wait_for_timeout(250)
+        if blocks:
+            try:
+                specs = parse_specs(blocks[-1].json(), result.get("tech_param_id"))
+                result.update({k: v for k, v in specs.items() if v is not None})
+            except Exception as e:
+                print(f"  Характеристики не разобрались: {e}")
+        return result
+    finally:
+        page.remove_listener("response", on_response)
 
 
 if __name__ == "__main__":

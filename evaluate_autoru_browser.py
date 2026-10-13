@@ -14,7 +14,22 @@ sheets_writer.py, его локальная схема колонок разош
     autoru_tradein_low, autoru_tradein_high,
     autoru_uncertainty_percent, autoru_mark, autoru_model,
     autoru_year, autoru_owners_count, autoru_accuracy_note,
-    autoru_status, autoru_checked_at
+    autoru_status, autoru_checked_at,
+    autoru_engine_type, autoru_displacement, autoru_power,       - характеристики
+    autoru_drive, autoru_transmission, autoru_modification        модификации (с 13.10.2026)
+
+ХАРАКТЕРИСТИКИ (топливо, объём см³, мощность л.с., привод, коробка, название
+модификации "1.6 AT (110 л.с.)") приходят вместе с оценкой - см.
+autoru_valuation.parse_specs; пишутся в лист и в vin_cache вместе с ценой.
+
+ДОЗАПОЛНЕНИЕ характеристик у уже оценённых лотов (вручную, не в пайплайне):
+    python evaluate_autoru_browser.py --specs [N]
+Лоты со статусом ok/ambiguous без характеристик, одна оценка на VIN (машина на
+нескольких площадках - один запрос), не больше N машин за запуск (по умолчанию
+config.AUTORU_MAX_PER_RUN). Пишутся ТОЛЬКО колонки характеристик - цена и статус
+не меняются. Перед заполнением формы скрипт открывает Авто.ру и ждёт Enter:
+кнопку согласия на сайте владелец нажимает сам. Повторный запуск продолжает с
+тех, у кого характеристик ещё нет.
 
 Пробег для запроса к Авто.ру берётся из mileage_km (там либо пробег с
 карточки лота, либо показание TRONK, пересчитанное на сегодня - см.
@@ -76,7 +91,19 @@ NEW_COLUMNS = [
     "autoru_uncertainty_percent", "autoru_mark", "autoru_model",
     "autoru_year", "autoru_owners_count", "autoru_accuracy_note",
     "autoru_status", "autoru_checked_at",
-]
+] + vin_cache.AUTORU_SPEC_FIELDS
+
+
+def _spec_updates(result):
+    """Характеристики из ответа оценки (autoru_valuation) -> {колонка: значение}."""
+    return {
+        "autoru_engine_type": result.get("engine_type"),
+        "autoru_displacement": result.get("displacement"),
+        "autoru_power": result.get("power"),
+        "autoru_drive": result.get("drive"),
+        "autoru_transmission": result.get("transmission"),
+        "autoru_modification": result.get("modification"),
+    }
 
 
 def _clean_mileage(value):
@@ -129,7 +156,9 @@ def _batch_write(worksheet, row_num, col, updates):
         worksheet.batch_update(data)
 
 
-def run():
+def run(specs_only=False, limit=None):
+    if specs_only:
+        return run_specs(limit)
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
     spreadsheet = client.open_by_key(config.SPREADSHEET_ID)
@@ -275,6 +304,7 @@ def run():
                 updates["autoru_model"] = result["model"]
                 updates["autoru_year"] = result["year"]
                 updates["autoru_owners_count"] = result["owners_count"]
+                updates.update(_spec_updates(result))
 
                 if result["need_info_for_evaluation"]:
                     status = "ambiguous"
@@ -345,5 +375,100 @@ def _wait_captcha(page):
     return False
 
 
+def _new_context(p):
+    browser = p.chromium.launch(headless=config.AUTORU_HEADLESS)
+    context = browser.new_context(
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+        ),
+        locale="ru-RU",
+        viewport={"width": 1440, "height": 900},
+    )
+    return browser, context.new_page()
+
+
+def run_specs(limit=None):
+    """Дозаполнение характеристик у уже оценённых лотов (см. докстринг модуля)."""
+    limit = limit or config.AUTORU_MAX_PER_RUN
+    creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    spreadsheet = gspread.authorize(creds).open_by_key(config.SPREADSHEET_ID)
+    worksheet = spreadsheet.worksheet(SHEET_NAME)
+    values = worksheet.get_all_values()
+    header = _ensure_columns(worksheet, values[0])
+    col = {name: idx for idx, name in enumerate(header)}
+
+    # ключ машины (VIN, без него - госномер) -> строки листа с этой машиной
+    groups, order = {}, []
+    for i, row in enumerate(values[1:], start=2):
+        row = row + [""] * (len(header) - len(row))
+        if row[col["autoru_status"]].strip() not in ("ok", "ambiguous"):
+            continue
+        if row[col["autoru_power"]].strip() or row[col["autoru_modification"]].strip():
+            continue
+        if "lot_kind" in col and row[col["lot_kind"]].strip() == lot_metrics.LOT_MULTILOT:
+            continue
+        key = row[col["vin"]].strip().upper()
+        if len(key) != 17:
+            key = _lot_plate(row, col)
+        if not key:
+            continue
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append((i, row))
+    todo = order[:limit]
+    print(f"Без характеристик: {sum(len(g) for g in groups.values())} лотов, {len(order)} машин. "
+          f"Сейчас: {len(todo)} машин (лимит {limit}).")
+    if not todo:
+        return
+
+    cache = vin_cache.VinCache(spreadsheet)
+    done = errors_in_row = 0
+    last_error = ""
+    with sync_playwright() as p:
+        browser, page = _new_context(p)
+        page.goto(autoru_valuation.LANDING_URL, wait_until="domcontentloaded")
+        input("Нажмите кнопку согласия в окне Авто.ру, затем Enter здесь: ")
+        for key in todo:
+            rows = groups[key]
+            row = rows[0][1]
+            mileage = (lot_metrics.plausible_mileage(_clean_mileage(row[col["mileage_km"]]))
+                       or _clean_mileage(row[col["estimated_mileage"]]) or PROBE_MILEAGE_KM)
+            try:
+                result = autoru_valuation.evaluate_by_vin(page, key, mileage)
+            except Exception as e:
+                print(f"[{key}] ошибка: {str(e)[:150]}")
+                if "showcaptcha" in page.url and not _wait_captcha(page):
+                    print("Капчу не решили - стоп. Повторный запуск продолжит с этого места.")
+                    break
+                errors_in_row += 1
+                last_error = str(e)[:150]
+                if errors_in_row >= config.AUTORU_MAX_ERRORS_IN_ROW:
+                    print(f"{errors_in_row} ошибок подряд (последняя: {last_error}) - стоп.")
+                    break
+                continue
+            errors_in_row = 0
+            specs = {k: v for k, v in _spec_updates(result).items() if v is not None}
+            print(f"[{key}] {result.get('mark')} {result.get('model')}: {specs.get('autoru_modification') or specs or 'характеристик нет'}"
+                  f"{' (лотов: ' + str(len(rows)) + ')' if len(rows) > 1 else ''}")
+            if specs:
+                for row_num, _ in rows:
+                    _batch_write(worksheet, row_num, col, specs)
+                if len(key) == 17:
+                    cache.update(key, specs)
+                done += 1
+            time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
+        browser.close()
+    cache.flush()
+    print(f"\nГотово: характеристики записаны для {done} машин из {len(todo)}. "
+          f"Осталось без характеристик: {len(order) - done} машин.")
+
+
 if __name__ == "__main__":
-    run()
+    import sys
+    if "--specs" in sys.argv:
+        rest = sys.argv[sys.argv.index("--specs") + 1:]
+        run(specs_only=True, limit=int(rest[0]) if rest and rest[0].isdigit() else None)
+    else:
+        run()
