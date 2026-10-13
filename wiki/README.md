@@ -107,7 +107,7 @@ HonestLot не организует торги, не продаёт машины
 | новые `automation.alert(...)` | runbook |
 | серверы, домены, боты | infrastructure, architecture |
 | `TODO.md` (сделано или добавлено) | roadmap |
-| `miniapp/backend/app/billing.py`, `pay_providers.py`, `frontend/pay/` (подписка, оплата) | payments, monetization |
+| `miniapp/backend/app/billing.py`, `pay_providers.py`, `frontend/pay/`, `site.py` + `site_pages/` (подписка, оплата, страницы сайта) | payments, monetization |
 
 - Значения настроек на странице [Настройки](config.md) переписаны из `config.py` на 11.10.2026.
   Перед ответом, где важна точная цифра, сверьтесь с кодом.

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{ROBOTS}}
+  <title>{{TITLE}}</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/site/site.css?v=1">
+</head>
+<body class="page-{{PAGE}}">
+<header>
+  <a class="brand" href="/pro"><img src="/logo.svg" alt=""><b>Honest<span>Lot</span></b></a>
+  <nav>
+    <a href="/pro">Подписка</a>
+    <a href="/offer">Оферта</a>
+    <a href="/privacy">Персональные данные</a>
+  </nav>
+</header>
+<main>
+{{CONTENT}}
+</main>
+<footer>
+  <p>HonestLot — информационный сервис о машинах с торгов по банкротству.
+    Не организатор торгов и не участник торгов от имени пользователя.</p>
+  <p>Связь: <a href="mailto:{{EMAIL}}">{{EMAIL}}</a>, поддержка в Telegram —
+    <a href="https://t.me/{{SUPPORT_BOT}}">@{{SUPPORT_BOT}}</a>.</p>
+  <p><a href="/offer">Оферта</a> · <a href="/privacy">Политика обработки персональных данных</a> ·
+    <a href="/requisites" rel="nofollow">Реквизиты</a></p>
+</footer>
+</body>
+</html>

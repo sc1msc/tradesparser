@@ -1,0 +1,42 @@
+/* Публичные страницы сайта (/pro, /offer, /privacy, /requisites) - см. backend/app/site.py */
+:root { --bg: #f4f5f7; --card: #fff; --text: #16181d; --hint: #6b7280; --line: #e3e5e9; --green: #179a50; --green-soft: rgba(23,154,80,.12); }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --card: #181b21; --text: #e8eaee; --hint: #8b919b; --line: #2a2e36; --green: #2fbf6c; --green-soft: rgba(47,191,108,.16); } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header, main, footer { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; padding-top: 20px; padding-bottom: 8px; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 20px; color: var(--text); text-decoration: none; }
+.brand img { width: 32px; height: 32px; }
+.brand span { color: var(--green); }
+nav { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 15px; }
+nav a { color: var(--hint); text-decoration: none; }
+nav a:hover { color: var(--green); }
+main { padding-bottom: 24px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 24px 0 8px; }
+h2 { font-size: 21px; margin: 32px 0 8px; }
+h3 { font-size: 17px; margin: 22px 0 6px; }
+.lead { font-size: 18px; color: var(--hint); margin-top: 0; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; margin: 16px 0; }
+ul, ol { padding-left: 22px; }
+li { margin: 4px 0; }
+a { color: var(--green); }
+.prices { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.prices th, .prices td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.prices th { font-size: 14px; color: var(--hint); font-weight: 600; }
+.prices td:nth-child(n+2) { white-space: nowrap; font-weight: 700; }
+.prices tr:last-child td { border-bottom: 0; }
+.note, .hint { color: var(--hint); font-size: 14px; }
+.btn { display: inline-block; margin: 16px 0; padding: 14px 28px; font-weight: 700; color: #fff; background: var(--green); border-radius: 12px; text-decoration: none; }
+dl.req { display: grid; grid-template-columns: max-content 1fr; gap: 8px 20px; margin: 0; }
+dl.req dt { color: var(--hint); }
+dl.req dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.doc h2 { font-size: 18px; }
+.doc p, .doc li { overflow-wrap: anywhere; }
+footer { border-top: 1px solid var(--line); padding-top: 16px; padding-bottom: 32px; color: var(--hint); font-size: 14px; }
+footer p { margin: 6px 0; }
+@media (max-width: 480px) {
+  h1 { font-size: 25px; }
+  .prices th, .prices td { padding: 10px; font-size: 15px; }
+  dl.req { grid-template-columns: 1fr; gap: 2px; }
+  dl.req dd { margin-bottom: 10px; }
+}

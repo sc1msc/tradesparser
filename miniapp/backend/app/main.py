@@ -46,7 +46,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, billing, db, lots, watchdog
+from . import auth, backup, billing, db, lots, site, watchdog
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -63,6 +63,7 @@ async def lifespan(_app):
 
 app = FastAPI(title="honestlot", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 app.include_router(billing.router)
+app.include_router(site.router)  # /pro, /offer, /privacy, /requisites - страницы для ЮKassa
 
 
 def _now_iso():

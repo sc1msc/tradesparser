@@ -595,8 +595,8 @@ def api_offer(authorization: str = Header(default="")):
     tid, user = _who(authorization)
     return {**offer(tid), **public_status(tid), "user": user and {"first_name": user.get("first_name"),
                                                                     "username": user.get("username")},
-            "offer_url": os.environ.get("HONESTLOT_OFFER_URL", ""),
-            "privacy_url": os.environ.get("HONESTLOT_PRIVACY_URL", "")}
+            "offer_url": os.environ.get("HONESTLOT_OFFER_URL") or "/offer",  # страницы site.py
+            "privacy_url": os.environ.get("HONESTLOT_PRIVACY_URL") or "/privacy"}
 
 
 @router.post("/api/pay/checkout")
