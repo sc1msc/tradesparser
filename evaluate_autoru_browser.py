@@ -62,6 +62,7 @@ import automation
 import config
 import lot_metrics
 import autoru_valuation
+import sheets_writer
 import vin_cache
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -153,7 +154,8 @@ def _batch_write(worksheet, row_num, col, updates):
         cell = gspread.utils.rowcol_to_a1(row_num, col[name] + 1)
         data.append({"range": cell, "values": [[value]]})
     if data:
-        worksheet.batch_update(data)
+        # таймаут или 5xx Google - повтор, а не падение всего шага (так упало дозаполнение 13.10.2026)
+        sheets_writer.retry_write(lambda: worksheet.batch_update(data))
 
 
 def run(specs_only=False, limit=None):
