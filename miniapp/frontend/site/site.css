@@ -40,3 +40,4 @@ footer p { margin: 6px 0; }
   dl.req { grid-template-columns: 1fr; gap: 2px; }
   dl.req dd { margin-bottom: 10px; }
 }
+.card h3:first-child { margin-top: 0; }
