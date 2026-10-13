@@ -5,6 +5,11 @@
 
 const tg = window.Telegram && window.Telegram.WebApp;
 const IN_TG = !!(tg && tg.initData);
+// Вне Telegram (обычный браузер: platform "unknown") корень сайта - страница подписки /pro, а не
+// заглушка с кнопкой "Открыть бота": ЮKassa требует, чтобы сайт, где принимают оплату, не уводил
+// в Telegram (замечание менеджера 13.10.2026). localhost - локальная разработка (run_local.py).
+const OUTSIDE_TG = !(tg && tg.platform && tg.platform !== "unknown");
+const TO_SITE = OUTSIDE_TG && !["localhost", "127.0.0.1"].includes(location.hostname);
 const PAGE = 20;
 const BOT = "honestlot_bot";
 // Аккаунт поддержки в Telegram (без @). Пусто - ссылка "Написать в поддержку" не показывается.
@@ -812,6 +817,7 @@ function renderFilters(initial) {
 // ---------- заглушка вне Telegram ----------
 
 function showStub() {
+  if (OUTSIDE_TG) return location.replace("/pro");  // браузер, в том числе локальный - на сайт
   document.getElementById("app").replaceChildren(h("div", { class: "stub" },
     h("img", { src: "logo.svg", alt: "" }),
     h("h2", {}, "HonestLot"),
@@ -842,4 +848,4 @@ async function start() {
     if (e instanceof AuthError) showStub();
   }
 }
-start();
+if (TO_SITE) location.replace("/pro"); else start();
