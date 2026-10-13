@@ -436,16 +436,16 @@ async function renderFavs() {
 // ---------- вкладки и навигация ----------
 
 const tabsEl = h("nav", { class: "tabs" });
+function selectTab(key) {
+  if (key === "favs" && locked("favs")) return;
+  if (state.stack.length) { state.stack = []; state.scrolls = []; renderTop(); }  // из экрана лота - сразу в раздел
+  if (state.tab === key) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  state.tab = key; renderTabs(); showTab();
+}
 function renderTabs() {
-  const tab = (key, label, ic) => h("button", {
-    class: state.tab === key ? "on" : "",
-    onclick: () => {
-      if (key === "favs" && locked("favs")) return;
-      if (state.tab === key) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
-      state.tab = key; renderTabs(); showTab();
-    },
-  }, icon(ic), label);
+  const tab = (key, label, ic) => h("button", { class: state.tab === key ? "on" : "", onclick: () => selectTab(key) }, icon(ic), label);
   tabsEl.replaceChildren(tab("feed", "Лоты", "list"), tab("favs", "Избранное", "heart"));
+  if (webNav) webNav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
 }
 function showTab() {
   feed.el.classList.toggle("hidden", state.tab !== "feed");
@@ -494,7 +494,11 @@ function gallery(photos) {
     const i = Math.round(slides.scrollLeft / slides.clientWidth);
     counter.textContent = `${i + 1} / ${photos.length}`;
   }, { passive: true });
-  return h("div", { class: "gallery" }, slides, photos.length > 1 ? counter : null);
+  const arrows = WEB && photos.length > 1 ? [-1, 1].map((d) => h("button", {
+    class: "gnav " + (d < 0 ? "prev" : "next"), "aria-label": d < 0 ? "Предыдущее фото" : "Следующее фото",
+    onclick: () => slides.scrollBy({ left: d * slides.clientWidth, behavior: "smooth" }),
+  }, d < 0 ? "‹" : "›")) : [];
+  return h("div", { class: "gallery" }, slides, ...arrows, photos.length > 1 ? counter : null);
 }
 
 function rows(pairs) {
@@ -598,19 +602,17 @@ async function renderLot(id) {
     h("b", {}, "Эта машина снова на торгах"),
     h("span", {}, `${rub(current.price)}${current.deadline ? " · заявки до " + dShort(current.deadline) : ""} · открыть →`)) : null;
 
-  overlay.replaceChildren(h("div", { class: "screen no-tabs" },
-    backbar(h("div", { class: "actions" },
-      h("button", { class: "sharebtn", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "top") }),
-      heartButton(lot.id, lot))),
-    relistedBox,
-    gallery(lot.photos),
-    h("div", { class: "block" },
+  const headBlock = h("div", { class: "block headblock" },
       h("h2", {}, lot.name, lot.year ? `, ${lot.year}` : ""),
       h("div", { class: "sub" }, [mileage, regionShort(lot.region)].filter(Boolean).join(" · ")),
       lot.trade === "auction" ? h("div", { class: "pricecap" }, "Начальная цена") : null,
       h("div", { class: "bigprice" }, rub(lot.price), gapBadge(lot.gap)),
       lot.next_price && lot.is_open ? h("div", { class: "nextstep" },
-        `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null),
+        `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null);
+  const bottomBar = h("div", { class: "bottombar" },
+    h("button", { class: "btn share", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "bottom") }),
+    h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.url); } }, "Открыть лот на сайте торгов"));
+  const blocks = [
     deadlineBlock,
     damageBox(lot),
     marketBlock(lot),
@@ -630,9 +632,20 @@ async function renderLot(id) {
       ["Статус", lot.status],
     ])),
     desc ? h("div", { class: "block" }, h("h3", {}, "Описание"), desc, descToggle) : null,
-    h("div", { class: "bottombar" },
-      h("button", { class: "btn share", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "bottom") }),
-      h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.url); } }, "Открыть лот на сайте торгов"))));
+  ];
+  // В веб-версии на широком экране - две колонки: фото слева, цена, кнопки и блоки справа
+  // (кнопки сразу под ценой: на компьютере нижней панели нет). На телефоне колонки
+  // складываются в одну в прежнем порядке, панель снова внизу экрана (style.css).
+  const body = WEB
+    ? [h("div", { class: "lotgrid" }, h("div", { class: "lotleft" }, gallery(lot.photos)),
+        h("div", { class: "lotright" }, headBlock, bottomBar, ...blocks))]
+    : [gallery(lot.photos), headBlock, ...blocks, bottomBar];
+  overlay.replaceChildren(h("div", { class: "screen no-tabs" + (WEB ? " lotscreen" : "") },
+    backbar(h("div", { class: "actions" },
+      h("button", { class: "sharebtn", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "top") }),
+      heartButton(lot.id, lot))),
+    relistedBox,
+    ...body));
 }
 
 // Предупреждение о повреждениях: тотальные (сгорела, на запчасти - по тексту или по
@@ -921,8 +934,38 @@ function siteLinks(...extra) {
 
 // Внизу ленты в веб-версии: страницы сайта и выход.
 function webLinks() {
-  if (!WEB) return null;
-  return siteLinks(h("button", { onclick: () => { store.set("web_token", null); location.reload(); } }, "Выйти"));
+  return WEB ? siteLinks() : null;
+}
+
+function logout() { store.set("web_token", null); location.reload(); }
+
+// Имя из токена входа (auth.make_web_token: base64url JSON {id, u, n, exp}) - для шапки сайта.
+function webUserName() {
+  try {
+    const b = webToken().split(".")[0].replace(/-/g, "+").replace(/_/g, "/");
+    const p = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b + "=".repeat((4 - b.length % 4) % 4)), (c) => c.charCodeAt(0))));
+    return p.n || (p.u ? "@" + p.u : "");
+  } catch { return ""; }
+}
+
+// Шапка веб-версии: логотип, разделы (на компьютере вместо нижних вкладок), подписка, имя и выход.
+// pro: true - подписчик, false - без подписки (оплата включена), undefined - оплата выключена.
+let webNav = null;
+function webHeader(pro) {
+  webNav = h("nav", { class: "wnav" },
+    [["feed", "Лоты"], ["favs", "Избранное"]].map(([key, label]) =>
+      h("button", { "data-tab": key, class: state.tab === key ? "on" : "", onclick: () => selectTab(key) }, label)));
+  const name = webUserName();
+  return h("header", { class: "webhead" }, h("div", { class: "wh-in" },
+    h("button", { class: "wh-brand", "aria-label": "HonestLot — к ленте", onclick: () => selectTab("feed") },
+      h("img", { src: "logo.svg", alt: "" }), h("span", {}, "Honest", h("b", {}, "Lot"))),
+    webNav,
+    h("div", { class: "wh-right" },
+      pro === true ? h("span", { class: "wh-pro" }, "Pro")
+        : pro === false ? h("a", { class: "wh-cta", href: "/pro" }, "Перейти на Pro")
+          : h("a", { class: "wh-link", href: "/pro" }, "Подписка"),
+      name ? h("span", { class: "wh-user" }, name) : null,
+      h("button", { class: "wh-link", onclick: logout }, "Выйти"))));
 }
 
 // ---------- старт ----------
@@ -933,6 +976,7 @@ async function start() {
     const me = await loadMe();
     webLocked = me.pro === false;
     if (webLocked) state.filters = emptyFilters();
+    document.getElementById("app").append(webHeader(me.pro));
   }
   document.getElementById("app").append(root, overlay);
   root.append(buildFeed(), favsEl, tabsEl);

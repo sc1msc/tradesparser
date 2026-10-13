@@ -254,16 +254,107 @@ input { font: inherit; color: inherit; }
 .togglerow b { display: block; font-size: 15px; font-weight: 600; }
 .togglerow .sub { display: block; font-size: 13px; color: var(--hint); margin-top: 2px; }
 
-/* ---------- веб-версия (honestlot.ru в обычном браузере, html.web) ---------- */
-/* колонка шириной с телефон по центру: лента и экраны сделаны под мобильный экран */
-html.web #app { max-width: 560px; margin: 0 auto; min-height: 100vh; background: var(--bg2); box-shadow: 0 0 0 1px var(--sep); }
-html.web .tabs, html.web .bottombar { left: 50%; right: auto; width: min(100%, 560px); transform: translateX(-50%); }
+/* ---------- веб-версия (honestlot.ru в обычном браузере, html.web) ----------
+   Своя палитра без темы Telegram: нейтральный фон страницы, белые карточки с тонкой рамкой,
+   зелёный - только акцент. На телефоне - раскладка мини-аппа под шапкой сайта; от 760px -
+   сетка карточек, от 960px - экран лота в две колонки и разделы в шапке вместо нижних вкладок. */
+/* :root.web - не слабее :root:not(.tg) из тёмной темы мини-аппа выше, иначе его цвета победят */
+:root.web {
+  --bg: #ffffff; --bg2: #f3f4f6; --text: #15181d; --hint: #6b7280; --link: #15924b;
+  --sep: #e4e6ea; --green: #15924b; --green-soft: rgba(21, 146, 75, .1);
+  --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .06);
+  --head: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root.web { --bg: #171a20; --bg2: #0f1115; --text: #e9ecef; --hint: #9aa1ab; --link: #3cc274;
+             --sep: #272b33; --green: #2fbf6c; --green-soft: rgba(47, 191, 108, .14); --shadow: none; }
+}
+html.web body { font-size: 15px; -webkit-font-smoothing: antialiased; }
+html.web .price, html.web .bigprice, html.web .dl, html.web .row .v { font-variant-numeric: tabular-nums; }
+
+/* шапка сайта */
+.webhead { position: sticky; top: 0; z-index: 20; height: var(--head); background: var(--bg); border-bottom: 1px solid var(--sep); }
+.wh-in { max-width: 1240px; height: 100%; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 24px; }
+.wh-brand { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 700; letter-spacing: -.2px; }
+.wh-brand img { width: 28px; height: 28px; }
+.wh-brand b { color: var(--green); }
+.wnav { display: none; gap: 4px; }
+.wnav button { height: 36px; padding: 0 14px; border-radius: 8px; color: var(--hint); font-weight: 600; }
+.wnav button:hover { color: var(--text); background: var(--bg2); }
+.wnav button.on { color: var(--text); background: var(--bg2); }
+.wh-right { margin-left: auto; display: flex; align-items: center; gap: 14px; font-size: 14px; }
+.wh-link { color: var(--hint); }
+.wh-link:hover { color: var(--text); }
+.wh-cta { height: 34px; padding: 0 14px; border-radius: 8px; background: var(--green); color: #fff; font-weight: 600; display: inline-flex; align-items: center; text-decoration: none; }
+.wh-pro { font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-soft); border-radius: 999px; padding: 3px 10px; }
+.wh-user { display: none; color: var(--text); font-weight: 600; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.wh-link { text-decoration: none; }
+
+/* шапка ленты: логотип уже в шапке сайта; липнет под шапкой сайта */
+html.web .brandline:has(img) { display: none; }
+html.web .topbar { top: var(--head); background: var(--bg2); }
+html.web .backbar { top: var(--head); }
+html.web .search, html.web .iconbtn, html.web .chip:not(.on) { background: var(--bg); box-shadow: inset 0 0 0 1px var(--sep); }
+html.web .card, html.web .block, html.web .fsec, html.web .more { box-shadow: inset 0 0 0 1px var(--sep); }
+
+/* экран входа - карточка по центру */
 .login { padding-top: 56px; }
+html.web .login { max-width: 440px; margin: 8vh auto 32px; padding: 40px 32px 28px; background: var(--bg); border-radius: 18px; box-shadow: inset 0 0 0 1px var(--sep), var(--shadow); }
 .login .lead { color: var(--text); font-weight: 600; margin-top: 20px; }
 .login .widget { min-height: 48px; margin: 12px 0 8px; display: flex; justify-content: center; }
 .login .hint { color: var(--hint); font-size: 13px; }
 .sitelinks { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; margin: 16px auto 8px; font-size: 13px; }
 .sitelinks a, .sitelinks button { color: var(--hint); text-decoration: underline; }
+
+/* фильтры на широком экране - панель по центру, нижняя кнопка - по её ширине */
+html.web .tabs, html.web .bottombar { left: 50%; right: auto; width: min(100%, 640px); transform: translateX(-50%); }
+
+@media (min-width: 760px) {
+  html.web #root > .screen, html.web #overlay > .screen { max-width: 1240px; margin: 0 auto; }
+  html.web .topbar { padding: 16px 16px 10px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  html.web .searchrow { flex: 1 1 360px; max-width: 520px; }
+  html.web .sortrow { margin: 0; padding: 0; flex-wrap: wrap; }
+  html.web .total { padding: 4px 16px 8px; }
+  /* лента и избранное - сетка вертикальных карточек */
+  html.web .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; padding: 6px 16px 0; }
+  html.web .card { flex-direction: column; gap: 0; padding: 0; border-radius: 14px; overflow: hidden; cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  html.web .card:hover { box-shadow: inset 0 0 0 1px var(--sep), 0 8px 24px rgba(16, 24, 40, .1); }
+  html.web .thumb { width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; }
+  html.web .thumb .warn { left: 10px; top: 10px; }
+  html.web .card .info { padding: 12px 14px 14px; gap: 4px; }
+  html.web .card .name { font-size: 15px; }
+  html.web .card .price { font-size: 18px; }
+  html.web .card .fav { top: 8px; right: 8px; width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, .92); color: #6b7280; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
+  html.web .card .fav.on { color: #e5484d; }
+  html.web .more { width: 320px; margin-top: 20px; }
+  html.web .fav-title { padding: 20px 16px 6px; font-size: 14px; font-weight: 600; }
+  html.web #overlay > .screen:not(.lotscreen) { max-width: 640px; }
+}
+
+@media (min-width: 960px) {
+  /* разделы - в шапке, нижние вкладки не нужны */
+  .wnav { display: flex; }
+  .wh-user { display: inline; }
+  html.web .tabs { display: none; }
+  html.web .screen { padding-bottom: 32px; }
+  html.web .screen.no-tabs:not(.lotscreen) { padding-bottom: 96px; }
+  html.web .backbar { background: var(--bg2); padding: 10px 16px; }
+  /* экран лота: фото слева (липнет), справа цена, кнопки и блоки */
+  html.web .lotgrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; padding: 0 16px; align-items: start; }
+  html.web .lotleft { position: sticky; top: calc(var(--head) + 64px); }
+  html.web .lotleft .gallery, html.web .lotleft .nophoto { border-radius: 14px; overflow: hidden; }
+  html.web .lotleft .slides { max-height: calc(100vh - var(--head) - 96px); }
+  html.web .lotright .block { margin: 0 0 12px; padding: 18px 20px; }
+  html.web .lotright .headblock h2 { font-size: 24px; }
+  html.web .lotright .bigprice { font-size: 30px; }
+  html.web .lotright .bottombar { position: static; transform: none; width: auto; margin: 0 0 12px; padding: 0; background: none; border: 0; }
+  html.web .relisted-box { margin: 0 16px 12px; }
+}
+/* стрелки галереи (веб-версия): мышью фото не свайпнуть */
+.gnav { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; background: rgba(0, 0, 0, .45); color: #fff; font-size: 26px; line-height: 1; display: grid; place-items: center; opacity: .85; }
+.gnav:hover { opacity: 1; background: rgba(0, 0, 0, .65); }
+.gnav.prev { left: 10px; }
+.gnav.next { right: 10px; }
 
 /* предложение Pro (веб-версия, showPaywall): лист снизу на телефоне, окно по центру на компьютере */
 .paywall { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: rgba(0, 0, 0, .45); }
