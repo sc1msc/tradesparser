@@ -492,7 +492,7 @@ function marketBlock(lot) {
       h("div", { class: "sub" }, "Мультилот: несколько машин одним лотом. Сравнение с рынком для такого лота не считаем — смотрите состав лота в описании."));
   }
   if (lot.market_low == null || lot.market_high == null) {
-    return h("div", { class: "block" }, h("h3", {}, "Рынок"), h("div", { class: "sub" }, "Оценки Авто.ру для этого лота пока нет."));
+    return h("div", { class: "block" }, h("h3", {}, "Рынок"), h("div", { class: "sub" }, "Рыночной оценки для этого лота пока нет."));
   }
   const lo = Math.min(lot.market_low, lot.price) * 0.9;
   const hi = Math.max(lot.market_high, lot.price) * 1.1;
@@ -505,7 +505,7 @@ function marketBlock(lot) {
   else if (lot.gap <= -0.5) verdict = `${what} ${auction ? "выше" : "дороже"} середины рынка на ${Math.round(-lot.gap)}%`;
   if (auction) verdict += ". Итоговая цена определится на торгах.";
   return h("div", { class: "block" },
-    h("h3", {}, "Рыночная цена · Авто.ру"),
+    h("h3", {}, "Рыночная цена"),
     h("div", {}, `${rub(lot.market_low)} — ${rub(lot.market_high)}`),
     h("div", { class: "range" },
       h("div", { class: "band", style: { left: pos(lot.market_low), width: `calc(${pos(lot.market_high)} - ${pos(lot.market_low)})` } }),
@@ -513,7 +513,7 @@ function marketBlock(lot) {
     h("div", { class: "range-labels" }, h("span", {}, auction ? "▮ начальная цена" : "▮ цена лота"), h("span", {}, `середина ${short(Math.round(mid))} ₽`)),
     h("div", { class: "sub", style: { marginTop: "8px" } }, verdict),
     lot.gap_uncertain ? h("div", { class: "sub unsure-note" },
-      "Оценка может быть неточной: Авто.ру сам указывает большую погрешность для этой машины.") : null,
+      "Оценка может быть неточной: для этой машины у неё большая погрешность.") : null,
     lot.mileage_estimated ? h("div", { class: "sub" }, "Оценка сделана по примерному пробегу.") : null);
 }
 

@@ -36,7 +36,7 @@ SELECTIONS = [
         "key": "one_owner",
         "sheet": "lots_one_owner",
         "title": "Один владелец",
-        "digest_intro": "с одним предыдущим владельцем (по данным Auto.ru)",
+        "digest_intro": "с одним предыдущим владельцем",
     },
     {
         "key": "heavy_luxury",
