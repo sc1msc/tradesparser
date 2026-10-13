@@ -920,7 +920,7 @@ function showLogin(expired) {
   document.getElementById("app").replaceChildren(h("div", { class: "stub login" },
     h("img", { src: "logo.svg", alt: "" }),
     h("h2", {}, "HonestLot"),
-    h("p", {}, "Машины с торгов по банкротству в Москве и Московской области — с рыночной оценкой каждой."),
+    h("p", {}, "Автомобили с торгов по банкротству в Москве и Московской области — с рыночной оценкой."),
     h("p", { class: "lead" }, expired ? "Вход устарел — войдите через Telegram ещё раз." : "Авторизуйтесь, чтобы смотреть лоты."),
     box, fallback,
     siteLinks()));

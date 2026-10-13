@@ -43,7 +43,11 @@ Telegram (правила для разработчиков, п. 6.2) и Apple (3
 Повышение цены действующим подписчикам (со следующего периода, письмо за 14
 дней) - пока не реализовано: цена периода хранится в subscriptions.price.
 
-Письма - mailer.py. Админка - python -m app.billing [list|early <id>].
+ПОДАРОК. python -m app.billing grant <@ник|telegram_id> [месяцев]: бесплатный Pro (grant).
+Есть подписка - срок продлевается с её конца; нет - подписка без автопродления за 0 ₽,
+в конце срока просто закончится (письма не уходят: e-mail у подарка пустой).
+
+Письма - mailer.py. Админка - python -m app.billing [list | early <id> | grant <@ник|id> [мес]].
 """
 import base64
 import calendar
@@ -696,7 +700,44 @@ def fake_confirm(id: str, paid: int):
     return RedirectResponse(return_url, status_code=303)
 
 
-# ---------- админка: python -m app.billing [list | early <telegram_id> [заметка]] ----------
+# ---------- подарок: бесплатный Pro ----------
+
+def grant(who, months=1, now=None):
+    """Бесплатный Pro на months месяцев. who - telegram_id или @ник (пользователь должен хоть раз
+    открыть мини-апп или сайт). -> (telegram_id, новый конец срока)."""
+    now = now or now_msk()
+    c = _conn()
+    if str(who).startswith("@"):
+        row = c.execute("SELECT telegram_id FROM users WHERE lower(username) = ?", (str(who)[1:].lower(),)).fetchone()
+        if not row:
+            raise ValueError(f"{who} нет в базе - пусть откроет мини-апп или сайт")
+        tid = row["telegram_id"]
+    else:
+        tid = int(who)
+    sub = subscription(tid)
+    early = int(_early_for(c, tid))  # подарок не отнимает раннюю цену, если она человеку полагается
+    with db._lock:
+        with c:
+            if sub and sub["status"] in ("active", "past_due") and _dt(sub["period_end"]) > now:
+                # действующая подписка (в том числе платная с автопродлением) - продлеваем с её конца
+                end = add_months(_dt(sub["period_end"]), months)
+                c.execute("UPDATE subscriptions SET period_end = ?, status = 'active', renew_attempts = 0, "
+                          "next_attempt_at = NULL, updated_at = ? WHERE telegram_id = ?", (_iso(end), _iso(now), tid))
+            elif sub:
+                end = add_months(now, months)
+                c.execute("UPDATE subscriptions SET plan_id = 'month', price = 0, early = ?, status = 'active', "
+                          "autorenew = 0, period_end = ?, payment_method_id = NULL, payment_method_title = NULL, "
+                          "renew_attempts = 0, next_attempt_at = NULL, reminded_for = NULL, updated_at = ? "
+                          "WHERE telegram_id = ?", (early, _iso(end), _iso(now), tid))
+            else:
+                end = add_months(now, months)
+                c.execute("INSERT INTO subscriptions (telegram_id, email, plan_id, price, early, status, autorenew, "
+                          "period_end, created_at, updated_at) VALUES (?, '', 'month', 0, ?, 'active', 0, ?, ?, ?)",
+                          (tid, early, _iso(end), _iso(now), _iso(now)))
+    return tid, end
+
+
+# ---------- админка: python -m app.billing [list | early <telegram_id> [заметка] | grant <@ник|id> [мес]] ----------
 
 def _cli(argv):
     c = _conn()
@@ -706,6 +747,10 @@ def _cli(argv):
                 c.execute("INSERT OR REPLACE INTO early_access (telegram_id, note, created_at) VALUES (?, ?, ?)",
                           (int(argv[1]), " ".join(argv[2:]) or None, _iso(now_msk())))
         print(f"Ранняя цена выдана: {argv[1]}")
+        return
+    if argv[:1] == ["grant"] and len(argv) >= 2:
+        tid, end = grant(argv[1], int(argv[2]) if len(argv) > 2 else 1)
+        print(f"Pro подарен: {argv[1]} (telegram_id {tid}) до {_date_ru(end)} включительно")
         return
     rows = c.execute("SELECT s.*, u.username FROM subscriptions s LEFT JOIN users u USING (telegram_id) "
                      "ORDER BY s.period_end DESC").fetchall()

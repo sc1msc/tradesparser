@@ -39,8 +39,11 @@
 - возвраты: пока вручную в личном кабинете ЮKassa. По оферте (п. 6) при отказе возвращается плата за
   неиспользованные полные дни в течение 10 дней, доступ прекращается в день отказа — подписку
   закончить вручную в базе;
-- админка: только команды `python -m app.billing list` и `python -m app.billing early <telegram_id> [заметка]`
-  (в контейнере: `docker compose exec api python -m app.billing list`).
+- админка: только команды `python -m app.billing list`, `python -m app.billing early <telegram_id> [заметка]`
+  и `python -m app.billing grant <@ник|telegram_id> [месяцев]` — бесплатный Pro (подарок): есть
+  подписка — срок продлевается с её конца, нет — подписка без автопродления за 0 ₽, которая просто
+  закончится. Человек должен хоть раз открыть мини-апп или сайт. В контейнере:
+  `docker compose exec api python -m app.billing list`.
 
 ## Какой сервис оплаты выбрать
 
