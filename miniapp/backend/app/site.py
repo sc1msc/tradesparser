@@ -101,7 +101,7 @@ def render(page):
     return out
 
 
-@router.get("/robots.txt", response_class=PlainTextResponse)
+@router.api_route("/robots.txt", methods=["GET", "HEAD"], response_class=PlainTextResponse)
 def robots():
     # /requisites здесь нарочно не закрыт - см. докстринг
     return "User-agent: *\nDisallow: /api/\nDisallow: /pay/\n"
@@ -119,4 +119,5 @@ def _page_route(page):
 # Явные адреса, а не "/{page}": такой маршрут перехватил бы статику мини-аппа
 # (/app.js, /style.css), которую отдаёт StaticFiles в конце main.py.
 for _page in PAGES:
-    router.add_api_route(f"/{_page}", _page_route(_page), methods=["GET"], response_class=HTMLResponse)
+    # HEAD - так доступность сайта проверяют роботы (в том числе при модерации магазина)
+    router.add_api_route(f"/{_page}", _page_route(_page), methods=["GET", "HEAD"], response_class=HTMLResponse)
