@@ -93,6 +93,7 @@ input { font: inherit; color: inherit; }
   background: var(--bg2) center/cover no-repeat;
   display: grid; place-items: center; color: var(--hint);
 }
+.thumb .nophoto-t { display: none; }
 .thumb .warn {
   position: absolute; left: 5px; top: 5px; width: 22px; height: 22px; border-radius: 6px;
   background: rgba(0, 0, 0, .55); color: #ffc24a; font-size: 13px; display: grid; place-items: center;
@@ -331,6 +332,13 @@ html.web .tabs, html.web .bottombar { left: 50%; right: auto; width: min(100%, 6
   html.web .card { flex-direction: column; gap: 0; padding: 0; border-radius: 14px; overflow: hidden; cursor: pointer; transition: box-shadow .15s, transform .15s; }
   html.web .card:hover { box-shadow: inset 0 0 0 1px var(--sep), 0 8px 24px rgba(16, 24, 40, .1); }
   html.web .thumb { width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; }
+  /* рамка карточки - поверх фото и заглушки: иначе заглушка без фото сливается с фоном страницы */
+  html.web .card { position: relative; }
+  html.web .card::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--sep); pointer-events: none; }
+  html.web .thumb { background-color: var(--neutral-soft); }  /* пока фото грузится или не загрузилось */
+  html.web .thumb.nophoto { background: var(--neutral-soft); align-content: center; gap: 6px; }
+  html.web .thumb.nophoto svg { width: 44px; height: 44px; opacity: .7; }
+  html.web .thumb .nophoto-t { display: block; font-size: 13px; }
   html.web .thumb .warn { left: 10px; top: 10px; }
   html.web .card .info { padding: 12px 14px 14px; gap: 4px; }
   html.web .card .name { font-size: 15px; }

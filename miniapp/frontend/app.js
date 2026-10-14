@@ -266,8 +266,9 @@ function priceChange(price, prev) {
 
 function card(it) {
   if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
-  const thumb = h("div", { class: "thumb", style: it.photo ? { backgroundImage: `url("${it.photo}")` } : null },
+  const thumb = h("div", { class: "thumb" + (it.photo ? "" : " nophoto"), style: it.photo ? { backgroundImage: `url("${it.photo}")` } : null },
     it.photo ? null : icon("car"),
+    it.photo ? null : h("span", { class: "nophoto-t" }, "Нет фото"),
     it.damaged ? h("span", { class: "warn", title: "Возможно, повреждён" }, "⚠") : null);
   const meta = [kmText(it), regionShort(it.region)].filter(Boolean).join(" · ");
   const specLine = specsShort(it);
