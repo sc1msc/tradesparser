@@ -13,6 +13,7 @@
   --sep: var(--tg-theme-section-separator-color, rgba(125, 130, 139, .22));
   --green: #179a50;
   --green-soft: rgba(23, 154, 80, .12);
+  --wm-lot: #0E9C6B;  /* «lot» в надписи - фирменная мята */
   --neutral-soft: rgba(125, 130, 139, .14);
   --warn: #c77800;
   --radius: 14px;
@@ -22,7 +23,7 @@
     --bg: #17191d; --bg2: #0e0f12; --text: #eef0f3; --hint: #8b919b; --link: #5aa5ff;
   }
 }
-:root.dark { --green: #2fbf6c; --green-soft: rgba(47, 191, 108, .16); --warn: #e0a23a; }
+:root.dark { --wm-lot: #3EE0A1; --green: #2fbf6c; --green-soft: rgba(47, 191, 108, .16); --warn: #e0a23a; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg2); color: var(--text); }
@@ -45,7 +46,10 @@ input { font: inherit; color: inherit; }
   padding: 10px 16px 8px;
 }
 .brandline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.brandline img { width: 26px; height: 26px; }
+.brandline img { width: 28px; height: 28px; }
+.wmw { display: inline-flex; }
+.wm { height: 14px; width: auto; fill: currentColor; display: block; }
+.wm .lot { fill: var(--wm-lot); }
 .brandline .word { font-weight: 700; font-size: 18px; letter-spacing: -.2px; }
 .brandline .word span { color: var(--green); }
 
@@ -267,7 +271,7 @@ input { font: inherit; color: inherit; }
 }
 @media (prefers-color-scheme: dark) {
   :root.web { --bg: #171a20; --bg2: #0f1115; --text: #e9ecef; --hint: #9aa1ab; --link: #3cc274;
-             --sep: #272b33; --green: #2fbf6c; --green-soft: rgba(47, 191, 108, .14); --shadow: none; }
+             --sep: #272b33; --wm-lot: #3EE0A1; --green: #2fbf6c; --green-soft: rgba(47, 191, 108, .14); --shadow: none; }
 }
 html.web body { font-size: 15px; -webkit-font-smoothing: antialiased; }
 html.web .price, html.web .bigprice, html.web .dl, html.web .row .v { font-variant-numeric: tabular-nums; }
@@ -275,9 +279,9 @@ html.web .price, html.web .bigprice, html.web .dl, html.web .row .v { font-varia
 /* шапка сайта */
 .webhead { position: sticky; top: 0; z-index: 20; height: var(--head); background: var(--bg); border-bottom: 1px solid var(--sep); }
 .wh-in { max-width: 1240px; height: 100%; margin: 0 auto; padding: 0 16px; display: flex; align-items: center; gap: 24px; }
-.wh-brand { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 700; letter-spacing: -.2px; }
-.wh-brand img { width: 28px; height: 28px; }
-.wh-brand b { color: var(--green); }
+.wh-brand { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.wh-brand img { width: 30px; height: 30px; }
+.wh-brand .wm { height: 15px; }
 .wnav { display: none; gap: 4px; }
 .wnav button { height: 36px; padding: 0 14px; border-radius: 8px; color: var(--hint); font-weight: 600; }
 .wnav button:hover { color: var(--text); background: var(--bg2); }

@@ -1,12 +1,13 @@
 /* Страницы подписки HonestLot Pro на сайте (honestlot.ru/pay) - см. billing.py */
-:root { --bg: #f4f5f7; --card: #fff; --text: #16181d; --hint: #6b7280; --line: #e3e5e9; --green: #179a50; --green-soft: rgba(23,154,80,.12); --err: #c0392b; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --card: #181b21; --text: #e8eaee; --hint: #8b919b; --line: #2a2e36; --green: #2fbf6c; --green-soft: rgba(47,191,108,.16); --err: #ff6b5e; } }
+:root { --bg: #f4f5f7; --card: #fff; --text: #16181d; --hint: #6b7280; --line: #e3e5e9; --green: #179a50; --green-soft: rgba(23,154,80,.12); --wm-lot: #0E9C6B; --err: #c0392b; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0f1115; --card: #181b21; --text: #e8eaee; --hint: #8b919b; --line: #2a2e36; --green: #2fbf6c; --green-soft: rgba(47,191,108,.16); --wm-lot: #3EE0A1; --err: #ff6b5e; } }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; margin-bottom: 18px; }
 .brand img { width: 32px; height: 32px; }
-.brand span { color: var(--green); }
+.brand .wm { height: 16px; width: auto; fill: currentColor; display: block; }
+.brand .wm .lot { fill: var(--wm-lot); }
 h1 { font-size: 24px; margin: 0 0 6px; }
 .sub, .hint { color: var(--hint); font-size: 14px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 14px; }

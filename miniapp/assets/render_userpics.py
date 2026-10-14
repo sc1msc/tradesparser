@@ -1,85 +1,91 @@
 # -*- coding: utf-8 -*-
 r"""
-Юзерпики ботов: монограмма HL (Honest Lot), которую разрезает полоса с
-надписью - композиция взята у логотипа канала Honest Dealer (HD), цвета -
-фирменные цвета мини-аппа: белый знак на зелёном (#179a50, как logo.svg).
-Золотой вариант на чёрном был 01.10.2026 и отклонён - бело-зелёный.
-  bot_userpic     - @honestlot_bot, в полосе "HONEST LOT"
-  support_userpic - @honestlot_support_bot, в полосе "ПОДДЕРЖКА"
+Фирменные картинки HonestLot (знак утверждён владельцем 14.10.2026): буква h из двух
+частей - белый ствол и мятная арка, которая поворачивает вниз и уходит стрелкой ниже
+основания ствола, то есть ниже «линии рынка». Плечо - суперэллипс, как у контейнера
+иконки и у шрифта Unbounded, которым набрано «honestlot».
 
-Telegram обрезает аватар в круг - знак держится в центральной части.
-Надпись - Montserrat 800 из Google Fonts: PNG рендерится браузером Playwright
-(уже стоит для evaluate_autoru_browser.py) с подключённым шрифтом. SVG рядом -
-исходник для правок; без установленного Montserrat он покажет запасной шрифт.
+Скрипт пишет:
+  frontend/logo.svg             - иконка (тёмно-синий суперэллипс), шапки и заглушки
+  frontend/favicon.svg          - пиксельная версия на сетке 32 для 16-32 px
+  frontend/apple-touch-icon.png - 180x180, iOS скругляет сам
+  assets/wordmark.svg           - надпись «honestlot» в кривых (Unbounded 600, -0.025em)
+  assets/bot_userpic, channel_userpic, support_userpic (.svg + .png 640x640) - аватарки
+    @honestlot_bot, канала и @honestlot_support_bot; поддержка - инверсия на мятном.
+    Telegram обрезает аватар в круг, поэтому знак уменьшен до 0.86.
+
+Контуры посчитаны один раз (построение - в истории сессии 14.10.2026), здесь - готовые
+пути. Надпись вставлена в шапки (app.js, site_pages/layout.html, pay/*.html) копией
+путей HONEST/LOT отсюда: меняете надпись - обновите и там.
 
 Запуск из корня репозитория:  python miniapp/assets/render_userpics.py
 """
-import base64
 import os
 
 from playwright.sync_api import sync_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FONT_CSS = "https://fonts.googleapis.com/css2?family=Montserrat:wght@800&display=block"
-BG = "#179a50"  # фирменный зелёный мини-аппа (frontend/logo.svg)
-FG = "#ffffff"
+FRONT = os.path.join(HERE, "..", "frontend")
+
+NAVY, MINT, MINT_DARK, WHITE = "#0B1A2E", "#3EE0A1", "#0E9C6B", "#FFFFFF"
+
+# знак на сетке 120x120
+SQUIRCLE = "M120 60 L119.98 76.43 L119.93 81.68 L119.83 85.48 L119.7 88.57 L119.54 91.21 L119.33 93.53 L119.09 95.61 L118.81 97.51 L118.49 99.25 L118.13 100.86 L117.73 102.35 L117.29 103.75 L116.81 105.05 L116.29 106.28 L115.73 107.43 L115.12 108.51 L114.47 109.53 L113.77 110.49 L113.03 111.39 L112.23 112.23 L111.39 113.03 L110.49 113.77 L109.53 114.47 L108.51 115.12 L107.43 115.73 L106.28 116.29 L105.05 116.81 L103.75 117.29 L102.35 117.73 L100.86 118.13 L99.25 118.49 L97.51 118.81 L95.61 119.09 L93.53 119.33 L91.21 119.54 L88.57 119.7 L85.48 119.83 L81.68 119.93 L76.43 119.98 L60 120 L43.57 119.98 L38.32 119.93 L34.52 119.83 L31.43 119.7 L28.79 119.54 L26.47 119.33 L24.39 119.09 L22.49 118.81 L20.75 118.49 L19.14 118.13 L17.65 117.73 L16.25 117.29 L14.95 116.81 L13.72 116.29 L12.57 115.73 L11.49 115.12 L10.47 114.47 L9.51 113.77 L8.61 113.03 L7.77 112.23 L6.97 111.39 L6.23 110.49 L5.53 109.53 L4.88 108.51 L4.27 107.43 L3.71 106.28 L3.19 105.05 L2.71 103.75 L2.27 102.35 L1.87 100.86 L1.51 99.25 L1.19 97.51 L0.91 95.61 L0.67 93.53 L0.46 91.21 L0.3 88.57 L0.17 85.48 L0.07 81.68 L0.02 76.43 L0 60 L0.02 43.57 L0.07 38.32 L0.17 34.52 L0.3 31.43 L0.46 28.79 L0.67 26.47 L0.91 24.39 L1.19 22.49 L1.51 20.75 L1.87 19.14 L2.27 17.65 L2.71 16.25 L3.19 14.95 L3.71 13.72 L4.27 12.57 L4.88 11.49 L5.53 10.47 L6.23 9.51 L6.97 8.61 L7.77 7.77 L8.61 6.97 L9.51 6.23 L10.47 5.53 L11.49 4.88 L12.57 4.27 L13.72 3.71 L14.95 3.19 L16.25 2.71 L17.65 2.27 L19.14 1.87 L20.75 1.51 L22.49 1.19 L24.39 0.91 L26.47 0.67 L28.79 0.46 L31.43 0.3 L34.52 0.17 L38.32 0.07 L43.57 0.02 L60 0 L76.43 0.02 L81.68 0.07 L85.48 0.17 L88.57 0.3 L91.21 0.46 L93.53 0.67 L95.61 0.91 L97.51 1.19 L99.25 1.51 L100.86 1.87 L102.35 2.27 L103.75 2.71 L105.05 3.19 L106.28 3.71 L107.43 4.27 L108.51 4.88 L109.53 5.53 L110.49 6.23 L111.39 6.97 L112.23 7.77 L113.03 8.61 L113.77 9.51 L114.47 10.47 L115.12 11.49 L115.73 12.57 L116.29 13.72 L116.81 14.95 L117.29 16.25 L117.73 17.65 L118.13 19.14 L118.49 20.75 L118.81 22.49 L119.09 24.39 L119.33 26.47 L119.54 28.79 L119.7 31.43 L119.83 34.52 L119.93 38.32 L119.98 43.57Z"
+STEM = "M30.27 21.7L30.27 21.7Q30.27 20.1 31.87 20.1L46.17 20.1Q47.77 20.1 47.77 21.7L47.77 76.1L30.77 76.1Q30.27 76.1 30.27 75.6Z"
+ARROW = "M47.77 67.1V51.1C47.77 45.25 51.62 42.1 58.77 42.1H62.27C80.67 42.1 85.27 46.7 85.27 65.1V79.1L85.27 79.6Q85.27 80.1 85.74 79.92L94.03 76.68Q95.52 76.1 94.53 77.35L77.64 98.69Q76.52 100.1 75.4 98.69L58.51 77.35Q57.52 76.1 59.01 76.68L67.3 79.92Q67.77 80.1 67.77 79.6V65.6C67.77 58.8 66.07 57.1 59.27 57.1H54.77C50.92 57.1 47.77 61.1 47.77 67.1Z"
+# надпись: viewBox в единицах шрифта (кегль 1000)
+WORD_VIEWBOX = "60 -770 5757 786"
+HONEST = "M60 -770H245V0H60ZM459 -586Q540 -586 597.5 -553.5Q655 -521 685.5 -461Q716 -401 716 -318V0H530V-290Q530 -361 495.5 -397.5Q461 -434 395 -434Q350 -434 316 -414.5Q282 -395 263.5 -359.5Q245 -324 245 -275L186 -306Q198 -397 236 -459Q274 -521 331.5 -553.5Q389 -586 459 -586ZM1135 16Q1027 16 946 -22Q865 -60 820 -128Q775 -196 775 -285Q775 -375 820 -442.5Q865 -510 946.5 -548Q1028 -586 1135 -586Q1243 -586 1324.5 -548Q1406 -510 1451 -442.5Q1496 -375 1496 -285Q1496 -195 1451 -127.5Q1406 -60 1324.5 -22Q1243 16 1135 16ZM1135 -124Q1190 -124 1228.5 -143.5Q1267 -163 1287.5 -199Q1308 -235 1308 -285Q1308 -335 1287.5 -371Q1267 -407 1228.5 -426.5Q1190 -446 1135 -446Q1082 -446 1043 -426.5Q1004 -407 983 -371Q962 -335 962 -285Q962 -235 983 -199Q1004 -163 1043 -143.5Q1082 -124 1135 -124ZM1533 -570H1718L1755 -348V0H1569V-376ZM1968 -586Q2050 -586 2107.5 -553.5Q2165 -521 2195.5 -461Q2226 -401 2226 -318V0H2040V-290Q2040 -361 2005 -397.5Q1970 -434 1905 -434Q1859 -434 1825.5 -414.5Q1792 -395 1773.5 -359.5Q1755 -324 1755 -275L1696 -306Q1707 -397 1745.5 -459Q1784 -521 1841.5 -553.5Q1899 -586 1968 -586ZM2640 16Q2538 16 2457.5 -22Q2377 -60 2331 -128Q2285 -196 2285 -287Q2285 -376 2329 -443Q2373 -510 2450.5 -548Q2528 -586 2626 -586Q2726 -586 2798 -542Q2870 -498 2909 -418Q2948 -338 2948 -230H2434V-347H2846L2779 -305Q2776 -352 2756.5 -384.5Q2737 -417 2705 -434.5Q2673 -452 2629 -452Q2581 -452 2546 -433Q2511 -414 2491.5 -380Q2472 -346 2472 -301Q2472 -244 2497.5 -204Q2523 -164 2571.5 -143Q2620 -122 2690 -122Q2754 -122 2818 -139.5Q2882 -157 2933 -189V-68Q2875 -28 2800.5 -6Q2726 16 2640 16ZM3658 -183Q3658 -119 3620.5 -74.5Q3583 -30 3511 -7Q3439 16 3336 16Q3231 16 3152 -10Q3073 -36 3029 -83Q2985 -130 2982 -192H3171Q3177 -167 3199.5 -148Q3222 -129 3258 -119.5Q3294 -110 3343 -110Q3409 -110 3443 -124Q3477 -138 3477 -166Q3477 -187 3452.5 -198Q3428 -209 3365 -214L3261 -222Q3163 -229 3105 -253Q3047 -277 3022.5 -314Q2998 -351 2998 -397Q2998 -460 3037.5 -502Q3077 -544 3147 -565Q3217 -586 3311 -586Q3405 -586 3478.5 -561Q3552 -536 3596.5 -492Q3641 -448 3647 -389H3458Q3454 -409 3436.5 -426Q3419 -443 3386.5 -453.5Q3354 -464 3302 -464Q3243 -464 3212 -451Q3181 -438 3181 -413Q3181 -394 3200 -383Q3219 -372 3272 -367L3407 -357Q3503 -349 3557.5 -326.5Q3612 -304 3635 -268Q3658 -232 3658 -183ZM3662 -432V-513L3780 -556L3860 -722H3966V-570H4212V-432H3966V-244Q3966 -180 3992 -154.5Q4018 -129 4085 -129Q4128 -129 4160.5 -136.5Q4193 -144 4222 -157V-16Q4192 -4 4143.5 6Q4095 16 4043 16Q3952 16 3893.5 -13Q3835 -42 3807.5 -94.5Q3780 -147 3780 -218V-432Z"
+LOT = "M4283 -770H4468V0H4283ZM4895 16Q4787 16 4706 -22Q4625 -60 4580 -128Q4535 -196 4535 -285Q4535 -375 4580 -442.5Q4625 -510 4706.5 -548Q4788 -586 4895 -586Q5003 -586 5084.5 -548Q5166 -510 5211 -442.5Q5256 -375 5256 -285Q5256 -195 5211 -127.5Q5166 -60 5084.5 -22Q5003 16 4895 16ZM4895 -124Q4950 -124 4988.5 -143.5Q5027 -163 5047.5 -199Q5068 -235 5068 -285Q5068 -335 5047.5 -371Q5027 -407 4988.5 -426.5Q4950 -446 4895 -446Q4842 -446 4803 -426.5Q4764 -407 4743 -371Q4722 -335 4722 -285Q4722 -235 4743 -199Q4764 -163 4803 -143.5Q4842 -124 4895 -124ZM5257 -432V-513L5375 -556L5455 -722H5561V-570H5807V-432H5561V-244Q5561 -180 5587 -154.5Q5613 -129 5680 -129Q5723 -129 5755.5 -136.5Q5788 -144 5817 -157V-16Q5787 -4 5738.5 6Q5690 16 5638 16Q5547 16 5488.5 -13Q5430 -42 5402.5 -94.5Q5375 -147 5375 -218V-432Z"
+FAVICON = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect rx="7" fill="#0B1A2E"/><path d="M4 5 Q4 4 5 4 H9 Q10 4 10 5 V22 H4 Z" fill="#FFFFFF"/><path d="M10 17 V12 C10 10.6 10.8 10 12.2 10 H17 C20.6 10 22 11.4 22 15 V24 L26 22 L19 29 L12 22 L16 24 V17 C16 15.2 15.6 14 14.4 14 H12.6 C11 14 10 15 10 17 Z" fill="#3EE0A1"/></svg>'''
 
 
-def svg(band_text):
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" width="640" height="640">
-  <!-- Сгенерировано miniapp/assets/render_userpics.py - правьте там. -->
-  <defs>
-    <mask id="cut">
-      <rect width="640" height="640" fill="#fff"/>
-      <rect x="0" y="338" width="640" height="64" fill="#000"/>
-    </mask>
-  </defs>
-  <rect width="640" height="640" fill="{BG}"/>
-  <g fill="{FG}" mask="url(#cut)">
-    <rect x="128" y="168" width="62" height="304"/>
-    <rect x="262" y="168" width="62" height="304"/>
-    <rect x="128" y="296" width="196" height="42"/>
-    <rect x="364" y="168" width="62" height="304"/>
-    <rect x="364" y="410" width="148" height="62"/>
-  </g>
-  <text x="320" y="390" text-anchor="middle" fill="{FG}"
-        font-family="Montserrat, Arial Black, sans-serif" font-weight="800"
-        font-size="50" letter-spacing="3">{band_text}</text>
-</svg>
-'''
+def mark(bg=NAVY, fg=WHITE, accent=MINT, container="squircle", scale=1.0, size=None):
+    box = {"squircle": f'<path d="{SQUIRCLE}" fill="{bg}"/>',
+           "square": f'<rect width="120" height="120" fill="{bg}"/>'}.get(container, "")
+    tr = f' transform="translate(60 60) scale({scale}) translate(-60 -60)"' if scale != 1 else ""
+    wh = f' width="{size}" height="{size}"' if size else ""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"{wh}>{box}<g{tr}>'
+            f'<path d="{STEM}" fill="{fg}"/><path d="{ARROW}" fill="{accent}"/></g></svg>')
 
 
-USERPICS = {"bot_userpic": "HONEST LOT", "support_userpic": "ПОДДЕРЖКА"}
+def wordmark(fg=NAVY, lot=MINT_DARK):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{WORD_VIEWBOX}">'
+            f'<path d="{HONEST}" fill="{fg}"/><path d="{LOT}" fill="{lot}"/></svg>')
 
 
-def main(preview_path=None):
+USERPICS = {
+    "bot_userpic": dict(container="square", scale=0.86),
+    "channel_userpic": dict(container="square", scale=0.86),
+    "support_userpic": dict(bg=MINT, fg=NAVY, accent=WHITE, container="square", scale=0.86),
+}
+
+
+def write(path, text):
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text + "\n")
+
+
+def png(page, source, path, size):
+    page.set_viewport_size({"width": size, "height": size})
+    page.set_content(f"<body style='margin:0'>{source}</body>")
+    page.screenshot(path=path, clip={"x": 0, "y": 0, "width": size, "height": size})
+
+
+def main():
+    write(os.path.join(FRONT, "logo.svg"), mark())
+    write(os.path.join(FRONT, "favicon.svg"), FAVICON)
+    write(os.path.join(HERE, "wordmark.svg"), wordmark())
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": 640, "height": 640})
-        for name, text in USERPICS.items():
-            source = svg(text)
-            with open(os.path.join(HERE, f"{name}.svg"), "w", encoding="utf-8", newline="\n") as f:
-                f.write(source)
-            page.set_content(f"<html><head><link href='{FONT_CSS}' rel='stylesheet'></head>"
-                             f"<body style='margin:0;background:{BG}'>{source}</body></html>")
-            page.wait_for_load_state("networkidle")
-            page.evaluate("document.fonts.ready")
-            if not page.evaluate("document.fonts.check('800 50px Montserrat')"):
-                print(f"{name}: шрифт Montserrat не загрузился - проверьте интернет")
-            page.screenshot(path=os.path.join(HERE, f"{name}.png"), clip={"x": 0, "y": 0, "width": 640, "height": 640})
+        page = browser.new_page()
+        png(page, mark(container="square", size=180), os.path.join(FRONT, "apple-touch-icon.png"), 180)
+        for name, kw in USERPICS.items():
+            write(os.path.join(HERE, f"{name}.svg"), mark(**kw))
+            png(page, mark(size=640, **kw), os.path.join(HERE, f"{name}.png"), 640)
             print(f"{name}.png готов")
-        if preview_path:  # оба аватара в кругах - как их покажет Telegram
-            imgs = [base64.b64encode(open(os.path.join(HERE, f"{n}.png"), "rb").read()).decode() for n in USERPICS]
-            page.set_viewport_size({"width": 640, "height": 320})
-            page.set_content("<html><body style='margin:0;background:#e9edf0;display:flex;gap:60px;"
-                             "justify-content:center;align-items:center;height:320px'>" + "".join(
-                                 f"<div style='width:220px;height:220px;border-radius:50%;overflow:hidden'>"
-                                 f"<img src='data:image/png;base64,{i}' width=220 height=220></div>" for i in imgs)
-                             + "</body></html>")
-            page.screenshot(path=preview_path)
         browser.close()
 
 
 if __name__ == "__main__":
-    import sys
-    main(sys.argv[1] if len(sys.argv) > 1 else None)
+    main()
