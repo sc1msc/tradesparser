@@ -3,6 +3,7 @@
 // base64url JSON {id, u, n, exp}). На страницах оплаты бывает ещё вход виджетом Telegram только
 // для этой вкладки (sessionStorage hl_tglogin, см. pay/pay.js). Подпись токена проверяет сервер,
 // здесь только показываем имя. Не вошёл - ссылка «Войти» ведёт в веб-версию.
+// «Моя подписка» - путь к отмене подписки и отвязке карты (этого ждёт ЮKassa для автоплатежей).
 (function () {
   function decode(b64) {
     const s = b64.replace(/-/g, "+").replace(/_/g, "/");
@@ -45,8 +46,17 @@
       const b = document.createElement("button");
       b.type = "button";
       b.className = "acct-out";
+      b.title = "Выйти";
+      b.setAttribute("aria-label", "Выйти");
       b.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg><span>Выйти</span>';
       b.onclick = logout;
+      if (!location.pathname.endsWith("/manage.html")) {
+        const m = document.createElement("a");
+        m.className = "acct-sub";
+        m.href = "/pay/manage.html";
+        m.textContent = "Моя подписка";
+        box.append(m);
+      }
       box.append(n, b);
     } else if (box.dataset.guest !== "none") {
       const a = document.createElement("a");

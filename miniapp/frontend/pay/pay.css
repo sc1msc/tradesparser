@@ -85,3 +85,5 @@ button.ghost { background: none; color: var(--text); border: 1px solid var(--lin
 .acct-name { font-weight: 600; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acct-out { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: var(--hint); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
 .acct-out:hover { color: var(--text); }
+.acct-sub { color: var(--text); font-weight: 600; text-decoration: none; }
+@media (max-width: 479px) { .acct-name, .acct-out span { display: none; } .acct-out { padding: 5px 8px; } }

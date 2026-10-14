@@ -290,6 +290,7 @@ html.web .price, html.web .bigprice, html.web .dl, html.web .row .v { font-varia
 .wh-link { color: var(--hint); }
 .wh-link:hover { color: var(--text); }
 .wh-cta { height: 34px; padding: 0 14px; border-radius: 8px; background: var(--green); color: #fff; font-weight: 600; display: inline-flex; align-items: center; text-decoration: none; }
+a.wh-pro { text-decoration: none; }
 .wh-pro { font-size: 12px; font-weight: 700; color: var(--green); background: var(--green-soft); border-radius: 999px; padding: 3px 10px; }
 .wh-user { display: none; color: var(--text); font-weight: 600; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 a.wh-link { text-decoration: none; }

@@ -130,6 +130,14 @@ footer p { margin: 6px 0; }
 .acct-out { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
 .acct-out:hover { color: var(--text); }
 .acct-in { font-weight: 600; text-decoration: none; }
+.acct-sub { color: var(--text); font-weight: 600; text-decoration: none; }
+.acct-sub:hover { color: var(--accent); }
+@media (max-width: 479px) {
+  .acct-name, .acct-out span { display: none; }
+  .acct { gap: 10px; }
+  .acct-out { padding: 5px 8px; }
+  header { column-gap: 12px; }
+}
 @media (min-width: 700px) {
   header nav { margin-left: auto; }
   .acct:not(:empty) { padding-left: 20px; border-left: 1px solid var(--line); }

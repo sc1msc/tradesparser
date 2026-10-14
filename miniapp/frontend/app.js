@@ -1028,7 +1028,7 @@ function webHeader(pro) {
       h("img", { src: "logo.svg", alt: "" }), wordmark()),
     webNav,
     h("div", { class: "wh-right" },
-      pro === true ? h("span", { class: "wh-pro" }, "Pro")
+      pro === true ? h("a", { class: "wh-pro", href: "/pay/manage.html", title: "Моя подписка" }, "Pro")
         : pro === false ? h("a", { class: "wh-cta", href: "/pro" }, "Перейти на Pro")
           : h("a", { class: "wh-link", href: "/pro" }, "Подписка"),
       name ? h("span", { class: "wh-user" }, name) : null,
