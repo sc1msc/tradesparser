@@ -390,6 +390,9 @@ def _new_context(p):
     return browser, context.new_page()
 
 
+SPECS_MAX_EMPTY_IN_ROW = 8  # столько пустых оценок подряд - Авто.ру перестал отвечать, стоп
+
+
 def run_specs(limit=None):
     """Дозаполнение характеристик у уже оценённых лотов (см. докстринг модуля)."""
     limit = limit or config.AUTORU_MAX_PER_RUN
@@ -426,7 +429,7 @@ def run_specs(limit=None):
         return
 
     cache = vin_cache.VinCache(spreadsheet)
-    done = errors_in_row = 0
+    done = errors_in_row = empty_in_row = 0
     last_error = ""
     with sync_playwright() as p:
         browser, page = _new_context(p)
@@ -460,6 +463,18 @@ def run_specs(limit=None):
                 if len(key) == 17:
                     cache.update(key, specs)
                 done += 1
+                empty_in_row = 0
+                if done % 25 == 0:
+                    cache.flush()  # прервут Ctrl+C - записанное в кэш не пропадёт
+            elif not result.get("mark"):
+                # Пустая оценка (ни марки, ни модели) подряд у многих машин - Авто.ру перестал
+                # отвечать (14.10.2026: после ~50 машин так шло 40+ подряд). В таблицу ничего не
+                # пишется, машины остаются в очереди - останавливаемся, повторный запуск продолжит.
+                empty_in_row += 1
+                if empty_in_row >= SPECS_MAX_EMPTY_IN_ROW:
+                    print(f"{empty_in_row} пустых оценок подряд - Авто.ру, похоже, ограничил запросы. "
+                          f"Стоп; повторите позже, запуск продолжит с этого места.")
+                    break
             time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
         browser.close()
     cache.flush()
