@@ -6,7 +6,7 @@
   <title>HonestLot Pro - подписка</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="pay.css?v=4">
+  <link rel="stylesheet" href="pay.css?v=5">
 </head>
 <body>
 <main>
@@ -56,7 +56,7 @@ function render() {
     return el;
   }));
   $("renewText").textContent = $("autorenew").checked
-    ? `${rub(p.price)} ${p.months === 1 ? "каждый месяц" : "каждые " + months(p.months)}, спишем автоматически в конце периода. За 3 дня напомним письмом. Отключить можно в любой момент на странице управления подпиской или по ссылке из письма.`
+    ? `${rub(p.price)} ${p.months === 1 ? "каждый месяц" : "каждые " + months(p.months)}, спишем автоматически в конце периода. За 3 дня напомним письмом. Отменить подписку и отвязать карту можно в любой момент на странице «Моя подписка» или по ссылке из письма.`
     : "Подписка закончится в конце оплаченного периода, списаний больше не будет.";
   $("pay").textContent = `Оплатить ${rub(p.price)}`;
   $("pay").disabled = !$("consent").checked;

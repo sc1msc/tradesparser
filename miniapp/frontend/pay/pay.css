@@ -39,3 +39,42 @@ label.toggle .sw::after { content: ""; position: absolute; top: 3px; left: 3px; 
 label.toggle input:checked + .sw { background: var(--green); }
 label.toggle input:checked + .sw::after { transform: translateX(18px); }
 label.toggle input:focus-visible + .sw { outline: 2px solid var(--green); outline-offset: 2px; }
+/* «Моя подписка» (manage.html) - по образцу экрана ЮKassa для автоплатежей */
+h2 { font-size: 17px; margin: 0 0 12px; }
+a.btn { display: block; text-align: center; margin-top: 18px; padding: 14px; font-weight: 700; color: #fff; background: var(--green); border-radius: 12px; text-decoration: none; }
+.flash { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--green-soft); color: var(--green); font-weight: 600; font-size: 15px; }
+.subhead { display: flex; align-items: center; gap: 12px; }
+.subicon { width: 44px; height: 44px; flex: none; }
+.subt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.subt b { font-size: 18px; }
+.badge { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding: 8px 12px; border-radius: 10px; font-size: 12px; line-height: 1.3; }
+.badge b { font-size: 15px; }
+.badge.ok { background: var(--green-soft); color: var(--green); }
+.badge.off { background: var(--line); color: var(--hint); }
+.badge.warn { background: rgba(224, 162, 58, .16); color: #b8760f; }
+.actions .btn { margin-top: 14px; }
+button.outline-danger { background: none; color: var(--err); border: 1px solid var(--err); }
+.irows { display: grid; gap: 8px; }
+.irow { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 12px 14px; border-radius: 10px; background: var(--bg); }
+.irow b { text-align: right; overflow-wrap: anywhere; }
+table.hist { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+.hist th { text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--hint); padding: 0 0 8px; }
+.hist td { padding: 10px 0; border-top: 1px solid var(--line); }
+.hist .r { text-align: right; }
+.hint.sm { font-size: 12px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; }
+.pill.ok { background: var(--green-soft); color: var(--green); }
+.pill.bad { background: rgba(192, 57, 43, .12); color: var(--err); }
+/* окно подтверждения отмены */
+dialog.modal { width: min(440px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 18px; background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+dialog.modal::backdrop { background: rgba(8, 10, 14, .6); }
+.mbody { position: relative; padding: 28px 22px 22px; text-align: center; }
+.mclose { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--bg); color: var(--hint); font-size: 22px; line-height: 1; cursor: pointer; }
+.micon { width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: var(--err); background: rgba(192, 57, 43, .12); }
+.mbody h2 { font-size: 22px; margin: 0 0 6px; }
+.mcard { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); text-align: left; }
+.mnote { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--green-soft); border: 1px solid var(--green); font-size: 14px; text-align: left; }
+.mbtns { display: flex; gap: 10px; margin-top: 18px; }
+.mbtns .btn { margin-top: 0; padding: 14px 10px; white-space: nowrap; font-size: 15px; }
+button.danger { background: var(--err); }
+button.ghost { background: none; color: var(--text); border: 1px solid var(--line); }

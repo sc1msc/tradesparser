@@ -299,7 +299,18 @@ def public_status(telegram_id):
         "price": sub["price"], "period_end": sub["period_end"],
         "autorenew": bool(sub["autorenew"] and sub["payment_method_id"]),
         "payment_method": sub["payment_method_title"] if sub["payment_method_id"] else None,
-        "email": sub["email"]}}
+        "email": sub["email"], "created_at": sub["created_at"]}}
+
+
+def payment_history(telegram_id, limit=24):
+    """Платежи для страницы управления: прошедшие и непрошедшие продления. Брошенные первые
+    оплаты (ушёл со страницы ЮKassa) и ещё не завершённые - не показываем."""
+    rows = _conn().execute(
+        "SELECT created_at, amount, plan_id, kind, status FROM payments WHERE telegram_id = ? "
+        "AND (status = 'succeeded' OR (status = 'canceled' AND kind = 'renewal')) "
+        "ORDER BY created_at DESC LIMIT ?", (telegram_id, limit)).fetchall()
+    return [{"date": r["created_at"], "amount": r["amount"], "plan_title": PLANS.get(r["plan_id"], {}).get("title"),
+             "renewal": r["kind"] == "renewal", "ok": r["status"] == "succeeded"} for r in rows]
 
 
 # ---------- оплата ----------
@@ -425,8 +436,10 @@ def cancel(telegram_id, now=None):
                             "next_attempt_at = NULL, updated_at = ? WHERE telegram_id = ?", (_iso(now), telegram_id))
     if sub["autorenew"] and sub["payment_method_id"]:
         end = _dt(sub["period_end"])
-        mailer.send(sub["email"], "Автопродление HonestLot Pro отключено",
-                    f"Автопродление подписки HonestLot Pro отключено, больше списаний не будет.\n\n"
+        card = f" ({sub['payment_method_title']})" if sub["payment_method_title"] else ""
+        mailer.send(sub["email"], "Подписка HonestLot Pro отменена",
+                    f"Автопродление подписки HonestLot Pro отключено, способ оплаты{card} отвязан - "
+                    f"больше списаний не будет.\n\n"
                     f"Доступ к Pro сохранится до {_date_ru(end)} включительно.\n"
                     f"Возобновить подписку можно на странице: {site_url()}/pay/\n")
     return public_status(telegram_id)
@@ -546,7 +559,7 @@ def _mail_paid(row, plan, end, renewing):
     mailer.send(row["email"], "Оплата HonestLot Pro прошла",
                 f"Спасибо! Оплата {row['amount']} ₽ за HonestLot Pro ({plan['title']}) прошла.\n\n"
                 f"Pro действует до {_date_ru(end)} включительно.\n{renew}\n"
-                f"Управление подпиской и отмена автопродления: {manage_url(row['telegram_id'])}\n")
+                f"Управление подпиской, отмена и отвязка карты: {manage_url(row['telegram_id'])}\n")
 
 
 def _mail_reminder(sub, end):
@@ -554,7 +567,7 @@ def _mail_reminder(sub, end):
     mailer.send(sub["email"], "Скоро продление HonestLot Pro",
                 f"{_date_ru(end)} подписка HonestLot Pro продлится автоматически: спишем {sub['price']} ₽ "
                 f"за {plan['title']} ({sub['payment_method_title'] or 'сохранённый способ оплаты'}).\n\n"
-                f"Отключить автопродление: {manage_url(sub['telegram_id'])}\n")
+                f"Отменить подписку и отвязать карту: {manage_url(sub['telegram_id'])}\n")
 
 
 # ---------- фоновый поток ----------
@@ -644,7 +657,7 @@ def api_order(order_id: str):
 def api_status(authorization: str = Header(default="")):
     _guard()
     tid, _ = _who(authorization)
-    return public_status(tid)
+    return {**public_status(tid), "payments": payment_history(tid)}
 
 
 @router.post("/api/pay/cancel")
