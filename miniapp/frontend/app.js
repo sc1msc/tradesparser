@@ -171,7 +171,10 @@ async function api(path, opts = {}) {
 
 // hideDamaged - "Скрыть битые" (тотальные повреждения), по умолчанию включена и в счётчик фильтров не входит
 // price: [300000, null] - по умолчанию "от 300 тыс.": ниже - в основном хлам и мусорные лоты (12.10.2026)
-const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [300e3, null], mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [], hideDamaged: true });
+// fuel/gearbox/drive - характеристики с Авто.ру (значения как в lots.FUELS/GEARBOXES/DRIVES),
+// volume - [от, до] в литрах, power - [от, до] в л.с.; null в паре - без границы
+const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [300e3, null], mileageTo: null, gapMin: null, regions: [], trade: [], kinds: [],
+  fuel: [], gearbox: [], drive: [], volume: null, power: null, hideDamaged: true });
 const SORTS = [["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
 
 const state = {
@@ -203,12 +206,16 @@ function queryString(filters, q, sort) {
   if (filters.regions.length) p.set("regions", filters.regions.join(","));
   if (filters.trade.length) p.set("trade", filters.trade.join(","));
   if ((filters.kinds || []).length) p.set("kinds", filters.kinds.join(","));
+  for (const k of ["fuel", "gearbox", "drive"]) if ((filters[k] || []).length) p.set(k, filters[k].join(","));
+  if (filters.volume) { if (filters.volume[0] != null) p.set("vol_from", filters.volume[0]); if (filters.volume[1] != null) p.set("vol_to", filters.volume[1]); }
+  if (filters.power) { if (filters.power[0] != null) p.set("power_from", filters.power[0]); if (filters.power[1] != null) p.set("power_to", filters.power[1]); }
   if (filters.hideDamaged !== false) p.set("hide_damaged", "1");
   return p.toString();
 }
 
 function activeFilterCount(f) {
-  return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.regions.length, f.trade.length, (f.kinds || []).length]
+  return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.regions.length, f.trade.length, (f.kinds || []).length,
+    (f.fuel || []).length, (f.gearbox || []).length, (f.drive || []).length, f.volume, f.power]
     .filter(Boolean).length;
 }
 
@@ -263,6 +270,7 @@ function card(it) {
     it.photo ? null : icon("car"),
     it.damaged ? h("span", { class: "warn", title: "Возможно, повреждён" }, "⚠") : null);
   const meta = [kmText(it), regionShort(it.region)].filter(Boolean).join(" · ");
+  const specLine = specsShort(it);
   const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";
   const deadline = it.is_open
     ? h("div", { class: "deadline" + (isSoon(it.deadline) ? " soon" : "") },
@@ -279,6 +287,7 @@ function card(it) {
       // у аукциона в ленте - начальная цена (итоговая определится на торгах): подписываем
       h("div", { class: "priceline" }, h("span", { class: "price" }, it.trade === "auction" ? h("span", { class: "pfx" }, "старт ") : null, rub(it.price)), gapBadge(it.gap),
         it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
+      specLine ? h("div", { class: "specs" }, specLine) : null,
       meta ? h("div", { class: "meta" }, meta) : null,
       relisted,
       deadline),
@@ -404,6 +413,10 @@ function activeChips(f) {
     (x) => { x.regions = x.regions.filter((v) => v !== r); }]);
   for (const [v, label] of TRADES) if (f.trade.includes(v)) out.push([label, (x) => { x.trade = x.trade.filter((t) => t !== v); }]);
   for (const [v, label] of KINDS) if ((f.kinds || []).includes(v)) out.push([label, (x) => { x.kinds = x.kinds.filter((k) => k !== v); }]);
+  for (const [key, label] of [["fuel", (v) => cap(v)], ["gearbox", (v) => cap(v)], ["drive", (v) => `${cap(v)} привод`]])
+    for (const v of f[key] || []) out.push([label(v), (x) => { x[key] = x[key].filter((y) => y !== v); }]);
+  if (f.volume) out.push([`Объём ${rangeText(f.volume, litersText)} л`, (x) => { x.volume = null; }]);
+  if (f.power) out.push([`Мощность ${rangeText(f.power, String)} л.с.`, (x) => { x.power = null; }]);
   return out;
 }
 function renderActive() {
@@ -705,10 +718,25 @@ async function renderLot(id) {
     ...body));
 }
 
+const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+const litersText = (l) => Number(l).toFixed(1).replace(".", ",");
+const GEARBOX_SHORT = { "автомат": "АКПП", "механика": "МКПП" };
+// Для карточки ленты: "1,6 л · 110 л.с. · АКПП · передний · дизель" - что известно (Авто.ру).
+// Бензин - у большинства, в ленте его не пишем, чтобы строка помещалась; на экране лота он есть.
+function specsShort(it) {
+  return [
+    it.displacement ? `${litersText(Math.round(it.displacement / 100) / 10)} л` : null,
+    it.power ? `${it.power} л.с.` : null,
+    it.transmission ? GEARBOX_SHORT[it.transmission] || it.transmission : null,
+    it.drive,
+    it.engine_type !== "бензин" ? it.engine_type : null,
+  ].filter(Boolean).join(" · ");
+}
+
 // "1,6 л, 110 л.с., бензин" - из того, что известно (объём в см³ -> литры с одним знаком)
 function engineText(lot) {
   const parts = [
-    lot.displacement ? `${(Math.round(lot.displacement / 100) / 10).toFixed(1).replace(".", ",")} л` : null,
+    lot.displacement ? `${litersText(Math.round(lot.displacement / 100) / 10)} л` : null,
     lot.power ? `${lot.power} л.с.` : null,
     lot.engine_type,
   ].filter(Boolean);
@@ -731,6 +759,9 @@ function damageBox(lot) {
 
 const PRICE_STEPS = [0, 100e3, 200e3, 300e3, 400e3, 500e3, 600e3, 700e3, 800e3, 900e3, 1e6, 1.2e6, 1.5e6, 2e6, 2.5e6, 3e6, 4e6, 5e6, 7e6, 10e6, 15e6, 20e6, null];
 const MILEAGE_STEPS = [20e3, 40e3, 60e3, 80e3, 100e3, 120e3, 150e3, 200e3, 250e3, 300e3, null];
+// первый шаг - "без нижней границы", null в конце - "без верхней"
+const VOLUME_STEPS = [0, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, null];
+const POWER_STEPS = [0, 70, 90, 100, 110, 120, 150, 180, 200, 250, 300, 400, null];
 const GAP_OPTIONS = [[null, "Любой"], [0.5, "Ниже рынка"], [10, "от 10%"], [20, "от 20%"], [30, "от 30%"]];
 const TRADES = [["auction", "Аукцион"], ["public_offer", "Публичное предложение"]];
 const KINDS = [["car", "Одна машина"], ["multilot", "Мультилоты"]];
@@ -876,6 +907,28 @@ function renderFilters(initial) {
   const tradeChips = chipGroup(TRADES, (v) => draft.trade.includes(v), (v) => { draft.trade = toggleIn(draft.trade, v); });
   draft.kinds = draft.kinds || [];
   const kindChips = chipGroup(KINDS, (v) => draft.kinds.includes(v), (v) => { draft.kinds = toggleIn(draft.kinds, v); });
+
+  // --- характеристики: топливо, коробка, привод (чипы), объём и мощность (слайдеры) ---
+  for (const k of ["fuel", "gearbox", "drive"]) draft[k] = draft[k] || [];
+  const specChips = (key) => (facets[key] || []).length ? chipGroup(facets[key].map((o) => [o.key, cap(o.key), o.count]),
+    (v) => draft[key].includes(v), (v) => { draft[key] = toggleIn(draft[key], v); }) : h("div", { class: "sub" }, "Пока нет данных");
+  function rangeSection(title, steps, key, fmt, unit) {
+    const idx = (v, dflt) => { const i = v == null ? -1 : steps.indexOf(v); return i >= 0 ? i : dflt; };
+    const text = () => draft[key] ? `${rangeText(draft[key], fmt)} ${unit}` : "любая";
+    const sec = section(title, text(), dualSlider(steps,
+      [idx(draft[key] && draft[key][0], 0), idx(draft[key] && draft[key][1], steps.length - 1)],
+      (i, j) => {
+        const from = i === 0 ? null : steps[i], to = steps[j];
+        draft[key] = from == null && to == null ? null : [from, to];
+        sec.val.textContent = text(); refreshCount();
+      }));
+    return sec;
+  }
+  const volumeSec = rangeSection("Объём двигателя", VOLUME_STEPS, "volume", litersText, "л");
+  const powerSec = rangeSection("Мощность", POWER_STEPS, "power", String, "л.с.");
+  const specsNote = facets.cars && facets.specs_known < facets.cars
+    ? h("div", { class: "sub" }, `Характеристики известны у ${nf.format(facets.specs_known)} из ${nf.format(facets.cars)} машин. `
+      + "Если выбрать фильтр ниже, лоты без них не покажутся.") : null;
   const damageToggle = h("label", { class: "togglerow" },
     h("input", { type: "checkbox", checked: draft.hideDamaged !== false,
       onchange: (e) => { draft.hideDamaged = e.target.checked; refreshCount(); } }),
@@ -896,6 +949,10 @@ function renderFilters(initial) {
     backbar(),
     h("div", { class: "fsec" }, h("h3", {}, "Марка и модель", brandVal), brandSearch, brandList),
     yearSec.el, priceSec.el, mileageSec.el,
+    h("div", { class: "fsec" }, h("h3", {}, "Двигатель"), specsNote, specChips("fuel")),
+    volumeSec.el, powerSec.el,
+    h("div", { class: "fsec" }, h("h3", {}, "Коробка"), specChips("gearbox")),
+    h("div", { class: "fsec" }, h("h3", {}, "Привод"), specChips("drive")),
     h("div", { class: "fsec" }, h("h3", {}, "Ниже рынка"), gapChips),
     h("div", { class: "fsec" }, h("h3", {}, "Регион"), regionChips),
     h("div", { class: "fsec" }, h("h3", {}, "Форма торгов"), tradeChips),

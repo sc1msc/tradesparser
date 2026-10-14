@@ -139,6 +139,11 @@ TRADE_AUCTION = "auction"
 TRADE_PUBLIC_OFFER = "public_offer"
 
 SORTS = ("gap", "price_asc", "price_desc", "deadline")
+# Характеристики модификации с Авто.ру (autoru_valuation.ENGINE_TYPES/TRANSMISSIONS/DRIVES) -
+# порядок вариантов в фильтрах. Неизвестные значения идут в конец.
+FUELS = ("бензин", "дизель", "гибрид", "электро", "газ")
+GEARBOXES = ("автомат", "робот", "вариатор", "механика")
+DRIVES = ("передний", "задний", "полный")
 
 # Через сколько дней после дедлайна закрытая карточка избранного уходит в архив.
 FAVORITE_ARCHIVE_DAYS = 60
@@ -513,7 +518,21 @@ def summary(lot, state, now, favorites):
         "favorite": favorites.has(lot),
         "is_open": is_open(lot, state, now),
         "listings": 1,
+        **specs(lot),
     }
+
+
+def specs(lot):
+    """Двигатель, коробка, привод - по модификации, которую нашёл Авто.ру. У мультилота они
+    одной из машин и для лота целиком ничего не значат."""
+    car = lot["kind"] == lot_metrics.LOT_CAR
+    return {k: (lot.get(k) if car else None)
+            for k in ("engine_type", "displacement", "power", "drive", "transmission")}
+
+
+def liters(displacement):
+    """см³ -> литры с одним знаком, как пишут в объявлениях: 1598 -> 1.6."""
+    return round(displacement / 100) / 10 if displacement else None
 
 
 def detail(lot, now, favorites):
@@ -538,12 +557,7 @@ def detail(lot, now, favorites):
         "market_low": lot.get("autoru_price_low"),
         "market_high": lot.get("autoru_price_high"),
         "owners": lot.get("autoru_owners"),
-        # характеристики модификации (с 13.10.2026; у лотов, оценённых раньше, - после дозаполнения)
-        "engine_type": lot.get("engine_type"),
-        "displacement": lot.get("displacement"),
-        "power": lot.get("power"),
-        "drive": lot.get("drive"),
-        "transmission": lot.get("transmission"),
+        # характеристики (engine_type, displacement, power, drive, transmission) - уже в summary
         "trade_form": lot.get("trade_form"),
         "platform": lot.get("platform"),
         "status": lot.get("status"),
@@ -656,6 +670,13 @@ def parse_filters(params):
         "trade": set(_split(params.get("trade"))),
         "gap_min": _num(params.get("gap_min")),
         "hide_damaged": params.get("hide_damaged") == "1",
+        "fuel": set(_split(params.get("fuel"))),
+        "gearbox": set(_split(params.get("gearbox"))),
+        "drive": set(_split(params.get("drive"))),
+        "vol_from": _num(params.get("vol_from")),   # литры
+        "vol_to": _num(params.get("vol_to")),
+        "power_from": _num(params.get("power_from")),  # л.с.
+        "power_to": _num(params.get("power_to")),
     }
 
 
@@ -692,6 +713,17 @@ def _matches(item, lot, f, skip_damage=False):
     if f["kinds"] and lot["kind"] not in f["kinds"]:
         return False
     if f["gap_min"] is not None and (item["gap"] is None or item["gap"] < f["gap_min"]):
+        return False
+    # характеристики известны не у всех лотов: при выбранном фильтре лот без них не показываем
+    if f["fuel"] and item["engine_type"] not in f["fuel"]:
+        return False
+    if f["gearbox"] and item["transmission"] not in f["gearbox"]:
+        return False
+    if f["drive"] and item["drive"] not in f["drive"]:
+        return False
+    if not _between(liters(item["displacement"]), f["vol_from"], f["vol_to"]):
+        return False
+    if not _between(item["power"], f["power_from"], f["power_to"]):
         return False
     return True
 
@@ -743,7 +775,19 @@ def facets(favorites):
     brands = {}
     regions = {}
     years, prices, mileages = [], [], []
+    spec_counts = {"engine_type": {}, "transmission": {}, "drive": {}}
+    volumes, powers, cars, with_specs = [], [], 0, 0
     for it, lot in open_items(favorites):
+        if lot["kind"] == lot_metrics.LOT_CAR:
+            cars += 1
+            with_specs += bool(it["engine_type"] or it["transmission"] or it["drive"] or it["power"])
+        for key, counts in spec_counts.items():
+            if it[key]:
+                counts[it[key]] = counts.get(it[key], 0) + 1
+        if it["displacement"]:
+            volumes.append(liters(it["displacement"]))
+        if it["power"]:
+            powers.append(it["power"])
         if lot["brand_key"]:
             b = brands.setdefault(lot["brand_key"], {"key": lot["brand_key"], "label": lot["brand_label"],
                                                      "count": 0, "models": {}})
@@ -769,7 +813,19 @@ def facets(favorites):
         "year": [min(years), max(years)] if years else None,
         "price": [min(prices), max(prices)] if prices else None,
         "mileage": [0, max(mileages)] if mileages else None,
+        # характеристики: варианты с числом лотов в заданном порядке; у скольких машин они известны
+        "fuel": _ordered(spec_counts["engine_type"], FUELS),
+        "gearbox": _ordered(spec_counts["transmission"], GEARBOXES),
+        "drive": _ordered(spec_counts["drive"], DRIVES),
+        "volume": [min(volumes), max(volumes)] if volumes else None,
+        "power": [min(powers), max(powers)] if powers else None,
+        "specs_known": with_specs, "cars": cars,
     }
+
+
+def _ordered(counts, order):
+    keys = [k for k in order if k in counts] + sorted(k for k in counts if k not in order)
+    return [{"key": k, "count": counts[k]} for k in keys]
 
 
 def get(lot_id):

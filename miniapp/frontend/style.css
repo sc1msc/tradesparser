@@ -47,6 +47,8 @@ input { font: inherit; color: inherit; }
 }
 .brandline { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .brandline img { width: 28px; height: 28px; }
+/* строка характеристик в карточке ленты: объём, мощность, коробка, привод, топливо */
+.card .specs { font-size: 13px; color: var(--text); opacity: .8; }
 .wmw { display: inline-flex; }
 .wm { height: 14px; width: auto; fill: currentColor; display: block; }
 .wm .lot { fill: var(--wm-lot); }
