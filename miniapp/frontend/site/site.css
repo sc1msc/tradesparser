@@ -122,3 +122,19 @@ footer p { margin: 6px 0; }
   dl.req { grid-template-columns: 1fr; gap: 2px; }
   dl.req dd { margin-bottom: 10px; }
 }
+
+/* кто вошёл и «Выйти» (site/account.js); вход общий с веб-версией */
+.acct { display: flex; align-items: center; gap: 12px; font-size: 15px; }
+.acct:empty { display: none; }
+.acct-name { font-weight: 600; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-out { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+.acct-out:hover { color: var(--text); }
+.acct-in { font-weight: 600; text-decoration: none; }
+@media (min-width: 700px) {
+  header nav { margin-left: auto; }
+  .acct:not(:empty) { padding-left: 20px; border-left: 1px solid var(--line); }
+}
+@media (max-width: 699px) {
+  .acct { margin-left: auto; }
+  header nav { order: 3; width: 100%; }
+}

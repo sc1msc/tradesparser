@@ -25,6 +25,7 @@ export async function api(path, opts = {}) {
 export function showLogin(box, onDone) {
   window.onTelegramAuth = (user) => {
     try { sessionStorage.setItem("hl_tglogin", btoa(unescape(encodeURIComponent(JSON.stringify(user))))); } catch { /* */ }
+    window.hlAccountRefresh?.();  // site/account.js: показать имя и «Выйти»
     onDone();
   };
   box.innerHTML = '<p>Чтобы оформить или изменить подписку, войдите через Telegram - тем же аккаунтом, что в мини-аппе HonestLot.</p>';

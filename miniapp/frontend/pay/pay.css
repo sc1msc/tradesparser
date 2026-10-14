@@ -78,3 +78,10 @@ dialog.modal::backdrop { background: rgba(8, 10, 14, .6); }
 .mbtns .btn { margin-top: 0; padding: 14px 10px; white-space: nowrap; font-size: 15px; }
 button.danger { background: var(--err); }
 button.ghost { background: none; color: var(--text); border: 1px solid var(--line); }
+/* шапка: логотип слева, кто вошёл и «Выйти» справа (site/account.js) */
+.topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.topline .brand { margin-bottom: 0; }
+.acct { display: flex; align-items: center; gap: 10px; font-size: 14px; min-width: 0; }
+.acct-name { font-weight: 600; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acct-out { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: var(--hint); background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 12px; cursor: pointer; }
+.acct-out:hover { color: var(--text); }
