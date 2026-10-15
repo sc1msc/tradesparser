@@ -140,6 +140,7 @@ def api_favorite_remove(lot_id: str, authorization: str = Header(default="")):
 
 class WebLoginPayload(BaseModel):
     user: dict  # поля, которые Telegram Login Widget передал в onauth (id, ..., auth_date, hash)
+    start: str | None = None  # ?startapp=lot<id>_<код> из ссылки «Поделиться» веб-версии
 
 
 @app.post("/api/web-login")
@@ -149,7 +150,12 @@ def api_web_login(payload: WebLoginPayload):
         user = auth.validate_login_widget(payload.user, os.environ.get("HONESTLOT_BOT_TOKEN", ""))
     except auth.AuthError as e:
         raise HTTPException(status_code=401, detail=str(e))
-    db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(), auth.WEB_SOURCE)
+    # пришёл по ссылке «Поделиться» из веб-версии - как в мини-аппе: источник share и кто пригласил;
+    # другие метки из адреса не принимаем, иначе любой мог бы вписать себе источник
+    source, ref_code = auth.split_start_param(payload.start)
+    if source != auth.SHARE_SOURCE:
+        source, ref_code = auth.WEB_SOURCE, None
+    db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(), source, ref_code)
     return {"token": auth.make_web_token(user), "first_name": user.get("first_name"), "username": user.get("username")}
 
 

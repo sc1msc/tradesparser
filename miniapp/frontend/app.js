@@ -323,7 +323,10 @@ async function shareLot(lot, place) {
   haptic();
   track("share", lot.id, place);
   const ref = await Promise.race([loadRef(), new Promise((r) => setTimeout(() => r(null), 1500))]);
-  const link = `https://t.me/${BOT}?startapp=${shareParam(lot.id, ref)}`;
+  // из Telegram - ссылка на лот в мини-аппе, из браузера - на лот в веб-версии (тот же параметр
+  // startapp: startLotId откроет лот после входа, а сервер засчитает приглашение)
+  const param = shareParam(lot.id, ref);
+  const link = IN_TG ? `https://t.me/${BOT}?startapp=${param}` : `${location.origin}/?startapp=${param}`;
   const gap = lot.gap != null && lot.gap >= 0.5 ? `, на ${Math.round(lot.gap)}% ниже рынка` : "";
   const text = `${lot.name}${lot.year ? ", " + lot.year : ""} — ${rub(lot.price)}${gap}`;
   if (IN_TG) {
@@ -336,8 +339,8 @@ async function shareLot(lot, place) {
   }
 }
 
-// Параметр запуска: в Telegram - start_param из initData, в обычном браузере
-// (локальная проверка) - ?startapp=... в адресе страницы.
+// Параметр запуска: в Telegram - start_param из initData, в браузере (веб-версия и локальная
+// проверка) - ?startapp=... в адресе страницы (ссылка «Поделиться» из веб-версии).
 function startLotId() {
   const p = (IN_TG && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || new URLSearchParams(location.search).get("startapp") || "";
   const m = /^lot(\d+)/.exec(p);
@@ -1027,7 +1030,7 @@ function showLogin(expired) {
     h("a", { href: `https://t.me/${BOT}`, target: "_blank", rel: "noopener" }, `@${BOT}`), ".");
   window.onTelegramAuth = async (user) => {
     try {
-      const r = await fetch("/api/web-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user }) });
+      const r = await fetch("/api/web-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user, start: new URLSearchParams(location.search).get("startapp") }) });
       if (!r.ok) throw new Error(String(r.status));
       store.set("web_token", (await r.json()).token);
       location.reload();
@@ -1112,6 +1115,8 @@ async function start() {
   // открыли по ссылке "Поделиться" - сразу экран лота, "Назад" ведёт в ленту
   const sharedId = startLotId();
   if (sharedId) push({ kind: "lot", id: sharedId });
+  // в браузере убираем параметр из адреса: иначе обновление страницы снова откроет этот лот
+  if (sharedId && !IN_TG) history.replaceState(null, "", location.pathname + location.hash);
   try {
     const [facets, favs] = await Promise.all([api("/facets"), api("/favorites")]);
     state.facets = facets;
