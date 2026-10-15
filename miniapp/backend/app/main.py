@@ -22,6 +22,8 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    при "Поделиться", {"type": "paywall"/"paywall_go", "place":
                                    "filters"/"favs"} - веб-версия без Pro показала предложение Pro /
                                    нажали "Перейти на Pro" (остальное пишет сервер)
+  GET    /api/lot-statuses       - (ключ импорта) статусы торгов, которые сервер прочитал
+                                   сам на агрегаторе и ЭТП (status_refresh.py) - ПК пишет их в лист
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
                                    торгов ещё неизвестен - ПК перечитывает их на сайте
   POST   /api/lot-status         - (ключ импорта) статусы, перечитанные с сайта
@@ -50,7 +52,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, billing, db, lots, site, watchdog
+from . import auth, backup, billing, db, lots, site, status_refresh, watchdog
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -62,6 +64,7 @@ async def lifespan(_app):
     backup.start()    # ежедневная копия базы - фоновым потоком
     watchdog.start()  # давно нет выгрузки с ПК - сообщение администратору
     billing.start()   # автопродление подписок (только если оплата включена)
+    status_refresh.start()  # статус торгов: агрегатор и ЭТП несколько раз в день
     yield
 
 
@@ -199,6 +202,13 @@ def _check_import_token(token):
     expected = os.environ.get("HONESTLOT_IMPORT_TOKEN", "")
     if not expected or not hmac.compare_digest(expected, token):
         raise HTTPException(status_code=403, detail="неверный ключ импорта")
+
+
+@app.get("/api/lot-statuses")
+def api_lot_statuses(x_import_token: str = Header(default="")):
+    """Статусы, которые сервер прочитал сам (status_refresh.py) - ПК пишет их в лист lots в шаге 1."""
+    _check_import_token(x_import_token)
+    return {"lots": status_refresh.statuses()}
 
 
 @app.get("/api/watchlist")

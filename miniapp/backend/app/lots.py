@@ -52,6 +52,7 @@ import re
 import threading
 
 import bidding_schedule
+import etp_status
 import lot_metrics
 
 from . import db
@@ -369,9 +370,44 @@ def snap_model(brand_key, model, text, catalog):
     return found[0] if len(found) == 1 else None
 
 
+# Свежие данные, которые сервер читает сам (status_refresh.py), важнее выгрузки с ПК, пока не
+# устарели: сервер проверяет публичные предложения несколько раз в день, ПК выгружает раз в сутки.
+LIVE_MAX_AGE_HOURS = 30
+
+
+def _fresh(value, now):
+    dt = _parse_iso(value)
+    return dt is not None and now - dt < datetime.timedelta(hours=LIVE_MAX_AGE_HOURS)
+
+
+def _apply_live(lot, now=None):
+    """live_* (карточка агрегатора) и etp_* (страница ЭТП) поверх выгрузки с ПК. Итог на ЭТП
+    (завершены, не состоялись, отменены) - статус лота; «итоги подводятся» (приём заявок на ЭТП
+    окончен, а агрегатор ещё пишет «идёт приём») - лот не в ленте (_etp_pending), но не закрыт:
+    торги могут продолжиться, сервер проверит снова."""
+    now = now or now_msk()
+    if _fresh(lot.get("live_checked_at"), now):
+        if lot.get("live_status"):
+            lot["status"] = lot["live_status"]
+        if lot.get("live_price") is not None:
+            lot["price_current"] = lot["live_price"]
+        if lot.get("live_periods"):
+            try:
+                lot["periods"] = json.loads(lot["live_periods"])
+            except ValueError:
+                pass
+        if lot.get("live_end"):
+            lot["applications_end"] = lot["live_end"]
+    etp_fresh = _fresh(lot.get("etp_checked_at"), now)
+    if etp_fresh and lot.get("etp_state") == "closed" and lot.get("etp_outcome") in etp_status.OUTCOME_TEXT:
+        lot["status"] = etp_status.OUTCOME_TEXT[lot["etp_outcome"]]
+    lot["_etp_pending"] = etp_fresh and lot.get("etp_state") == "pending"
+
+
 def _prepare(lot, catalog=None):
     """Статичные (не зависящие от времени) производные поля - один раз на
     загрузку кэша. catalog - словарь моделей Авто.ру (build_catalog)."""
+    _apply_live(lot)
     brand_key, brand, raw_model = resolve_brand_model(lot.get("brand"), lot.get("model"), lot.get("title"))
     if not brand_key:  # название вида "Автомобиль" - марку ищем в описании
         found, rest = find_brand(lot.get("description"))
@@ -498,7 +534,7 @@ def is_open(lot, state, now):
     """Лот виден в ленте: есть в текущем листе, приём заявок ещё идёт,
     торги не отменены/не завершены."""
     return bool(lot.get("in_source")) and state["deadline"] is not None \
-        and state["deadline"] > now and not lot["_closed_status"] \
+        and state["deadline"] > now and not lot["_closed_status"] and not lot.get("_etp_pending") \
         and lot["kind"] not in lot_metrics.EXCLUDED_KINDS
 
 

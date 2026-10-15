@@ -44,6 +44,9 @@ COLUMNS = [
     "mileage_probeg_status", "mileage_probeg_date", "mileage_probeg_source",
     "mileage_probeg_checked_at", "mileage_probeg_km",
     "bidding_periods", "status_checked_at",
+    # статус торгов на самой ЭТП - его проверяет сервер мини-аппа (etp_status.py,
+    # status_refresh.py), ПК забирает в шаге 1 (main.pull_server_statuses)
+    "etp_url", "etp_status", "etp_checked_at",
 ]
 
 HEADER_ROW = 1
@@ -177,6 +180,9 @@ def ensure_header(worksheet):
     new_header = current_header + missing
     start_col = len(current_header) + 1
     end_col = len(new_header)
+    # Сетка листа не растёт сама: писать за её край Google не даёт ("exceeds grid limits")
+    if end_col > worksheet.col_count:
+        worksheet.add_cols(end_col - worksheet.col_count)
     range_str = f"{_col_letter(start_col)}{HEADER_ROW}:{_col_letter(end_col)}{HEADER_ROW}"
     _safe_update(worksheet, range_str, [missing])
 

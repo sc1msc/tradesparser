@@ -73,6 +73,7 @@ from google.oauth2.service_account import Credentials
 import automation
 import bidding_schedule
 import config
+import etp_status
 import lot_metrics
 import main
 from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
@@ -125,15 +126,8 @@ def _title(obj, key):
     return value.get("title") if isinstance(value, dict) else value
 
 
-def etp_link(lot):
-    """Ссылка на лот на самой ЭТП - туда ведёт кнопка «Открыть лот на сайте торгов», а не на
-    агрегатор. На карточке агрегатора это source_links: «Лот на ЭТП» (с якорем лота), иначе
-    «Торги на ЭТП»; запасной вариант - trade_link. Ссылки ЕФРСБ и самого агрегатора не берём."""
-    links = {(x.get("title") or "").strip().lower(): x.get("link") for x in lot.get("source_links") or []}
-    for url in (links.get("лот на этп"), links.get("торги на этп"), lot.get("trade_link")):
-        if url and url.startswith("http") and "fedresurs" not in url and "xn----etbpba5admdlad" not in url:
-            return url
-    return None
+# Ссылка на лот на самой ЭТП - туда ведёт кнопка «Открыть лот на сайте торгов» (etp_status.etp_link).
+etp_link = etp_status.etp_link
 
 
 def fetch_details(url, session):

@@ -33,6 +33,7 @@
 | BX–CB | `mileage_probeg_status/date/source/checked_at/km` | шаг 2 (TRONK) |
 | CC | `bidding_periods` — график ПП: `[[bid_end, price], ...]` | шаг 1 |
 | CD | `status_checked_at` | шаг 1 |
+| CE–CG | `etp_url` (лот на самой ЭТП), `etp_status` (что написано на ЭТП: «Прием заявок», «Торги завершены», «Определение участников»), `etp_checked_at` | шаг 1, с сервера мини-аппа (с 15.10.2026) |
 
 Особенности:
 

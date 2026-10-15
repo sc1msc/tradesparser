@@ -7,7 +7,8 @@ WORKDIR /app
 COPY miniapp/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY lot_metrics.py bidding_schedule.py /app/
+# etp_status, parse_lot, nextjs_json - сервер сам читает статусы торгов (app/status_refresh.py)
+COPY lot_metrics.py bidding_schedule.py etp_status.py parse_lot.py nextjs_json.py /app/
 COPY miniapp/backend/app /app/app
 COPY miniapp/frontend /app/frontend
 

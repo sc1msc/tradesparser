@@ -16,6 +16,7 @@ BeautifulSoup - вместо этого из страницы вытаскива
 import re
 
 import bidding_schedule
+import etp_status
 import lot_metrics
 from nextjs_json import extract_combined_payload, find_json_value, resolve_text_ref
 
@@ -106,6 +107,7 @@ def parse_lot_html(html, url=None):
         "trade_kind": trade_kind,
         "trade_section": trade_section,
         "platform": platform,
+        "etp_url": etp_status.etp_link(lot),  # лот на самой ЭТП (нет у торгов «вне ЭТП»)
         "applications_start": applications_start,
         # Для публичного предложения applications_end - окончание торгов
         # целиком: позднейшее из stages.end_bid_time и конца графика (они не

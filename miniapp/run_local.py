@@ -20,6 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [ROOT, os.path.join(ROOT, "miniapp", "backend")]
 os.environ.setdefault("HONESTLOT_DEV_USER_ID", "1")
 os.environ.setdefault("HONESTLOT_IMPORT_TOKEN", "dev")
+# локально сервер не ходит на агрегатор и ЭТП сам (status_refresh.py)
+os.environ.setdefault("HONESTLOT_STATUS_REFRESH", "0")
 
 import requests  # noqa: E402
 import uvicorn  # noqa: E402

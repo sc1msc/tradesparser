@@ -82,6 +82,15 @@ CREATE TABLE IF NOT EXISTS lots (
     drive             TEXT,
     transmission      TEXT,
     etp_url           TEXT,
+    live_status       TEXT,
+    live_price        INTEGER,
+    live_periods      TEXT,
+    live_end          TEXT,
+    live_checked_at   TEXT,
+    etp_state         TEXT,
+    etp_text          TEXT,
+    etp_outcome       TEXT,
+    etp_checked_at    TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -139,7 +148,11 @@ MIGRATIONS = {
              ("status_checked_at", "TEXT"), ("model_source", "TEXT"), ("title_brand", "TEXT"),
              ("title_model", "TEXT"), ("photo_verdict", "TEXT"), ("photo_signs", "TEXT"),
              ("engine_type", "TEXT"), ("displacement", "INTEGER"), ("power", "INTEGER"),
-             ("drive", "TEXT"), ("transmission", "TEXT"), ("etp_url", "TEXT")],
+             ("drive", "TEXT"), ("transmission", "TEXT"), ("etp_url", "TEXT"),
+             # live_*, etp_* - пишет сервер сам (status_refresh.py), импорт с ПК их не трогает
+             ("live_status", "TEXT"), ("live_price", "INTEGER"), ("live_periods", "TEXT"), ("live_end", "TEXT"),
+             ("live_checked_at", "TEXT"), ("etp_state", "TEXT"), ("etp_text", "TEXT"), ("etp_outcome", "TEXT"),
+             ("etp_checked_at", "TEXT")],
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }
@@ -235,6 +248,23 @@ def import_lots(lots, now_iso):
             else:
                 cur = c.execute("UPDATE lots SET in_source = 0 WHERE in_source = 1")
     return len(ids), cur.rowcount
+
+
+LIVE_FIELDS = ("live_status", "live_price", "live_periods", "live_end", "live_checked_at",
+               "etp_url", "etp_state", "etp_text", "etp_outcome", "etp_checked_at")
+
+
+def save_live(lot_id, fields):
+    """Свежий статус лота, который сервер прочитал сам (status_refresh.py): live_* - с карточки
+    агрегатора, etp_* - со страницы ЭТП. Пустые значения не затирают известные."""
+    fields = {k: v for k, v in fields.items() if k in LIVE_FIELDS and v is not None}
+    if not fields:
+        return
+    sets = ", ".join(f"{k} = ?" for k in fields)
+    with _lock:
+        c = conn()
+        with c:
+            c.execute(f"UPDATE lots SET {sets} WHERE lot_id = ?", list(fields.values()) + [str(lot_id)])
 
 
 def touch_user(telegram_id, username, first_name, now_iso, start_param=None, ref_code=None):

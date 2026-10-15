@@ -47,6 +47,15 @@ lots_processed и отправке дайджеста (см. bidding_schedule.py
 записывал parse_lot.py до того, как научился разворачивать длинные тексты
 (nextjs_json.resolve_text_ref). У них обновляются ещё title и description.
 
+С 15.10.2026 статусы публичных предложений и лотов из избранного проверяет сервер
+мини-аппа: несколько раз в день, на агрегаторе и на самой ЭТП - агрегатор отстаёт
+(miniapp/backend/app/status_refresh.py, etp_status.py). Перед своей перепроверкой шаг
+забирает результат одним запросом (pull_server_statuses) и пишет в лист: status,
+price_current, bidding_periods, applications_end, status_checked_at и etp_url/etp_status/
+etp_checked_at. У этих лотов status_checked_at свежий, и refresh_public_offers их
+пропускает - сам перечитывает только то, что сервер не проверил (сервер недоступен -
+всё, как раньше).
+
 Сбои сайта торгов не проходят молча (в автоматическом режиме человек лог не
 читает): не загрузилась страница поиска - уведомление (automation.alert);
 карточки лотов считает CardFailures - не прочиталась заметная доля -
@@ -192,6 +201,44 @@ def _status_is_fresh(status_checked_at, now):
     if checked < _last_aggregator_update(now):
         return False
     return now - checked < datetime.timedelta(hours=config.PUBLIC_OFFER_REFRESH_HOURS)
+
+
+SERVER_STATUS_FIELDS = ("status", "price_current", "bidding_periods", "applications_end",
+                        "status_checked_at", "etp_url", "etp_status", "etp_checked_at")
+
+
+def pull_server_statuses(sheet_state):
+    """Статусы, которые сервер мини-аппа прочитал сам (GET /api/lot-statuses), -> в лист lots.
+    Сервер не настроен или недоступен - 0: тогда refresh_public_offers проверит всё сам.
+    Возвращает число обновлённых лотов."""
+    api_url = (config.MINIAPP_API_URL or "").rstrip("/")
+    if not api_url or not config.MINIAPP_IMPORT_TOKEN:
+        return 0
+    try:
+        resp = requests.get(f"{api_url}/api/lot-statuses", headers={"X-Import-Token": config.MINIAPP_IMPORT_TOKEN},
+                            timeout=60)
+        resp.raise_for_status()
+        items = resp.json().get("lots") or []
+    except (requests.RequestException, ValueError) as e:
+        print(f"  статусы с сервера не получены ({str(e)[:120]}) - перепроверю сам")
+        return 0
+    pending = []
+    for it in items:
+        lot_id = str(it.get("lot_id") or "")
+        if lot_id not in sheet_state.lot_row:
+            continue
+        updates = {k: it[k] for k in SERVER_STATUS_FIELDS if it.get(k) not in (None, "")}
+        if updates:
+            pending.append((lot_id, updates))
+    written = 0
+    for i in range(0, len(pending), REFRESH_WRITE_BATCH):
+        try:
+            written += sheet_state.update_fields_many(pending[i:i + REFRESH_WRITE_BATCH])
+        except Exception as e:  # сеть/Google - эти лоты перепроверит refresh_public_offers
+            print(f"  не удалось записать статусы с сервера: {e}")
+    closed = sum(1 for _, u in pending if bidding_schedule.is_closed_status(u.get("status")))
+    print(f"  с сервера: {written} лотов (из них торги закрыты: {closed})")
+    return written
 
 
 def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
@@ -422,6 +469,7 @@ def run():
                          "за этот прогон нет не потому, что их нет. Если повторится завтра - смотреть сайт.")
 
     print("\nОбновляю статус и график публичных предложений...")
+    pull_server_statuses(sheet_state)
     checked, closed = refresh_public_offers(worksheet, sheet_state, session, new_lot_ids)
     print(f"  проверено: {checked}, из них торги закрыты/отменены: {closed}")
 
