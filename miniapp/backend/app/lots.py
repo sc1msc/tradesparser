@@ -568,6 +568,7 @@ def detail(lot, now, favorites):
     out.update({
         "title": lot.get("title"),
         "url": lot.get("url"),
+        "etp_url": lot.get("etp_url"),  # лот на самой площадке; нет - кнопка ведёт на url
         "vin": lot.get("vin"),
         "plate": lot.get("plate"),
         "price_start": lot.get("price_start"),

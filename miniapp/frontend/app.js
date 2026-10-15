@@ -682,7 +682,7 @@ async function renderLot(id) {
         `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null);
   const bottomBar = h("div", { class: "bottombar" },
     h("button", { class: "btn share", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "bottom") }),
-    h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.url); } }, "Открыть лот на сайте торгов"));
+    h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.etp_url || lot.url); } }, "Открыть лот на сайте торгов"));
   const blocks = [
     deadlineBlock,
     damageBox(lot),

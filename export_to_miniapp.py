@@ -125,6 +125,17 @@ def _title(obj, key):
     return value.get("title") if isinstance(value, dict) else value
 
 
+def etp_link(lot):
+    """Ссылка на лот на самой ЭТП - туда ведёт кнопка «Открыть лот на сайте торгов», а не на
+    агрегатор. На карточке агрегатора это source_links: «Лот на ЭТП» (с якорем лота), иначе
+    «Торги на ЭТП»; запасной вариант - trade_link. Ссылки ЕФРСБ и самого агрегатора не берём."""
+    links = {(x.get("title") or "").strip().lower(): x.get("link") for x in lot.get("source_links") or []}
+    for url in (links.get("лот на этп"), links.get("торги на этп"), lot.get("trade_link")):
+        if url and url.startswith("http") and "fedresurs" not in url and "xn----etbpba5admdlad" not in url:
+            return url
+    return None
+
+
 def fetch_details(url, session):
     """Карточка лота -> то, что нужно мини-аппу и чего нет в таблице."""
     html = main.fetch(url, session)
@@ -161,6 +172,7 @@ def fetch_details(url, session):
         # Длинное описание бывает ссылкой "$81" на отдельный чанк (nextjs_json.resolve_text_ref).
         "description": resolve_text_ref(payload, lot.get("information")),
         "applications_end": stages.get("end_bid_time"),
+        "etp_url": etp_link(lot),
         "fetched_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -264,6 +276,7 @@ def build_lot(row, details, damage=None):
         "is_public_offer": is_public_offer,
         "status": row.get("status") or d.get("status"),
         "platform": d.get("platform"),
+        "etp_url": d.get("etp_url"),  # ссылка на лот на ЭТП (карточки, скачанные до 15.10.2026, - без неё)
         "applications_end": applications_end,
         "bidding_start": row.get("bidding_start") or None,
         "periods": periods,
