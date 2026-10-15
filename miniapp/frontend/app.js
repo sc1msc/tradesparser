@@ -981,13 +981,15 @@ function showStub() {
 
 // ---------- Pro в веб-версии ----------
 
-// Пока только в веб-версии (решение владельца 13.10.2026): фильтры и избранное - для подписчиков
-// Pro, остальным по нажатию - предложение перейти на Pro. Признак - поле "pro" в /api/me: оно есть,
-// только когда оплата включена (billing.enabled), без него ничего не закрываем. Закрыто только в
-// интерфейсе: API эти функции пока не ограничивает (TODO "Разделение бесплатного и Pro").
-let webLocked = false;
+// Фильтры и избранное - для подписчиков Pro (веб-версия - с 13.10.2026, мини-апп в Telegram - с
+// 15.10.2026, решения владельца), остальным по нажатию - окно «… — в подписке Pro». Признак - поле
+// "pro" в /api/me: оно есть, только когда оплата включена (billing.enabled), без него ничего не
+// закрываем. Закрыто только в интерфейсе: API эти функции пока не ограничивает (TODO "Разделение
+// бесплатного и Pro"). В Telegram в окне нет кнопки «Перейти на Pro»: правила Telegram (6.2) и Apple
+// (3.1.1) запрещают внутри мини-аппа вести на оплату мимо Stars - сказать, что функция в Pro, можно.
+let proLocked = false;
 function locked(kind) {
-  if (!webLocked) return false;
+  if (!proLocked) return false;
   showPaywall(kind);
   return true;
 }
@@ -1007,8 +1009,10 @@ function showPaywall(kind) {
       h("div", { class: "pw-tag" }, "HonestLot Pro"),
       h("h3", {}, title),
       h("p", {}, text),
-      h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, kind) }, "Перейти на Pro"),
-      h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
+      IN_TG
+        ? h("button", { class: "btn", onclick: close }, "Понятно")
+        : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, kind) }, "Перейти на Pro"),
+      IN_TG ? null : h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
   document.addEventListener("keydown", onKey);
   document.body.append(sheet);
   sheet.querySelector(".btn").focus();
@@ -1099,13 +1103,11 @@ function webHeader(pro) {
 // ---------- старт ----------
 
 async function start() {
-  if (WEB) {
-    // Pro в веб-версии - до того, как построить ленту: без Pro сохранённые раньше фильтры не применяем
-    const me = await loadMe();
-    webLocked = me.pro === false;
-    if (webLocked) state.filters = emptyFilters();
-    document.getElementById("app").append(webHeader(me.pro));
-  }
+  // Pro - до того, как построить ленту: без Pro сохранённые раньше фильтры не применяем
+  const me = await loadMe();
+  proLocked = me.pro === false;
+  if (proLocked) state.filters = emptyFilters();
+  if (WEB) document.getElementById("app").append(webHeader(me.pro));
   document.getElementById("app").append(root, overlay);
   root.append(buildFeed(), favsEl, tabsEl);
   favsEl.classList.add("hidden");
