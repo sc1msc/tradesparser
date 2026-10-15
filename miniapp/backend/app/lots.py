@@ -131,6 +131,13 @@ MODEL_JUNK_RE = re.compile(r"(\s|^)(VIN|ГОДА|Г\.В|ГОД|МОДЕЛЬ|19\d
 
 PLATE_RE = re.compile(r"\s*[АВЕКМНОРСТУХABEKMHOPCTYX]\d{3}[АВЕКМНОРСТУХABEKMHOPCTYX]{2}\d{2,3}(?:RUS)?(?![0-9A-ZА-Я])", re.IGNORECASE)
 KLASSE_RE = re.compile(r"^([A-Z0-9]+) KLASSE( AMG)?$", re.IGNORECASE)
+# Классы Mercedes-Benz - и коды Авто.ру ("GLA_CLASS", "S_CLASS_MAYBACH", "GL_KLASSE_AMG"), и модели
+# из названия лота ("E 200 D", "GLA 200", "E-CLASS", "E-класс" - после замены кириллических двойников
+# это "E-Kлacc", "ML 350"): буквы класса, за ними слово класса
+# или цифры двигателя. "ML" - это M-класс. Vito, Sprinter и прочие без цифр сюда не попадают.
+MB_CLASS_RE = re.compile(
+    r"^(MAYBACH\s+)?(A|B|C|E|G|R|S|V|X|CL|CLA|CLC|CLK|CLS|GL|GLA|GLB|GLC|GLE|GLK|GLS|ML|M|SL|SLC|SLK)"
+    r"(?:[\s-]*(?:CLASS|KLASSE|K[ЛL][AА][CС][CС])(?![A-ZА-Я])|[\s-]?\d{2,3}(?![0-9]))(.*)$", re.IGNORECASE)
 BMW_SERIES_RE = re.compile(r"^(\d)ER$", re.IGNORECASE)
 
 CYR_LOOKALIKES = str.maketrans("АВЕКМНОРСТУХаеокрсух", "ABEKMHOPCTYXaeokpcyx")
@@ -253,6 +260,16 @@ def clean_model(value, brand_label):
     # Модель из Autodoc иногда начинается с марки ("Audi A6 ...") - убираем повтор.
     if brand_label and _norm_key(model).startswith(_norm_key(brand_label) + " "):
         model = model[len(brand_label):].strip()
+    # ...или с хвоста марки: "MERCEDES BENZ E-CLASS" -> марка Mercedes, модель "BENZ E-CLASS"
+    parts = re.split(r"[\s-]+", _norm_key(brand_label))
+    if len(parts) > 1 and model.split() and _norm_key(model.split()[0]) in parts[1:]:
+        model = " ".join(model.split()[1:])
+    if _norm_key(brand_label) == "MERCEDES-BENZ":
+        m = MB_CLASS_RE.match(model.strip().translate(CYR_LOOKALIKES))  # "Е-класс" кириллицей
+        if m:
+            tail = _norm_key(m.group(3)).split()
+            return (f"{m.group(2).upper().replace('ML', 'M')}-класс" + (" Coupe" if "COUPE" in tail else "") + (" AMG" if "AMG" in tail else "")
+                    + (" Maybach" if m.group(1) or "MAYBACH" in tail else ""))
     model = MODEL_JUNK_RE.sub("", model).strip(" ,.:;-")
     model = PLATE_RE.sub("", model).strip(" ,.:;-")  # "220695-04 У668МЕ797" - госномер не модель
     # непарная скобка от обрезанной фразы ("Pajero)"), парные ("2131 (4X4)") не трогаем
