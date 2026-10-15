@@ -65,8 +65,9 @@ PHRASES = (
     ("прием заявок закончен", "pending", None), ("определение участников", "pending", None),
     ("подведение итогов", "pending", None), ("рассмотрение заявок", "pending", None),
     ("идут торги", "pending", None), ("торги идут", "pending", None), ("проведение торгов", "pending", None),
-    ("заверш", "closed", "done"), ("закончен", "closed", "done"),
+    ("заверш", "closed", "done"), ("закончен", "closed", "done"), ("окончен", "closed", "done"),
     ("прием заявок", "open", None), ("прием предложений", "open", None), ("объявлен", "open", None),
+    ("извещение опубликовано", "open", None),  # Центр реализации: торги объявлены, приём ещё не начался
 )
 
 # Движки, у которых статус - подпись «Статус...» в тексте страницы.
@@ -84,7 +85,7 @@ NEAR_VIN_HOSTS = {"sales.lot-online.ru", "www.fabrikant.ru", "fabrikant.ru"}
 LABEL_RE = re.compile(r"Статус(?:\s+торгов)?(?:\s+по\s+лоту)?(?:\s+лота)?\s*:?\s*(.{1,50})", re.I)
 # Где кончается значение статуса: дальше на странице идёт следующая подпись.
 NEXT_LABEL_RE = re.compile(r"\s(?:Дата|Начало|Окончание|Категория|Информация|Интервалы|Тип|Лот(?=\s)|Протокол|"
-                           r"Периоды|Предмет|Аукцион|Регион|Начальная|Документы|Сведения)")
+                           r"Периоды|Предмет|Аукцион|Регион|Начальная|Текущая|Купить|Документы|Сведения)")
 CDT_RE = re.compile(r'"tradeStatusDescription"\s*:\s*"([^"]{1,80})"')
 METS_RE = re.compile(r'class="[^"]*lot-status-name[^"]*"[^>]*>\s*([^<]{1,80})<')
 
@@ -120,9 +121,15 @@ def engine(url):
     return None
 
 
+def _norm(text):
+    """Нижний регистр, ё -> е, «приема» -> «прием»: «Торги в стадии приема заявок» (МЭТС),
+    «Этап приема заявок» (Фабрикант) - тот же «прием заявок»."""
+    return (text or "").lower().replace("ё", "е").replace("приема", "прием")
+
+
 def classify(fragment):
     """Текст статуса -> (state, outcome) или None, если не распознан."""
-    t = (fragment or "").lower().replace("ё", "е")
+    t = _norm(fragment)
     for phrase, state, outcome in PHRASES:
         if phrase in t:
             return state, outcome
@@ -179,7 +186,7 @@ def parse(url, html, hint=None):
                 window = text[a: a + 400]
                 for phrase in ("идет прием заявок", "прием заявок", "торги завершены", "торги не состоялись",
                                "торги отменены", "приостановлен", "подведение итогов"):
-                    i = window.lower().replace("ё", "е").find(phrase)
+                    i = _norm(window).find(phrase)
                     if i >= 0:
                         found.append((a + i, window[i: i + 40], classify(phrase)))
                         break
