@@ -105,6 +105,7 @@ HonestLot не организует торги, не продаёт машины
 | `bidding_schedule.py` (цена и срок публичного предложения) | numbers |
 | шаги `run_pipeline.py`, `config.py` | pipeline, config, runbook |
 | новые `automation.alert(...)` | runbook |
+| `.claude/skills/weekly-review/` (еженедельное ревью кода) | runbook |
 | серверы, домены, боты | infrastructure, architecture |
 | `TODO.md` (сделано или добавлено) | roadmap |
 | `miniapp/backend/app/billing.py`, `pay_providers.py`, `frontend/pay/`, `site.py` + `site_pages/` (подписка, оплата, страницы сайта) | payments, monetization |
