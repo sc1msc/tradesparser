@@ -155,7 +155,7 @@ def _batch_write(worksheet, row_num, col, updates):
         data.append({"range": cell, "values": [[value]]})
     if data:
         # таймаут или 5xx Google - повтор, а не падение всего шага (так упало дозаполнение 13.10.2026)
-        sheets_writer.retry_write(lambda: worksheet.batch_update(data))
+        sheets_writer.batch_update_retry(worksheet, data)
 
 
 def run(specs_only=False, limit=None):

@@ -274,6 +274,14 @@ def retry_write(call):
             time.sleep(pause)
 
 
+def batch_update_retry(worksheet, data):
+    """worksheet.batch_update с повтором. Каждой попытке - свежая копия data: gspread
+    дописывает имя листа прямо в переданные словари ("AJ888" -> "'лист'!AJ888"), и повтор
+    с теми же словарями уходил с адресом "'лист'!'лист'!AJ888" - Google отвечал 400
+    (так 14.10.2026 упало дозаполнение характеристик после обрыва связи)."""
+    return retry_write(lambda: worksheet.batch_update([dict(d) for d in data]))
+
+
 # На сколько строк расширять лист, когда новые лоты упираются в конец сетки
 # (Google не расширяет лист сам при записи явных диапазонов вида A1566 -
 # отвечает "exceeds grid limits"). Пачкой, а не по строке на лот: одно
@@ -401,7 +409,7 @@ class SheetState:
         if cell_updates is None:
             return None
         if cell_updates:
-            retry_write(lambda: self.worksheet.batch_update(cell_updates))
+            batch_update_retry(self.worksheet, cell_updates)
         return self.lot_row[str(lot_id)]
 
     def update_fields_many(self, items):
@@ -419,7 +427,7 @@ class SheetState:
                 found += 1
                 cell_updates.extend(cells)
         if cell_updates:
-            retry_write(lambda: self.worksheet.batch_update(cell_updates))
+            batch_update_retry(self.worksheet, cell_updates)
         return found
 
 
