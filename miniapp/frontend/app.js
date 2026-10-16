@@ -546,7 +546,8 @@ function renderTop() {
   if (top.kind === "lot") renderLot(top.id);
   if (top.kind === "filters") renderFilters(null);
 }
-if (IN_TG) tg.BackButton.onClick(() => pop());
+// «Назад» Telegram при открытом просмотре фото закрывает просмотр, а не экран лота
+if (IN_TG) tg.BackButton.onClick(() => (viewerClose ? viewerClose() : pop()));
 
 function backbar(right) {
   return h("div", { class: "backbar" },
@@ -560,7 +561,11 @@ function gallery(photos) {
   if (!photos.length) return h("div", { class: "nophoto" }, icon("car"));
   const counter = h("div", { class: "counter" }, `1 / ${photos.length}`);
   const slides = h("div", { class: "slides" },
-    photos.map((p, i) => h("img", { src: p.full, alt: "", loading: i ? "lazy" : "eager" })));
+    photos.map((p, i) => h("img", {
+      src: p.full, alt: "", loading: i ? "lazy" : "eager",
+      // на весь экран с увеличением; после закрытия галерея встаёт на то же фото
+      onclick: () => openViewer(photos, i, (at) => { slides.scrollLeft = at * slides.clientWidth; }),
+    })));
   slides.addEventListener("scroll", () => {
     const i = Math.round(slides.scrollLeft / slides.clientWidth);
     counter.textContent = `${i + 1} / ${photos.length}`;
@@ -570,6 +575,168 @@ function gallery(photos) {
     onclick: () => slides.scrollBy({ left: d * slides.clientWidth, behavior: "smooth" }),
   }, d < 0 ? "‹" : "›")) : [];
   return h("div", { class: "gallery" }, slides, ...arrows, photos.length > 1 ? counter : null);
+}
+
+// ---------- просмотр фото на весь экран ----------
+// Нажатие на фото в галерее лота открывает его на весь экран (16.10.2026): листание - свайпом
+// (прокрутка с привязкой к кадру, как в галерее; на компьютере - стрелки и клавиши ← →),
+// увеличение - двумя пальцами или двойным касанием (на компьютере - колесом и двойным
+// щелчком), увеличенное фото перетаскивается. Закрыть - крестик, «Назад» Telegram, Esc.
+// Свой код, а не библиотека: нужен только зум. Свайп вниз в Telegram сворачивает мини-апп -
+// на время просмотра выключен (disableVerticalSwipes, Bot API 7.7).
+let viewerClose = null;
+const ZOOM_MAX = 4, ZOOM_TAP = 2.5;
+
+function openViewer(photos, start, onClose) {
+  const frames = photos.map((p) => {
+    const img = h("img", { src: p.full, alt: "", draggable: "false" });
+    return { frame: h("div", { class: "pv-frame" }, img), img, s: 1, x: 0, y: 0 };
+  });
+  const track = h("div", { class: "pv-track" }, frames.map((f) => f.frame));
+  const counter = h("div", { class: "pv-counter" });
+  const arrows = WEB && photos.length > 1 ? [-1, 1].map((d) => h("button", {
+    class: "gnav pv-nav " + (d < 0 ? "prev" : "next"), "aria-label": d < 0 ? "Предыдущее фото" : "Следующее фото",
+    onclick: () => go(cur() + d),
+  }, d < 0 ? "‹" : "›")) : [];
+  const box = h("div", { class: "pv", role: "dialog", "aria-modal": "true", "aria-label": "Фото лота" }, track,
+    h("button", { class: "pv-close", "aria-label": "Закрыть", onclick: () => close() }, "×"),
+    ...arrows, photos.length > 1 ? counter : null);
+
+  const cur = () => Math.max(0, Math.min(frames.length - 1, Math.round(track.scrollLeft / (track.clientWidth || 1))));
+  const showCounter = () => { counter.textContent = `${cur() + 1} / ${photos.length}`; };
+  const go = (i) => {
+    reset(frames[cur()]);
+    track.scrollTo({ left: Math.max(0, Math.min(frames.length - 1, i)) * track.clientWidth, behavior: "smooth" });
+  };
+  // Не дальше края фото: размер картинки при масштабе 1 - вписанная в кадр (object-fit: contain).
+  function clamp(f) {
+    const fw = f.frame.clientWidth, fh = f.frame.clientHeight;
+    const nw = f.img.naturalWidth || fw, nh = f.img.naturalHeight || fh;
+    const k = Math.min(fw / nw, fh / nh) * f.s;
+    const mx = Math.max(0, (nw * k - fw) / 2), my = Math.max(0, (nh * k - fh) / 2);
+    f.x = Math.max(-mx, Math.min(mx, f.x));
+    f.y = Math.max(-my, Math.min(my, f.y));
+  }
+  function apply(f, animate) {
+    clamp(f);
+    f.img.style.transition = animate ? "transform .2s ease" : "none";
+    f.img.style.transform = `translate(${f.x}px, ${f.y}px) scale(${f.s})`;
+    track.classList.toggle("zoomed", f.s > 1.01);
+  }
+  function reset(f) { f.s = 1; f.x = 0; f.y = 0; apply(f, true); }
+  // Точка экрана -> координаты от центра кадра; масштаб вокруг точки p.
+  const local = (f, cx, cy) => {
+    const r = f.frame.getBoundingClientRect();
+    return { x: cx - r.left - r.width / 2, y: cy - r.top - r.height / 2 };
+  };
+  function zoomAt(f, s, p, animate) {
+    s = Math.max(1, Math.min(ZOOM_MAX, s));
+    f.x = p.x - (p.x - f.x) * s / f.s;
+    f.y = p.y - (p.y - f.y) * s / f.s;
+    f.s = s;
+    apply(f, animate);
+  }
+  const toggleZoom = (f, p) => (f.s > 1.01 ? reset(f) : zoomAt(f, ZOOM_TAP, p, true));
+
+  // касания: два пальца - масштаб, один палец по увеличенному фото - перетаскивание, двойное касание - зум
+  let pinch = null, pan = null, tap = null, lastTap = null;
+  const mid = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+  track.addEventListener("touchstart", (e) => {
+    const f = frames[cur()];
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const m = mid(e.touches[0], e.touches[1]);
+      pinch = { f, d: dist(e.touches[0], e.touches[1]), s: f.s, x: f.x, y: f.y, p: local(f, m.x, m.y) };
+      pan = tap = null;
+    } else if (e.touches.length === 1) {
+      const t = e.touches[0];
+      tap = { x: t.clientX, y: t.clientY, at: Date.now() };
+      pan = f.s > 1.01 ? { f, sx: t.clientX, sy: t.clientY, x: f.x, y: f.y } : null;
+    }
+  }, { passive: false });
+  track.addEventListener("touchmove", (e) => {
+    if (pinch && e.touches.length === 2) {
+      e.preventDefault();
+      const f = pinch.f, m = mid(e.touches[0], e.touches[1]), p = local(f, m.x, m.y);
+      const s = Math.max(1, Math.min(ZOOM_MAX, pinch.s * dist(e.touches[0], e.touches[1]) / pinch.d));
+      f.s = s;
+      f.x = pinch.p.x - (pinch.p.x - pinch.x) * s / pinch.s + (p.x - pinch.p.x);
+      f.y = pinch.p.y - (pinch.p.y - pinch.y) * s / pinch.s + (p.y - pinch.p.y);
+      apply(f);
+    } else if (pan && e.touches.length === 1) {
+      e.preventDefault();
+      const t = e.touches[0];
+      pan.f.x = pan.x + t.clientX - pan.sx;
+      pan.f.y = pan.y + t.clientY - pan.sy;
+      apply(pan.f);
+    }
+    if (tap && e.touches.length === 1 && Math.hypot(e.touches[0].clientX - tap.x, e.touches[0].clientY - tap.y) > 10) tap = null;
+  }, { passive: false });
+  track.addEventListener("touchend", (e) => {
+    if (pinch && e.touches.length < 2) {
+      if (pinch.f.s < 1.05) reset(pinch.f);
+      pinch = null;
+      tap = lastTap = null;
+      return;
+    }
+    if (e.touches.length || !tap || Date.now() - tap.at > 300) { if (!e.touches.length) pan = null; return; }
+    const f = frames[cur()];
+    if (lastTap && Date.now() - lastTap.at < 300 && Math.hypot(tap.x - lastTap.x, tap.y - lastTap.y) < 40) {
+      e.preventDefault();
+      toggleZoom(f, local(f, tap.x, tap.y));
+      lastTap = null;
+    } else lastTap = tap;
+    tap = pan = null;
+  });
+  // мышь: двойной щелчок и колесо - масштаб, перетаскивание увеличенного фото
+  track.addEventListener("dblclick", (e) => { const f = frames[cur()]; toggleZoom(f, local(f, e.clientX, e.clientY)); });
+  track.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const f = frames[cur()];
+    zoomAt(f, f.s * Math.exp(-e.deltaY / 400), local(f, e.clientX, e.clientY));
+  }, { passive: false });
+  let drag = null;
+  track.addEventListener("mousedown", (e) => {
+    const f = frames[cur()];
+    if (f.s > 1.01) { e.preventDefault(); drag = { f, sx: e.clientX, sy: e.clientY, x: f.x, y: f.y }; }
+  });
+  const onMouseMove = (e) => {
+    if (!drag) return;
+    drag.f.x = drag.x + e.clientX - drag.sx;
+    drag.f.y = drag.y + e.clientY - drag.sy;
+    apply(drag.f);
+  };
+  const onMouseUp = () => { drag = null; };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") go(cur() - 1);
+    else if (e.key === "ArrowRight") go(cur() + 1);
+  };
+  track.addEventListener("scroll", showCounter, { passive: true });
+
+  const swipes = IN_TG && tg.isVersionAtLeast && tg.isVersionAtLeast("7.7");
+  function close() {
+    const at = cur();
+    box.remove();
+    document.documentElement.classList.remove("pv-open");
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+    if (swipes) tg.enableVerticalSwipes();
+    viewerClose = null;
+    if (onClose) onClose(at);
+  }
+  viewerClose = close;
+  if (swipes) tg.disableVerticalSwipes();
+  document.documentElement.classList.add("pv-open");
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("mousemove", onMouseMove);
+  document.addEventListener("mouseup", onMouseUp);
+  document.body.append(box);
+  track.scrollLeft = start * track.clientWidth;
+  showCounter();
+  haptic();
 }
 
 function rows(pairs) {
