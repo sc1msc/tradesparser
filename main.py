@@ -207,6 +207,20 @@ SERVER_STATUS_FIELDS = ("status", "price_current", "bidding_periods", "applicati
                         "status_checked_at", "etp_url", "etp_status", "etp_checked_at")
 
 
+def _alert_if_no_new_lots(newest_scraped_at, newest_on_site, now=None):
+    """Поиск отдал лоты, но все уже в таблице, и так NO_NEW_LOTS_ALERT_DAYS дней подряд:
+    агрегатор, похоже, перестал публиковать новые лоты (так было с 11.10.2026)."""
+    try:
+        last = datetime.datetime.fromisoformat(newest_scraped_at)
+    except (TypeError, ValueError):
+        return
+    days = ((now or datetime.datetime.now()) - last).days
+    if days >= config.NO_NEW_LOTS_ALERT_DAYS:
+        automation.alert(f"Новых лотов нет {days} дн.: последний занесён {last:%d.%m.%Y}. Поиск агрегатора "
+                         f"отвечает, но всё в нём уже есть в таблице (самый свежий лот на сайте - "
+                         f"{newest_on_site}). Похоже, агрегатор перестал публиковать новые лоты.")
+
+
 def pull_server_statuses(sheet_state):
     """Статусы, которые сервер мини-аппа прочитал сам (GET /api/lot-statuses), -> в лист lots.
     Сервер не настроен или недоступен - 0: тогда refresh_public_offers проверит всё сам.
@@ -375,6 +389,7 @@ def run():
 
     page = 1
     total_new = 0
+    newest_on_site = None
     new_lot_ids = set()
     search_broken = False
     cards = CardFailures("Новые лоты")
@@ -395,6 +410,8 @@ def run():
             break
 
         result = parse_search.parse_search_html(html)
+        if page == 1 and result["lots"]:
+            newest_on_site = max(result["lots"], key=lambda x: int(x["lot_id"]))["lot_id"]
         print(f"  Найдено лотов на странице: {len(result['lots'])}")
         if page == 1 and not result["lots"]:
             # Первая страница выдачи пустой не бывает. 01.10.2026 агрегатор
@@ -467,6 +484,8 @@ def run():
     if search_broken:
         automation.alert("Поиск на сайте агрегатора не отдал лоты (пустая первая страница) - новых лотов "
                          "за этот прогон нет не потому, что их нет. Если повторится завтра - смотреть сайт.")
+    elif not total_new and newest_on_site:
+        _alert_if_no_new_lots(sheet_state.newest_scraped_at, newest_on_site)
 
     print("\nОбновляю статус и график публичных предложений...")
     pull_server_statuses(sheet_state)

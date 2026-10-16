@@ -330,6 +330,11 @@ class SheetState:
                 self.lot_row[row[0]] = row_num
 
         self.next_row = FIRST_DATA_ROW + len(data_rows)
+        # Когда занесён самый свежий лот (ISO-строки сравниваются как даты) -
+        # для уведомления «новых лотов нет N дней» (main.py).
+        col = header.index("scraped_at") if "scraped_at" in header else None
+        self.newest_scraped_at = max((r[col] for r in data_rows if col is not None and len(r) > col and r[col]),
+                                     default=None)
         # Размер сетки листа (не число заполненных строк) - спрашиваем у
         # Google заново, а не берём worksheet.row_count: gspread запоминает
         # его при открытии листа и не обновляет после remove_expired_lots
