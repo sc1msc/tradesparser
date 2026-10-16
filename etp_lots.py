@@ -608,7 +608,8 @@ def _norm_title(title):
 class Dedup:
     """Узнаёт лот, который уже есть в листе: тот же адрес лота на ЭТП, иначе тот же VIN у
     открытого лота (одна машина одновременно только в одних торгах), иначе то же название
-    и начальная цена у открытого лота. rows - строки листа lots (dict), extra_urls -
+    и начальная цена у открытого лота - если VIN нет хотя бы у одного из двух лотов: разные
+    VIN - разные машины, даже с одинаковым названием и ценой. rows - строки листа lots (dict), extra_urls -
     {lot_id: адрес на ЭТП} из кэша карточек (у старых строк листа etp_url пуст)."""
 
     def __init__(self, rows, now=None, extra_urls=None):
@@ -638,7 +639,8 @@ class Dedup:
                 self.vins.setdefault(vin, lot_id)
             title = _norm_title(row.get("title"))
             if title and row.get("price_start"):
-                self.titles.setdefault((title, str(money(str(row.get("price_start"))))), lot_id)
+                key = (title, str(money(str(row.get("price_start")))))
+                self.titles.setdefault(key, []).append((lot_id, vin if len(vin) == 17 else None))
 
     def find(self, lot):
         """-> (lot_id, почему) уже известного лота или (None, None)."""
@@ -651,9 +653,9 @@ class Dedup:
             return self.vins[vin], "тот же VIN у открытого лота"
         title = _norm_title(lot.get("title"))
         if title and lot.get("price_start"):
-            found = self.titles.get((title, str(money(str(lot.get("price_start"))))))
-            if found:
-                return found, "то же название и цена"
+            for found, other_vin in self.titles.get((title, str(money(str(lot.get("price_start"))))), []):
+                if len(vin) != 17 or not other_vin:  # у обоих VIN есть и разные - разные машины
+                    return found, "то же название и цена"
         return None, None
 
 
