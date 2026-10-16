@@ -512,6 +512,13 @@ def _int(value):
 
 def load():
     with _cache_lock:
+        # Базу изменил другой процесс (ручной запуск python -m app.etp_collect --photos и т.п.):
+        # data_version SQLite меняется только от чужих записей, свои записи этот процесс сбрасывает
+        # сам (invalidate). Проверка - один PRAGMA на запрос.
+        version = db.conn().execute("PRAGMA data_version").fetchone()[0]
+        if _cache.get("data_version") != version:
+            _cache["data_version"] = version
+            _cache["lots"] = None
         if _cache["lots"] is None:
             raw = db.all_lots()
             catalog = build_catalog(raw)
