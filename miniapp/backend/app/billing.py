@@ -127,6 +127,12 @@ CREATE TABLE IF NOT EXISTS early_access (
     note        TEXT,
     created_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pending_grants (
+    username    TEXT PRIMARY KEY,              -- ник Telegram в нижнем регистре, без @
+    months      INTEGER NOT NULL,              -- подарок (gift) тому, кто ещё не открывал HonestLot:
+    note        TEXT,                          -- включится при первом входе (claim_pending)
+    created_at  TEXT NOT NULL
+);
 """
 
 
@@ -629,6 +635,7 @@ def api_checkout(payload: CheckoutPayload, authorization: str = Header(default="
         raise HTTPException(status_code=400, detail="нужно согласие с офертой и обработкой персональных данных")
     if user:
         db.touch_user(tid, user.get("username"), user.get("first_name"), _iso(now_msk()))
+        claim_pending(tid, user.get("username"))
     try:
         return checkout(tid, payload.plan, payload.email, payload.autorenew)
     except ValueError as e:
@@ -750,7 +757,47 @@ def grant(who, months=1, now=None):
     return tid, end
 
 
-# ---------- админка: python -m app.billing [list | early <telegram_id> [заметка] | grant <@ник|id> [мес]] ----------
+def gift(who, months=1, now=None):
+    """Подарок Pro (16.10.2026): как grant, но если человек ещё ни разу не открывал мини-апп или сайт
+    (его нет в базе, а Pro привязан к telegram_id), подарок записывается на ник и включается сам при
+    первом входе (claim_pending). -> текст для консоли."""
+    try:
+        tid, end = grant(who, months, now)
+        return f"Pro подарен: {who} (telegram_id {tid}) до {_date_ru(end)} включительно"
+    except ValueError:
+        if not str(who).startswith("@"):
+            raise
+    name = str(who)[1:].strip().lower()
+    c = _conn()
+    with db._lock:
+        with c:
+            row = c.execute("SELECT months FROM pending_grants WHERE username = ?", (name,)).fetchone()
+            c.execute("INSERT OR REPLACE INTO pending_grants (username, months, created_at) VALUES (?, ?, ?)",
+                      (name, months + (row["months"] if row else 0), _iso(now or now_msk())))
+    return f"{who} ещё не открывал HonestLot - Pro на {months} мес. включится при первом входе"
+
+
+def claim_pending(tid, username):
+    """Вход пользователя: если на его ник есть отложенный подарок (gift) - выдать Pro и снять запись.
+    Ошибки не мешают входу. Поиск по ключу таблицы - на каждый вход это незаметно."""
+    name = (username or "").strip().lower()
+    if not name:
+        return
+    try:
+        c = _conn()
+        with db._lock:
+            with c:
+                row = c.execute("SELECT months FROM pending_grants WHERE username = ?", (name,)).fetchone()
+                if not row or c.execute("DELETE FROM pending_grants WHERE username = ?", (name,)).rowcount != 1:
+                    return
+        _, end = grant(tid, row["months"])
+        print(f"[подарок] @{name} (telegram_id {tid}) открыл HonestLot - Pro до {_date_ru(end)}", flush=True)
+    except Exception as e:  # вход важнее подарка
+        print(f"[подарок] @{name}: не выдан ({type(e).__name__}: {e})", flush=True)
+
+
+# ---------- админка: python -m app.billing [list | early <telegram_id> [заметка] | grant <@ник|id> [мес]
+# | gift <@ник> [<@ник> ...] [мес]] ----------
 
 def _cli(argv):
     c = _conn()
@@ -760,6 +807,14 @@ def _cli(argv):
                 c.execute("INSERT OR REPLACE INTO early_access (telegram_id, note, created_at) VALUES (?, ?, ?)",
                           (int(argv[1]), " ".join(argv[2:]) or None, _iso(now_msk())))
         print(f"Ранняя цена выдана: {argv[1]}")
+        return
+    if argv[:1] == ["gift"] and len(argv) >= 2:
+        months = int(argv[-1]) if argv[-1].isdigit() else 1
+        for who in [a for a in argv[1:] if not a.isdigit()]:
+            print(gift(who if who.startswith("@") or who.isdigit() else "@" + who, months))
+        waiting = c.execute("SELECT username, months FROM pending_grants ORDER BY created_at").fetchall()
+        if waiting:
+            print("Ждут первого входа: " + ", ".join(f"@{r['username']} ({r['months']} мес.)" for r in waiting))
         return
     if argv[:1] == ["grant"] and len(argv) >= 2:
         tid, end = grant(argv[1], int(argv[2]) if len(argv) > 2 else 1)

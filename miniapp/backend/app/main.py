@@ -93,6 +93,7 @@ def current_user(authorization, with_source=False):
     source, ref_code = auth.split_start_param(user.get("start_param"))
     db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(),
                   source, ref_code)
+    billing.claim_pending(int(user["id"]), user.get("username"))  # подарок Pro на ник, если ждал первого входа
     return (int(user["id"]), source) if with_source else int(user["id"])
 
 
@@ -167,6 +168,7 @@ def api_web_login(payload: WebLoginPayload):
     if source != auth.SHARE_SOURCE:
         source, ref_code = auth.WEB_SOURCE, None
     db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(), source, ref_code)
+    billing.claim_pending(int(user["id"]), user.get("username"))
     return {"token": auth.make_web_token(user), "first_name": user.get("first_name"), "username": user.get("username")}
 
 
