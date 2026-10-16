@@ -27,7 +27,8 @@ r"""
 lot_id - число (мини-апп и ссылки «Поделиться» вида lot<цифры>): лоты агрегатора
 сохраняют его номера, лоты с площадок получают ETP_ID_BASE + код площадки *
 10^8 + номер лота на площадке - всегда тот же для того же лота, без таблиц
-соответствия (lot_id_for).
+соответствия (lot_id_for). У МЭТС лот - «<номер торгов>-<номер лота>», номер для
+lot_id - номер торгов * 100 + номер лота.
 
 Повторы (Dedup). Тот же лот у агрегатора узнаётся по адресу лота на ЭТП (у лотов
 агрегатора он в etp_url), иначе - по VIN среди открытых лотов (одна машина
@@ -39,7 +40,8 @@ lot_id - число (мини-апп и ссылки «Поделиться» в
 водяных знаков агрегатора), periods (график для кэша мини-аппа), efrsb_number,
 trade_number, lot_number, applications_count (число поданных заявок).
 
-Площадки - классы с host, platform, list_lots(get) и read_lot(get, url). Новая
+Площадки (ТоргГрупп, МЭТС) - классы с host, platform, list_lots(get) и read_lot(get, url);
+cars_only - список уже отфильтрован категорией «легковой» самой площадки. Новая
 площадка: класс + запись в COLLECTORS и в PLATFORM_CODES (код не менять, на нём
 держатся номера лотов). get(url) -> текст страницы (на сервере - status_refresh.
 fetch, в проверках - подмена). Модуль общий для ПК и сервера (Docker-образ
@@ -58,7 +60,7 @@ import lot_metrics
 ETP_ID_BASE = 9_000_000_000
 ETP_ID_PLATFORM_STEP = 100_000_000
 # Код площадки в номере лота. Только дописывать: смена кода сменит номера лотов.
-PLATFORM_CODES = {"bankrot.torggroup.org": 1}
+PLATFORM_CODES = {"bankrot.torggroup.org": 1, "m-ets.ru": 2}
 
 # Регионы сбора (как SEARCH_PARAMS агрегатора в config.py) - названия как у агрегатора.
 REGIONS = {77: "г. Москва", 50: "Московская область"}
@@ -379,6 +381,182 @@ class TorgGroup:
         }
 
 
+# --- МЭТС (m-ets.ru) ---
+
+class Mets:
+    """Список лотов - /search?q=<фильтры JSON-ом в base64> (категория «Легковой автомобиль»,
+    регионы, «идёт приём заявок»; 20 лотов на страницу), лот - /<номер торгов>-<номер лота>:
+    на одной странице всё - статус, цены, график снижения, сроки, характеристики машины (марка,
+    модель, двигатель, мощность, пробег, привод, коробка, VIN), должник, управляющий, номер
+    ЕФРСБ, организатор, фото (с водяным знаком самой МЭТС). Пускает только российские адреса:
+    с ВМ открывается, с ПК под VPN - 403 (проверено 16.10.2026)."""
+
+    host = "m-ets.ru"
+    platform = "Межрегиональная электронная торговая система"
+    base = "https://m-ets.ru"
+    cars_only = True  # список уже отфильтрован категорией площадки, is_vehicle по названию не нужен
+    max_pages = 40    # защита от бесконечного цикла (16.10.2026 - 16 страниц)
+
+    def list_url(self, page):
+        import base64
+        query = {"search_category": "1", "stat[]": ["1"], "xregion[]": sorted(str(r) for r in REGIONS)}
+        q = base64.b64encode(json.dumps(query, separators=(",", ":")).encode()).decode().rstrip("=")
+        return f"{self.base}/search?q={q}" + (f"&page={page}" if page > 1 else "")
+
+    def list_lots(self, get, regions=REGIONS, sleep=None):
+        """-> [stub]: url, key, lot_number, trade_number, title, price_start, region, list_status."""
+        out = {}
+        for page in range(1, self.max_pages + 1):
+            html = get(self.list_url(page))
+            rows = self.parse_list(html)
+            for stub in rows:
+                out.setdefault(stub["key"], stub)
+            if sleep:
+                sleep()
+            last = re.search(r'class="end link"[^>]*>(\d+)<', html or "")
+            if not rows or page >= (int(last.group(1)) if last else page):
+                break
+        return list(out.values())
+
+    def parse_list(self, html):
+        stubs = []
+        for card in re.split(r'<div[^>]*class="card-so"', html or "")[1:]:
+            link = re.search(r'href="(\d+)-(\d+)"', card)
+            if not link:
+                continue
+            title = re.search(r'<div class="title">(.*?)</div>', card, re.S)
+            place = re.search(r'search-item-location">\s*<span>(.*?)</span>', card, re.S)
+            cost = re.search(r'<div class="cost[^"]*"[^>]*>(.*?)</div>', card, re.S)
+            url = f"{self.base}/{link.group(1)}-{link.group(2)}"
+            stubs.append({
+                "url": url, "key": listing_key(url), "trade_number": link.group(1), "lot_number": link.group(2),
+                "title": text_of(title.group(1)) if title else "", "price_start": money(text_of(cost.group(1)))
+                if cost else None, "region": text_of(place.group(1)) if place else None, "list_status": "приём заявок",
+            })
+        return stubs
+
+    @staticmethod
+    def sections(html):
+        """Поля страницы лота: {(раздел, подпись): значение}. Раздел - строка-заголовок
+        (lot-info-item title: «Сведения о должнике», «Финансовый управляющий», «Организатор торгов»…)."""
+        out = {}
+        section = ""
+        item = re.compile(r'<div class="lot-info-item( title)?[^"]*">\s*<div class="title">(.*?)</div>\s*'
+                          r'(?:<div class="value">(.*?)</div>)?', re.S)
+        for m in item.finditer(html or ""):
+            label = text_of(m.group(2)).rstrip(":").strip()
+            if m.group(1):
+                section = label
+                continue
+            out.setdefault((section, label), text_of(m.group(3) or ""))
+        return out
+
+    @staticmethod
+    def field(sections, label, section=None):
+        """Значение по подписи (подпись содержит label; раздел - начинается с section)."""
+        label = label.lower()
+        for (sec, lab), value in sections.items():
+            if label in lab.lower() and (section is None or section.lower() in sec.lower()):
+                return value
+        return None
+
+    def parse_periods(self, html):
+        """График снижения цены -> [{begin, end, bid_end, price}] и цена текущего периода
+        (строка data-status='1')."""
+        m = re.search(r"График снижения цены.*?<tbody>(.*?)</tbody>", html or "", re.S)
+        periods, current = [], None
+        for tr in re.findall(r"<tr[^>]*>.*?</tr>", m.group(1) if m else "", re.S):
+            cells = [text_of(c) for c in re.findall(r"<td.*?</td>", tr, re.S)]
+            if len(cells) < 4:
+                continue
+            begin, end, price = ru_datetime(cells[1]), ru_datetime(cells[2]), money(cells[3])
+            if end and price:
+                periods.append({"begin": begin, "end": end, "bid_end": end, "price": price})
+                if "data-status='1'" in tr or 'data-status="1"' in tr:
+                    current = price
+        periods.sort(key=lambda p: p["bid_end"])
+        return periods, current
+
+    def read_lot(self, get, url, with_trade=True):
+        """Страница лота -> поля строки листа и данные для мини-аппа (with_trade не нужен: всё на
+        одной странице). Нет названия или статуса - parse_error."""
+        html = get(url)
+        number = re.search(r"/(\d+)-(\d+)$", url.rstrip("/"))
+        s = self.sections(html)
+        f = lambda label, section=None: self.field(s, label, section)  # noqa: E731
+        head = re.search(r'<h2 class="lot-title[^"]*"[^>]*>(.*?)(?:<span ellipse|</h2>)', html or "", re.S)
+        title = text_of(head.group(1)) if head else None
+        raw = re.search(r'class="value lot-status-name"[^>]*>([^<]*)<', html or "")
+        raw_status = raw.group(1).strip() if raw else ""
+        status, state = aggregator_status(raw_status)
+        if not title or not status:
+            return {"url": url, "lot_id": None, "title": title,
+                    "parse_error": f"на странице лота нет названия или статуса ({raw_status or 'пусто'})"}
+        periods, current = self.parse_periods(html)
+        packed = bidding_schedule.pack_periods(periods)
+        price_start = money((f("Начальная цена продажи") or "").split("руб")[0])
+        # описание имущества - в <span itemprop="description"> (в подписи поля - латинская «C» и значок
+        # «Проверено модератором», общим разбором полей его не взять)
+        desc = re.search(r'itemprop="description">(.*?)</div>', html or "", re.S)
+        description = (text_of(desc.group(1)) if desc else "") or title
+        vin = (f("Идентификационный номер (VIN)") or "").strip().upper()
+        vin = vin if len(vin) == 17 else (lot_metrics.find_vin(title) or lot_metrics.find_vin(description))
+        mileage = money(f("Пробег"))
+        photos = [{"full": self.base + "/" + full, "thumb": self.base + "/" + thumb} for full, thumb in dict.fromkeys(
+            re.findall(r'href="(download/[^"]+)"[^>]*data-lightbox="lotpics\d+"[^>]*data-thumb="([^"]+)"', html))]
+        applications_end = ru_datetime(f("Окончание предоставления заявок"))
+        count = re.search(r"Количество заявок:\s*(\d+)", html)
+        region = f("Регион местонахождения имущества")
+        if region and region.replace(" ", "").lower() in ("г.москва", "москва"):
+            region = REGIONS[77]
+        manager_section = next((sec for sec, _ in s if "управляющ" in sec.lower()), "управляющ")
+        phone = f("Телефон", "Организатор торгов") or f("Номер контактного телефона")
+        return {
+            "url": url,
+            "lot_id": lot_id_for(self.host, int(number.group(1)) * 100 + int(number.group(2))
+                                 if number and int(number.group(2)) < 100 else None),
+            "title": title,
+            "status": status,
+            "etp_state": state,
+            "etp_status": raw_status,
+            "vin": vin or None,
+            "vins_all": lot_metrics.lot_vins((title + " " + description).upper()),
+            "plate": lot_metrics.find_plate(title) or lot_metrics.find_plate(description),
+            "mileage_km": mileage or _mileage(description) or _mileage(title),
+            "photo_url": photos[0]["full"] if photos else None,
+            "photos": photos,
+            "region": region,
+            "price_start": price_start,
+            "price_current": current or price_start,
+            "currency": "RUB",
+            "trade_kind": f("Форма проведения торгов"),
+            "trade_section": f("Вид торгов"),
+            "platform": self.platform,
+            "etp_url": url,
+            "applications_start": ru_datetime(f("Начало предоставления заявок")),
+            "applications_end": bidding_schedule.final_deadline(applications_end, packed) or applications_end,
+            "bidding_periods": packed,
+            "periods": periods,
+            "bidding_start": ru_datetime(f("Начало подачи предложений о цене")),
+            "description": description,
+            "efrsb_number": f("Идентификационный номер торгов на ЕФРСБ"),
+            "trade_number": number.group(1) if number else None,
+            "lot_number": number.group(2) if number else None,
+            "applications_count": int(count.group(1)) if count else None,
+            # характеристики машины прямо со страницы (у ТоргГрупп их нет)
+            "specs": {k: f(label) for k, label in (("brand", "Марка"), ("model", "Модель"), ("engine", "Двигатель"),
+                                                     ("year", "Год выпуска"), ("power", "Мощность"),
+                                                     ("drive", "Привод"), ("transmission", "Коробка передач"))},
+            "organizer_name": f("Наименование", "Организатор торгов"),
+            "organizer_phone": phone_digits(phone),
+            "organizer_email": f("Адрес электронной почты", "Организатор торгов") or f("Адрес электронной почты"),
+            "manager_name": f("ФИО", manager_section),
+            "manager_sro": f("саморегулируемой", manager_section),
+            "debtor_name": f("ФИО", "Сведения о должнике") or f("Наименование", "Сведения о должнике"),
+            "debtor_inn": f("ИНН", "Сведения о должнике"),
+        }
+
+
 _MILEAGE_RE = re.compile(r"пробег[а-я]*[:\s-]*([\d\s]{3,10})\s*км", re.I)
 
 
@@ -388,7 +566,7 @@ def _mileage(text):
     return int(digits) if digits else None
 
 
-COLLECTORS = [TorgGroup()]
+COLLECTORS = [TorgGroup(), Mets()]
 
 
 def collector_for(url):

@@ -7,10 +7,12 @@ r"""
 Что делает. Фоновый поток в процессе api (как status_refresh.py) в часы
 RUN_HOURS по Москве проходит по площадкам из etp_lots.COLLECTORS:
   - читает список лотов площадки (Москва и область, торги объявлены или идёт
-    приём заявок; только машины - etp_lots.is_vehicle);
+    приём заявок; только машины - etp_lots.is_vehicle, а у площадок с категорией
+    «легковой» (МЭТС, cars_only) - по категории самой площадки);
   - лот, который уже есть в витрине от агрегатора (тот же адрес лота на ЭТП),
     не читает: ПК его всё равно не добавит, а статус ему проверяет
-    status_refresh.py (16.10.2026 таких на ТоргГрупп было 316 из 504);
+    status_refresh.py (16.10.2026 таких на ТоргГрупп было 316 из 504, на
+    МЭТС - 218 из 313);
   - новый лот, или прочитанный больше REREAD_DAYS дней назад, - читает
     целиком (страница лота и страница торгов) и сохраняет в таблицу etp_lots;
   - остальным отмечает, что лот всё ещё в списке.
@@ -126,7 +128,7 @@ def collect(collector, now, get, sleep):
             st["bad"] += 1
             st["error"] = lot.get("parse_error") or "нет названия, цены или срока приёма заявок"
             continue
-        if not etp_lots.is_vehicle(lot["title"], lot.get("description")):
+        if not getattr(collector, "cars_only", False) and not etp_lots.is_vehicle(lot["title"], lot.get("description")):
             st["not_car"] += 1
             continue
         if lot.get("region") not in etp_lots.REGIONS.values():
