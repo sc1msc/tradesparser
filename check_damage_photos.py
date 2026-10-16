@@ -54,6 +54,7 @@ import requests
 from google.oauth2.service_account import Credentials
 
 import config
+import etp_lots
 import expenses
 import lot_metrics
 
@@ -156,22 +157,26 @@ def candidates(rows, details, min_gap):
     for r in rows:
         if (r.get("lot_kind") or lot_metrics.LOT_CAR) != lot_metrics.LOT_CAR:
             continue
-        # номер лота: колонка lot_id (у лотов с площадок ссылка ведёт на ЭТП), иначе - из ссылки агрегатора
-        m = re.match(r"(\d+)$", str(r.get("lot_id") or "").strip()) or LOT_ID_RE.search(r.get("url") or "")
-        if not m:
+        # номер лота - как в выгрузке в мини-апп (export_to_miniapp.lot_id_of): колонка lot_id, иначе из
+        # ссылки - у лотов агрегатора /lot/<номер>, у лотов с площадок - адрес на площадке (etp_lots)
+        lot_id = str(r.get("lot_id") or "").strip()
+        if not lot_id.isdigit():
+            m = LOT_ID_RE.search(r.get("url") or "")
+            lot_id = m.group(1) if m else etp_lots.lot_id_from_url(r.get("url"))
+        if not lot_id:
             continue
         gap = lot_metrics.gap_percent(_num(r.get("price_current")), _num(r.get("autoru_price_low")),
                                       _num(r.get("autoru_price_high")))
         if gap is None or gap < min_gap:
             continue
-        d = details.get(m.group(1)) or {}
+        d = details.get(lot_id) or {}
         gallery = [p for p in d.get("photos") or [] if p.get("full")]
         if not gallery and r.get("photo_url"):
             gallery = [{"full": r["photo_url"], "thumb": r["photo_url"]}]
         picked = pick_photos(gallery, config.DAMAGE_CHECK_PHOTOS)
         brand_model = " ".join(x for x in (r.get("brand"), r.get("name")) if x)
         out.append({
-            "lot_id": m.group(1), "url": r["url"], "gap": round(gap, 1),
+            "lot_id": lot_id, "url": r["url"], "gap": round(gap, 1),
             "name": f"{brand_model or (r.get('title') or 'Лот')[:60]}{', ' + r['year'] if r.get('year') else ''}",
             "title": r.get("title") or "", "price": _num(r.get("price_current")),
             "trade": "public_offer" if (r.get("bidding_periods") or "").strip() else "auction",

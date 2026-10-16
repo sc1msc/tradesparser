@@ -209,6 +209,10 @@ class TorgGroup:
     page_size = 20
     max_pages = 30  # защита от бесконечного цикла (16.10.2026 - не больше 9 страниц)
 
+    def lot_id_from_url(self, url):
+        m = re.search(r"/TradeLot/View/(\d+)", url or "")
+        return lot_id_for(self.host, m.group(1)) if m else None
+
     def list_url(self, region, state, page):
         return (f"{self.base}/Trade/AllSearch?pageSize={self.page_size}&currentPage={page}&sortBy=TradeId"
                 f"&asc=False&types={self.trade_types}&RegionId={region}&LotStateId={state}")
@@ -329,7 +333,7 @@ class TorgGroup:
             region = REGIONS[77]
         data = {
             "url": url,
-            "lot_id": lot_id_for(self.host, number.group(1) if number else None),
+            "lot_id": self.lot_id_from_url(url),
             "title": title,
             "status": status,
             "etp_state": state,
@@ -396,6 +400,13 @@ class Mets:
     base = "https://m-ets.ru"
     cars_only = True  # список уже отфильтрован категорией площадки, is_vehicle по названию не нужен
     max_pages = 40    # защита от бесконечного цикла (16.10.2026 - 16 страниц)
+
+    def lot_id_from_url(self, url):
+        """«/240658-1» -> номер торгов * 100 + номер лота (лотов в торгах меньше 100)."""
+        m = re.search(r"/(\d+)-(\d+)/?$", url or "")
+        if not m or int(m.group(2)) >= 100:
+            return None
+        return lot_id_for(self.host, int(m.group(1)) * 100 + int(m.group(2)))
 
     def list_url(self, page):
         import base64
@@ -513,8 +524,7 @@ class Mets:
         phone = f("Телефон", "Организатор торгов") or f("Номер контактного телефона")
         return {
             "url": url,
-            "lot_id": lot_id_for(self.host, int(number.group(1)) * 100 + int(number.group(2))
-                                 if number and int(number.group(2)) < 100 else None),
+            "lot_id": self.lot_id_from_url(url),
             "title": title,
             "status": status,
             "etp_state": state,
@@ -572,6 +582,14 @@ COLLECTORS = [TorgGroup(), Mets()]
 def collector_for(url):
     host = etp_status.host(url)
     return next((c for c in COLLECTORS if c.host == host), None)
+
+
+def lot_id_from_url(url):
+    """Номер лота с площадки по адресу его страницы - тот же, что даёт read_lot. Нужен листам без
+    колонки lot_id (lots_current_month): там номер лота агрегатора берут из ссылки /lot/<номер>, а у
+    лотов с площадок ссылка ведёт на площадку (16.10.2026 так 148 лотов не дошли до мини-аппа)."""
+    c = collector_for(url)
+    return c.lot_id_from_url(url) if c else None
 
 
 # Поля строки листа lots, которые ПК пишет из лота с площадки (main.pull_etp_lots).

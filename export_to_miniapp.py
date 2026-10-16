@@ -178,12 +178,13 @@ def fetch_details(url, session):
 
 
 def lot_id_of(row):
-    """Номер лота строки листа: колонка lot_id, у старых строк - из ссылки агрегатора."""
+    """Номер лота строки листа: колонка lot_id; в lots_current_month её нет - из ссылки: у лотов
+    агрегатора /lot/<номер>, у лотов с площадок - по адресу страницы на площадке (etp_lots)."""
     lot_id = str(row.get("lot_id") or "").strip()
     if lot_id.isdigit():
         return lot_id
     m = LOT_ID_RE.search(row.get("url") or "")
-    return m.group(1) if m else None
+    return m.group(1) if m else etp_lots.lot_id_from_url(row.get("url"))
 
 
 def _hours_since(value):
