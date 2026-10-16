@@ -264,12 +264,32 @@ function priceChange(price, prev) {
   return pct < 0 ? ` · дешевле на ${-pct}%` : ` · дороже на ${pct}%`;
 }
 
+// Превью в ленте с запасными вариантами (с 16.10.2026): фото площадки, не открылось (площадка
+// закрыла доступ, у пользователя VPN) - следующее (photo_alts, обычно фото агрегатора), не открылось
+// ничего - «Нет фото», а не пустой квадрат.
+function thumbBox(it) {
+  const urls = [it.photo, ...(it.photo_alts || [])].filter(Boolean);
+  const el = h("div", { class: "thumb" },
+    it.damaged ? h("span", { class: "warn", title: "Возможно, повреждён" }, "⚠") : null);
+  const noPhoto = () => {
+    el.classList.add("nophoto");
+    el.style.backgroundImage = "";
+    el.prepend(icon("car"), h("span", { class: "nophoto-t" }, "Нет фото"));
+  };
+  const tryUrl = (i) => {
+    if (i >= urls.length) return noPhoto();
+    const probe = new Image();
+    probe.onload = () => { el.style.backgroundImage = `url("${urls[i]}")`; };
+    probe.onerror = () => tryUrl(i + 1);
+    probe.src = urls[i];
+  };
+  tryUrl(0);
+  return el;
+}
+
 function card(it) {
   if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
-  const thumb = h("div", { class: "thumb" + (it.photo ? "" : " nophoto"), style: it.photo ? { backgroundImage: `url("${it.photo}")` } : null },
-    it.photo ? null : icon("car"),
-    it.photo ? null : h("span", { class: "nophoto-t" }, "Нет фото"),
-    it.damaged ? h("span", { class: "warn", title: "Возможно, повреждён" }, "⚠") : null);
+  const thumb = thumbBox(it);
   const meta = [kmText(it), regionShort(it.region)].filter(Boolean).join(" · ");
   const specLine = specsShort(it);
   const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";
@@ -557,12 +577,31 @@ function backbar(right) {
 
 // ---------- экран лота ----------
 
-function gallery(photos) {
-  if (!photos.length) return h("div", { class: "nophoto" }, icon("car"));
+// Галерея с запасными наборами фото (lot.photo_sets, lots._photo_sets на сервере): если фото
+// набора не открылось, галерея целиком переходит на следующий набор (обычно фото агрегатора); в
+// последнем наборе неоткрывшиеся фото просто убираются, не осталось ни одного - «нет фото».
+function gallery(lot) {
+  const sets = (lot.photo_sets && lot.photo_sets.length ? lot.photo_sets : [lot.photos || []]).filter((s) => s.length);
+  const box = h("div", { class: "gallery-wrap" });
+  const render = (k) => box.replaceChildren(sets[k] ? gallerySet(sets[k], () => render(k + 1), k === sets.length - 1)
+    : h("div", { class: "nophoto" }, icon("car")));
+  render(0);
+  return box;
+}
+
+function gallerySet(photos, fallback, last) {
+  let switched = false;
   const counter = h("div", { class: "counter" }, `1 / ${photos.length}`);
+  const onError = (e) => {
+    if (!last) { if (!switched) { switched = true; fallback(); } return; }
+    e.target.remove();
+    const left = slides.querySelectorAll("img").length;
+    if (!left) return fallback();
+    counter.textContent = `1 / ${left}`;
+  };
   const slides = h("div", { class: "slides" },
     photos.map((p, i) => h("img", {
-      src: p.full, alt: "", loading: i ? "lazy" : "eager",
+      src: p.full, alt: "", loading: i ? "lazy" : "eager", onerror: onError,
       // на весь экран с увеличением; после закрытия галерея встаёт на то же фото
       onclick: () => openViewer(photos, i, (at) => { slides.scrollLeft = at * slides.clientWidth; }),
     })));
@@ -878,9 +917,9 @@ async function renderLot(id) {
   // (кнопки сразу под ценой: на компьютере нижней панели нет). На телефоне колонки
   // складываются в одну в прежнем порядке, панель снова внизу экрана (style.css).
   const body = WEB
-    ? [h("div", { class: "lotgrid" }, h("div", { class: "lotleft" }, gallery(lot.photos)),
+    ? [h("div", { class: "lotgrid" }, h("div", { class: "lotleft" }, gallery(lot)),
         h("div", { class: "lotright" }, headBlock, bottomBar, ...blocks))]
-    : [gallery(lot.photos), headBlock, ...blocks, bottomBar];
+    : [gallery(lot), headBlock, ...blocks, bottomBar];
   overlay.replaceChildren(h("div", { class: "screen no-tabs" + (WEB ? " lotscreen" : "") },
     backbar(h("div", { class: "actions" },
       h("button", { class: "sharebtn", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "top") }),

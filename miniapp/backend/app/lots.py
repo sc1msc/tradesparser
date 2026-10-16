@@ -400,15 +400,8 @@ def _apply_live(lot, now=None):
                 pass
         if lot.get("live_end"):
             lot["applications_end"] = lot["live_end"]
-    # фото со страницы площадки (без водяного знака агрегатора) - вместо фото агрегатора
-    if lot.get("etp_photos"):
-        try:
-            photos = json.loads(lot["etp_photos"])
-        except ValueError:
-            photos = []
-        if photos:
-            lot["photos"] = photos
-    lot["photos"] = [_public_photo(p) for p in lot.get("photos") or []]
+    lot["photo_sets"] = _photo_sets(lot)
+    lot["photos"] = lot["photo_sets"][0] if lot["photo_sets"] else []
     etp_fresh = _fresh(lot.get("etp_checked_at"), now)
     if etp_fresh and lot.get("etp_state") == "closed" and lot.get("etp_outcome") in etp_status.OUTCOME_TEXT:
         lot["status"] = etp_status.OUTCOME_TEXT[lot["etp_outcome"]]
@@ -426,15 +419,66 @@ def _public_photo(p):
     return {**p, "full": _proxied(p.get("full")), "thumb": _proxied(p.get("thumb") or p.get("full"))}
 
 
+def _photo_sets(lot):
+    """Наборы фото лота по порядку предпочтения (с 16.10.2026). Лента отдаёт их все, а app.js берёт
+    следующий набор, если фото текущего не открылось, - так у лота не бывает «сломанных» фото:
+      1. фото со страницы площадки (etp_photos: ТоргГрупп - оригиналы, МЭТС и ЦДТ - знак площадки, но
+         без знака агрегатора);
+      2. фото из выгрузки (у лотов агрегатора - его копии с его водяным знаком).
+    Фото МЭТС - двумя наборами: через наш сервер (/img: открывается и с VPN) и напрямую (если сервер
+    МЭТС не пускает, у пользователя без VPN они всё равно откроются)."""
+    own = lot.setdefault("_import_photos", lot.get("photos") or [])
+    etp = []
+    if lot.get("etp_photos"):
+        try:
+            etp = json.loads(lot["etp_photos"]) or []
+        except ValueError:
+            etp = []
+        if etp and etp_lots.photo_host(etp[0].get("full")) not in etp_lots.REPLACE_PHOTO_HOSTS:
+            etp = []
+    sets = []
+    for group in (etp, own):
+        if not group:
+            continue
+        if etp_lots.photo_host(group[0].get("full")) in etp_lots.PROXY_PHOTO_HOSTS:
+            sets.append([_public_photo(p) for p in group])
+            sets.append([{**p, "thumb": p.get("thumb") or p.get("full")} for p in group])
+        else:
+            sets.append(group)
+    return sets
+
+
+PHOTO_RANK = {"original": 3, "platform": 2, "aggregator": 1, "other": 1}
+
+
+def _photo_rank(lot):
+    sets = lot.get("photo_sets") or []
+    return PHOTO_RANK.get(etp_lots.photo_kind(sets[0][0].get("full")), 0) if sets and sets[0] else 0
+
+
+def _borrow_car_photos(prepared, cars):
+    """Лоту без фото - фото другого лота той же машины (тот же VIN: запись «вне ЭТП» тех же торгов,
+    прошлые торги): это та же машина. Берём лучший набор (оригиналы, потом знак площадки, потом
+    агрегатор)."""
+    for lot in prepared:
+        if lot["photo_sets"] or not lot["car"]:
+            continue
+        donor = max((o for o in cars.get(lot["car"], []) if o["photo_sets"] and not o.get("_photos_from")),
+                    key=_photo_rank, default=None)
+        if donor:
+            lot["photo_sets"], lot["photos"], lot["_photos_from"] = donor["photo_sets"], donor["photos"], donor["lot_id"]
+
+
 def photo_sources():
     """Сколько лотов ленты с какими фото (по первому фото): original - без водяных знаков,
     platform - со знаком площадки, aggregator - копии агрегатора с его знаком, none - без фото."""
-    out = {"original": 0, "platform": 0, "aggregator": 0, "other": 0, "none": 0}
+    out = {"original": 0, "platform": 0, "aggregator": 0, "other": 0, "none": 0, "from_same_car": 0}
     for lot in load():
         if not lot.get("in_source"):
             continue
         photos = lot.get("photos") or []
         out[etp_lots.photo_kind(photos[0].get("full")) if photos else "none"] += 1
+        out["from_same_car"] += bool(lot.get("_photos_from"))
     return out
 
 
@@ -527,6 +571,7 @@ def load():
             for lot in prepared:
                 if lot["car"]:
                     cars.setdefault(lot["car"], []).append(lot)
+            _borrow_car_photos(prepared, cars)
             _cache["cars"] = cars
             _cache["by_id"] = {lot["lot_id"]: lot for lot in prepared}
             _cache["lots"] = prepared
@@ -606,6 +651,8 @@ def summary(lot, state, now, favorites):
         "trade": lot["trade"],
         "region": lot.get("region"),
         "photo": _first_photo(lot),
+        # запасные превью: не открылось первое - app.js берёт следующее (lots._photo_sets)
+        "photo_alts": [s[0].get("thumb") or s[0].get("full") for s in (lot.get("photo_sets") or [])[1:] if s],
         "damaged": bool(lot["damage"]) or lot["total_damage"],
         "total_damage": lot["total_damage"],
         "kind": lot["kind"],
@@ -659,6 +706,7 @@ def detail(lot, now, favorites):
         "bidding_start": _iso(parse_dt(lot.get("bidding_start"))),
         "description": lot.get("description"),
         "photos": lot.get("photos") or [],
+        "photo_sets": lot.get("photo_sets") or [],  # запасные наборы фото (lots._photo_sets)
         "periods": periods,
         "period_number": state["period_index"] + 1 if state["period_index"] is not None else None,
         "periods_total": state["periods_total"],

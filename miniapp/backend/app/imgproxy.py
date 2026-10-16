@@ -59,11 +59,17 @@ def get(url):
     path = os.path.join(cache_dir(), hashlib.sha1(url.encode("utf-8")).hexdigest())
     if os.path.exists(path):
         return path
+    host = status_refresh.check_paused(url)  # площадка закрыла доступ - не ходим (status_refresh.HostPaused)
     req = urllib.request.Request(url, headers={"User-Agent": status_refresh.USER_AGENT})
-    with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
-        if not (resp.headers.get_content_type() or "").startswith("image/"):
-            raise ValueError(f"не фото: {resp.headers.get_content_type()}")
-        data = resp.read(MAX_BYTES + 1)
+    try:
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT) as resp:
+            if not (resp.headers.get_content_type() or "").startswith("image/"):
+                raise ValueError(f"не фото: {resp.headers.get_content_type()}")
+            data = resp.read(MAX_BYTES + 1)
+    except urllib.error.HTTPError as e:
+        status_refresh.note_response(host, e.code)
+        raise
+    status_refresh.note_response(host, 200)
     if len(data) > MAX_BYTES:
         raise ValueError("фото больше 8 МБ")
     tmp = f"{path}.{os.getpid()}.tmp"

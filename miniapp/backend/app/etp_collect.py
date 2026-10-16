@@ -57,7 +57,8 @@ DELAY_SECONDS = 2.0       # пауза между запросами к площ
 REREAD_DAYS = 3           # прочитанный лот перечитывается целиком не чаще (цена, график, фото)
 KEEP_DAYS = 30            # лот хранится столько дней после окончания приёма заявок
 ALERT_REPEAT_HOURS = 24
-PHOTO_MAX_PER_PASS = 300  # страниц площадок за проход (по 2 с) - около 10 минут
+PHOTO_MAX_PER_PASS = 300  # страниц площадок за проход (по PHOTO_DELAY_SECONDS) - около 15 минут
+PHOTO_DELAY_SECONDS = 3.0  # добор фото медленнее остального: 16.10.2026 МЭТС закрыла доступ во время добора
 PHOTO_RECHECK_DAYS = 14   # фото лота перечитываются не чаще (фото у лота почти не меняются)
 
 _lock = threading.Lock()  # проход из потока и вручную не идут одновременно
@@ -193,7 +194,7 @@ def photo_candidates(now):
     out = []
     for r in db.conn().execute("SELECT lot_id, etp_url, etp_photos_at FROM lots WHERE in_source = 1 "
                                "AND etp_url IS NOT NULL AND etp_url != ''"):
-        if etp_lots.is_etp_lot_id(r["lot_id"]) or etp_lots.etp_status.host(r["etp_url"]) not in etp_lots.PHOTO_KIND:
+        if etp_lots.is_etp_lot_id(r["lot_id"]) or etp_lots.etp_status.host(r["etp_url"]) not in etp_lots.REPLACE_PHOTO_HOSTS:
             continue
         if r["etp_photos_at"] and not _stale(r["etp_photos_at"], now, PHOTO_RECHECK_DAYS):
             continue
@@ -209,9 +210,12 @@ def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO
     for lot_id, url in todo:
         try:
             photos = etp_lots.page_photos(url, get(url))
+        except status_refresh.HostPaused:  # площадка закрыла доступ - её лоты в следующий раз
+            st["fail"] += 1
+            continue
         except Exception:  # сеть, 403 - попробуем в следующий проход
             st["fail"] += 1
-            sleep(DELAY_SECONDS)
+            sleep(PHOTO_DELAY_SECONDS)
             continue
         if photos is None:
             st["skipped"] += 1
@@ -219,7 +223,7 @@ def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO
         st["with_photos" if photos else "empty"] += 1
         st["photos"] += len(photos)
         db.save_live(lot_id, {"etp_photos": json.dumps(photos, ensure_ascii=False), "etp_photos_at": _stamp()})
-        sleep(DELAY_SECONDS)
+        sleep(PHOTO_DELAY_SECONDS)
     lots.invalidate()
     print(f"[фото с площадок] страниц {st['pages']}: с фото {st['with_photos']} ({st['photos']} фото), без фото "
           f"{st['empty']}, не разобрано {st['skipped']}, сбоев {st['fail']}", flush=True)

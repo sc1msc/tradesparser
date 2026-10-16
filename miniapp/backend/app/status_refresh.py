@@ -96,18 +96,82 @@ def save_state(state):
     os.replace(tmp, state_file())
 
 
+# Площадка ответила BLOCK_AFTER раз подряд 403/429 (закрыла доступ серверу, 16.10.2026 так сделала МЭТС
+# во время добора фото) - BLOCK_HOURS часов сервер к ней не ходит вовсе (сбор лотов, статусы, фото,
+# прокси фото): повторные запросы только продлевают блокировку. Пауза - в BLOCK_FILE рядом с базой,
+# её видят и ручные запуски (python -m app.etp_collect). Запросы во время паузы - HostPaused.
+BLOCK_AFTER = 3
+BLOCK_HOURS = 12
+_denials = {}
+
+
+class HostPaused(urllib.error.URLError):
+    """К площадке не ходим: она недавно закрыла доступ серверу."""
+
+
+def block_file():
+    return os.path.join(os.path.dirname(os.path.abspath(db.db_path())), "blocked_hosts.json")
+
+
+def _blocks():
+    try:
+        with open(block_file(), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def paused_until(host):
+    """До какого времени (unix) к площадке не ходим, или None."""
+    until = _blocks().get(host)
+    return until if until and until > time.time() else None
+
+
+def note_response(host, code):
+    """Учёт ответов площадки: BLOCK_AFTER раз подряд 403/429 - пауза BLOCK_HOURS часов."""
+    if code not in (403, 429):
+        _denials.pop(host, None)
+        return
+    _denials[host] = _denials.get(host, 0) + 1
+    if _denials[host] >= BLOCK_AFTER:
+        blocks = {h: t for h, t in _blocks().items() if t > time.time()}
+        blocks[host] = time.time() + BLOCK_HOURS * 3600
+        tmp = block_file() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(blocks, f)
+        os.replace(tmp, block_file())
+        _denials.pop(host, None)
+        print(f"[площадки] {host} закрыла доступ (HTTP {code}) - пауза {BLOCK_HOURS} ч", flush=True)
+
+
+def check_paused(url):
+    h = etp_status.host(url)
+    until = paused_until(h)
+    if until:
+        raise HostPaused(f"{h} закрыла доступ серверу (403), пауза до {time.strftime('%d.%m %H:%M', time.localtime(until))}")
+    return h
+
+
 def fetch(url):
-    """Страница как текст. HTTP-ошибка (403 - площадка не пускает) - urllib.error.HTTPError.
+    """Страница как текст. HTTP-ошибка (403 - площадка не пускает) - urllib.error.HTTPError;
+    площадка на паузе после отказов (note_response) - HostPaused, запроса нет.
     Часть ЭТП подписана российским корневым сертификатом (Минцифры), которого нет в наборе
     сертификатов образа: для них повтор без проверки сертификата - страницу мы только читаем,
     ничего не отправляем."""
+    h = check_paused(url)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Language": "ru-RU,ru;q=0.9"})
     try:
-        return _read(urllib.request.urlopen(req, timeout=FETCH_TIMEOUT))
-    except urllib.error.URLError as e:
-        if not isinstance(e.reason, ssl.SSLCertVerificationError):
-            raise
-    return _read(urllib.request.urlopen(req, timeout=FETCH_TIMEOUT, context=ssl._create_unverified_context()))
+        try:
+            page = _read(urllib.request.urlopen(req, timeout=FETCH_TIMEOUT))
+        except urllib.error.URLError as e:
+            if isinstance(e, urllib.error.HTTPError) or not isinstance(e.reason, ssl.SSLCertVerificationError):
+                raise
+            page = _read(urllib.request.urlopen(req, timeout=FETCH_TIMEOUT, context=ssl._create_unverified_context()))
+    except urllib.error.HTTPError as e:
+        note_response(h, e.code)
+        raise
+    note_response(h, 200)
+    return page
 
 
 def _read(resp):
@@ -212,8 +276,8 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
             try:
                 page = get(etp_url)
                 res = etp_status.parse(etp_url, page, {"vin": lot.get("vin"), "plate": lot.get("plate")})
-                photos = etp_lots.page_photos(etp_url, page)  # фото площадки вместо фото агрегатора
-                if photos is not None:
+                photos = etp_lots.page_photos(etp_url, page) if h in etp_lots.REPLACE_PHOTO_HOSTS else None
+                if photos is not None:  # фото площадки вместо фото агрегатора
                     live.update({"etp_photos": json.dumps(photos, ensure_ascii=False), "etp_photos_at": stamp})
             except urllib.error.HTTPError as e:
                 res = etp_status.UNKNOWN

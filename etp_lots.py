@@ -590,6 +590,15 @@ PHOTO_KIND = {"bankrot.torggroup.org": "clean", "au-pro.ru": "clean", "m-ets.ru"
 # Площадки, которые не пускают зарубежные адреса (МЭТС отвечает 403): у пользователя с VPN их фото не
 # откроются, поэтому мини-апп показывает их через свой сервер (GET /img, miniapp/backend/app/imgproxy.py).
 PROXY_PHOTO_HOSTS = {"m-ets.ru"}
+# Чьими фото заменяем фото агрегатора у лотов от агрегатора. Фото агрегатора при этом остаются запасным
+# набором: не открылось фото площадки (площадка закрыла доступ, как МЭТС 16.10.2026, или у пользователя
+# VPN) - мини-апп показывает фото агрегатора (lots._photo_sets, app.js).
+REPLACE_PHOTO_HOSTS = {"bankrot.torggroup.org", "au-pro.ru", "torgi.cdtrf.ru", "m-ets.ru"}
+
+
+def photo_host(url):
+    """Площадка фото по адресу (webapi.torgi.cdtrf.ru -> torgi.cdtrf.ru)."""
+    return etp_status.host(url).replace("webapi.", "")
 
 _CDT_IMAGE_RE = re.compile(r"https://webapi\.torgi\.cdtrf\.ru/LotImage/public\?LotImageSize=Large&(?:amp;)?"
                            r"ImageId=([0-9a-f-]{36})&(?:amp;)?LotId=(\d+)&(?:amp;)?TradeId=(\d+)&(?:amp;)?_v=([0-9a-f-]{36})")
