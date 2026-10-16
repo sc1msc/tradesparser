@@ -22,6 +22,10 @@ r"""
 разбираем, а у остальных - ЭТП: так агрегатор получает не в 4 раза больше
 запросов, чем раньше от ПК.
 
+Лоты, собранные сервером прямо с площадки (etp_collect.py, номер от
+etp_lots.ETP_ID_BASE), карточки у агрегатора не имеют: у них читается только
+страница лота на площадке (разбор etp_lots.py) - статус, цена, график, срок.
+
 ПК забирает результат одним запросом (GET /api/lot-statuses, main.py) в шаге 1
 прогона и пишет в лист lots - подборки и дайджест видят те же статусы, а свою
 перепроверку ПК делает только для лотов, которые сервер не проверил.
@@ -51,6 +55,7 @@ import urllib.error
 import urllib.request
 
 
+import etp_lots
 import etp_status
 import parse_lot
 
@@ -171,6 +176,10 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
     for lot in todo:
         # Москва без пояса - как пишет ПК (main._status_is_fresh сравнивает с наивным временем)
         stamp = datetime.datetime.now(MSK).replace(tzinfo=None).isoformat(timespec="seconds")
+        if etp_lots.is_etp_lot_id(lot["lot_id"]):
+            db.save_live(lot["lot_id"], _direct(lot, stats, stamp, get))
+            sleep(DELAY_SECONDS)
+            continue
         etp_url = lot.get("etp_url")
         engine = etp_status.engine(etp_url) if etp_url else None
         live = {}
@@ -221,6 +230,35 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
     lots.invalidate()
     _report(stats, now, send)
     return stats
+
+
+def _direct(lot, stats, stamp, get):
+    """Лот, собранный с площадки: страница лота на площадке (etp_lots) -> live_* и etp_*."""
+    url = lot.get("etp_url") or lot.get("url")
+    h = etp_status.host(url)
+    st = stats["etp"].setdefault(h, {"ok": 0, "unknown": 0, "error": ""})
+    collector = etp_lots.collector_for(url)
+    if not collector:
+        stats["unsupported"][h] = stats["unsupported"].get(h, 0) + 1
+        return {}
+    try:
+        data = collector.read_lot(get, url, with_trade=False)
+    except urllib.error.HTTPError as e:
+        data = {"parse_error": f"HTTP {e.code}"}
+    except Exception as e:
+        data = {"parse_error": f"{type(e).__name__}: {str(e)[:100]}"}
+    if data.get("parse_error"):
+        st["unknown"] += 1
+        st["error"] = data["parse_error"][:120]
+        return {}
+    st["ok"] += 1
+    outcome = next((k for k, v in etp_status.OUTCOME_TEXT.items() if v == data["status"]), None)
+    stats["closed"] += data["etp_state"] == "closed"
+    stats["pending"] += data["etp_state"] == "pending"
+    return {"live_status": data["status"], "live_price": _int(data.get("price_current")),
+            "live_periods": data.get("bidding_periods") or None, "live_end": data.get("applications_end") or None,
+            "live_checked_at": stamp, "etp_url": url, "etp_state": data["etp_state"], "etp_text": data["etp_status"],
+            "etp_outcome": outcome, "etp_checked_at": stamp}
 
 
 def _int(value):

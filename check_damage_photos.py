@@ -156,7 +156,8 @@ def candidates(rows, details, min_gap):
     for r in rows:
         if (r.get("lot_kind") or lot_metrics.LOT_CAR) != lot_metrics.LOT_CAR:
             continue
-        m = LOT_ID_RE.search(r.get("url") or "")
+        # номер лота: колонка lot_id (у лотов с площадок ссылка ведёт на ЭТП), иначе - из ссылки агрегатора
+        m = re.match(r"(\d+)$", str(r.get("lot_id") or "").strip()) or LOT_ID_RE.search(r.get("url") or "")
         if not m:
             continue
         gap = lot_metrics.gap_percent(_num(r.get("price_current")), _num(r.get("autoru_price_low")),

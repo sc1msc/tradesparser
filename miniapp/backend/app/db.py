@@ -27,6 +27,10 @@ HONESTLOT_DB, по умолчанию miniapp/backend/data/honestlot.db).
               (только для новых: уже знакомого пользователя ссылка не "приводит").
   favorites - избранное: (telegram_id, lot_id) + vin машины - избранное
               следует за машиной (см. lots.favorites_list).
+  etp_lots  - лоты, которые сервер сам собрал с площадок (etp_collect.py, etp_lots.py):
+              ключ - адрес лота на ЭТП (etp_lots.listing_key), data - поля лота JSON-ом.
+              ПК забирает их (GET /api/etp-lots) и дописывает в лист lots, в витрину
+              (таблица lots) они попадают обычной выгрузкой с ПК.
   events    - минимальная аналитика: open (открыл мини-апп), lot_view
               (открыл карточку лота), fav_add (в избранное), source_click
               (перешёл на сайт торгов - самый сильный сигнал интереса),
@@ -117,6 +121,18 @@ CREATE TABLE IF NOT EXISTS events (
     created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_created ON events (created_at);
+
+CREATE TABLE IF NOT EXISTS etp_lots (
+    listing_key      TEXT PRIMARY KEY,
+    lot_id           TEXT NOT NULL,
+    host             TEXT NOT NULL,
+    data             TEXT NOT NULL,
+    applications_end TEXT,
+    list_status      TEXT,
+    first_seen_at    TEXT NOT NULL,
+    read_at          TEXT NOT NULL,
+    listed_at        TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS favorites (
     telegram_id INTEGER NOT NULL,
@@ -265,6 +281,66 @@ def save_live(lot_id, fields):
         c = conn()
         with c:
             c.execute(f"UPDATE lots SET {sets} WHERE lot_id = ?", list(fields.values()) + [str(lot_id)])
+
+
+def etp_known(host):
+    """{listing_key: read_at} лотов площадки, уже прочитанных сборщиком."""
+    return {r["listing_key"]: r["read_at"]
+            for r in conn().execute("SELECT listing_key, read_at FROM etp_lots WHERE host = ?", (host,))}
+
+
+def lot_etp_urls():
+    """Адреса лотов на ЭТП у лотов витрины (выгрузка с ПК и проверка статусов)."""
+    return [r[0] for r in conn().execute("SELECT etp_url FROM lots WHERE in_source = 1 AND etp_url IS NOT NULL AND etp_url != ''")]
+
+
+def etp_save(key, lot, host, list_status, now_iso):
+    """Лот с площадки (прочитан заново): данные целиком, first_seen_at - как был."""
+    with _lock:
+        c = conn()
+        with c:
+            c.execute(
+                "INSERT INTO etp_lots (listing_key, lot_id, host, data, applications_end, list_status, "
+                "first_seen_at, read_at, listed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(listing_key) DO UPDATE SET lot_id = excluded.lot_id, data = excluded.data, "
+                "applications_end = excluded.applications_end, list_status = excluded.list_status, "
+                "read_at = excluded.read_at, listed_at = excluded.listed_at",
+                (key, str(lot["lot_id"]), host, json.dumps(lot, ensure_ascii=False), lot.get("applications_end"),
+                 list_status, now_iso, now_iso, now_iso))
+
+
+def etp_touch(key, list_status, now_iso):
+    """Лот снова в списке площадки, перечитывать страницу пока не нужно."""
+    with _lock:
+        c = conn()
+        with c:
+            c.execute("UPDATE etp_lots SET list_status = ?, listed_at = ? WHERE listing_key = ?",
+                      (list_status, now_iso, key))
+
+
+def etp_rows(since_end=None):
+    """Лоты с площадок, чей приём заявок не кончился раньше since_end (строка даты листа;
+    None - все): [dict data + list_status, first_seen_at, read_at, listed_at]."""
+    sql = "SELECT * FROM etp_lots"
+    args = ()
+    if since_end:
+        sql += " WHERE applications_end IS NULL OR applications_end >= ?"
+        args = (since_end,)
+    out = []
+    for r in conn().execute(sql + " ORDER BY first_seen_at", args):
+        item = json.loads(r["data"])
+        item.update({"listing_key": r["listing_key"], "list_status": r["list_status"],
+                     "first_seen_at": r["first_seen_at"], "read_at": r["read_at"], "listed_at": r["listed_at"]})
+        out.append(item)
+    return out
+
+
+def etp_prune(before_end):
+    """Удаляет лоты, приём заявок по которым кончился раньше before_end: в листе их уже нет."""
+    with _lock:
+        c = conn()
+        with c:
+            return c.execute("DELETE FROM etp_lots WHERE applications_end < ?", (before_end,)).rowcount
 
 
 def touch_user(telegram_id, username, first_name, now_iso, start_param=None, ref_code=None):

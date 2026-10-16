@@ -11,6 +11,7 @@
 | `SEARCH_PARAMS` | категория 2, регионы 50 и 77, `bankrupt` | фильтр поиска: легковые, МО и Москва, банкротство |
 | `MAX_PAGES` | 20 | страниц поиска за прогон (~480 самых новых лотов) |
 | `EXPIRED_LOT_DAYS` | 3 | через сколько дней после окончательного срока лот удаляется из `lots` |
+| `NO_NEW_LOTS_ALERT_DAYS` | 2 | столько дней нет новых лотов агрегатора — уведомление каждый прогон |
 | `DELAY_BETWEEN_LOT_REQUESTS` | 2.0 с | пауза между карточками |
 | `DELAY_BETWEEN_SEARCH_PAGES` | 2.0 с | пауза между страницами поиска |
 | `SITE_MAX_ERRORS_IN_ROW` | 10 | столько карточек подряд не прочиталось — проход останавливается |
@@ -97,5 +98,6 @@
 | `HONESTLOT_TELEGRAM_API` | `https://tg.honestlot.ru` — релей |
 | `HONESTLOT_IMPORT_TOKEN` | ключ выгрузки, тот же, что `MINIAPP_IMPORT_TOKEN` на ПК |
 | `HONESTLOT_ADMIN_CHAT_ID` | кому пишет сторож; пусто — сторож выключен |
+| `HONESTLOT_ETP_COLLECT` | `0` — сервер не собирает лоты с площадок (`etp_collect.py`); по умолчанию собирает |
 
 Шаблон — `miniapp/.env.example`.

@@ -22,6 +22,8 @@ os.environ.setdefault("HONESTLOT_DEV_USER_ID", "1")
 os.environ.setdefault("HONESTLOT_IMPORT_TOKEN", "dev")
 # локально сервер не ходит на агрегатор и ЭТП сам (status_refresh.py)
 os.environ.setdefault("HONESTLOT_STATUS_REFRESH", "0")
+# и не собирает лоты с площадок (etp_collect.py)
+os.environ.setdefault("HONESTLOT_ETP_COLLECT", "0")
 
 import requests  # noqa: E402
 import uvicorn  # noqa: E402

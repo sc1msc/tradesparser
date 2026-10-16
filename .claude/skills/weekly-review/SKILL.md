@@ -76,6 +76,7 @@ disable-model-invocation: true
 | Область | Файлы |
 |---|---|
 | Сбор лотов с сайта | `main.py`, `nextjs_json.py`, `parse_search.py`, `parse_lot.py`, `lot_metrics.py` (find_vin, find_plate) |
+| Лоты и статусы прямо с площадок | `etp_lots.py`, `etp_status.py`, `miniapp/backend/app/etp_collect.py`, `status_refresh.py` |
 | Платные запросы TRONK и расходы | `tronk_mileage.py`, `tronk_valuation.py`, `fill_missing_mileage.py`, `expenses.py`, лимиты в `config.py` |
 | Google-таблица | `sheets_writer.py`, `build_lots_processed.py`, `build_lots_current_month.py`, `vin_cache.py`, `fill_missing_from_title.py`, `fix_numeric_cells.py` |
 | Рыночная оценка и подборки | `evaluate_autoru_browser.py`, `autoru_valuation.py`, `build_lot_selections.py`, `lot_metrics.py` (процент, тип лота, битые), `bidding_schedule.py` |

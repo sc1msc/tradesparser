@@ -56,6 +56,15 @@ etp_checked_at. У этих лотов status_checked_at свежий, и refres
 пропускает - сам перечитывает только то, что сервер не проверил (сервер недоступен -
 всё, как раньше).
 
+С 16.10.2026 новые лоты приходят и прямо с площадок (ЭТП): их собирает сервер мини-аппа
+(miniapp/backend/app/etp_collect.py, разбор - etp_lots.py), а шаг после поиска агрегатора
+забирает их одним запросом (pull_etp_lots) и дописывает в лист то, чего там нет. Повторы
+отсекает etp_lots.Dedup: тот же адрес лота на ЭТП, тот же VIN у открытого лота, то же название
+и цена. В обратную сторону так же: новый лот агрегатора, который уже пришёл с площадки, не
+заносится, а его номер запоминается в ETP_DUPLICATES_FILE, чтобы не скачивать карточку каждый
+прогон. Номера лотов с площадок - от etp_lots.ETP_ID_BASE; их карточек у агрегатора нет, и
+refresh_public_offers их пропускает: статус им проверяет сервер на самой площадке.
+
 Сбои сайта торгов не проходят молча (в автоматическом режиме человек лог не
 читает): не загрузилась страница поиска - уведомление (automation.alert);
 карточки лотов считает CardFailures - не прочиталась заметная доля -
@@ -64,13 +73,18 @@ etp_checked_at. У этих лотов status_checked_at свежий, и refres
 
 Запуск:  python main.py
 """
-import time
+import collections
 import datetime
+import json
+import os
+import time
+
 import requests
 
 import automation
 import bidding_schedule
 import config
+import etp_lots
 import nextjs_json
 import parse_search
 import parse_lot
@@ -93,6 +107,8 @@ HEADERS = {
 FETCH_TIMEOUT = (10, 20)
 FETCH_RETRY_PAUSES = (5, 15)  # паузы перед 2-й и 3-й попыткой, секунд
 REFRESH_WRITE_BATCH = 50  # перепроверенных лотов на один запрос записи в лист
+# Лоты агрегатора, которые уже пришли с площадки: {номер агрегатора: номер лота с площадки}.
+ETP_DUPLICATES_FILE = "etp_duplicates.json"
 
 
 def fetch(url, session):
@@ -221,6 +237,86 @@ def _alert_if_no_new_lots(newest_scraped_at, newest_on_site, now=None):
                          f"{newest_on_site}). Похоже, агрегатор перестал публиковать новые лоты.")
 
 
+def _newest_aggregator_lot(sheet_state):
+    """Когда занесён самый свежий лот агрегатора (ISO-строки сравниваются как даты) - для
+    уведомления «новых лотов нет»: лоты с площадок его не заглушают."""
+    return max((r.get("scraped_at") for r in sheet_state.records
+                if r.get("scraped_at") and not etp_lots.is_etp_lot_id(r.get("lot_id"))), default=None)
+
+
+def _load_etp_duplicates():
+    try:
+        with open(ETP_DUPLICATES_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_etp_duplicates(dups):
+    tmp = ETP_DUPLICATES_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(dups, f, ensure_ascii=False, indent=0)
+    os.replace(tmp, ETP_DUPLICATES_FILE)
+
+
+def pull_etp_lots(sheet_state, now=None):
+    """Лоты, которые сервер мини-аппа собрал прямо с площадок (GET /api/etp-lots), -> новые
+    строки листа lots (пачками, sheet_state.append_many). Повторы с тем, что уже в листе,
+    отсекает etp_lots.Dedup. Фото, график и описание - в кэш карточек мини-аппа
+    (export_to_miniapp.DETAILS_CACHE_FILE): карточки у агрегатора у этих лотов нет. Сервер не
+    настроен или недоступен - 0, пайплайн идёт дальше. Возвращает число новых лотов."""
+    import export_to_miniapp  # здесь, а не наверху: export_to_miniapp сам импортирует main
+
+    api_url = (config.MINIAPP_API_URL or "").rstrip("/")
+    if not api_url or not config.MINIAPP_IMPORT_TOKEN:
+        return 0
+    try:
+        resp = requests.get(f"{api_url}/api/etp-lots", headers={"X-Import-Token": config.MINIAPP_IMPORT_TOKEN},
+                            timeout=120)
+        resp.raise_for_status()
+        items = resp.json().get("lots") or []
+    except (requests.RequestException, ValueError) as e:
+        print(f"  лоты с площадок не получены ({str(e)[:120]})")
+        return 0
+    now = now or datetime.datetime.now()
+    cache = export_to_miniapp._load_cache()
+    dedup = etp_lots.Dedup(sheet_state.records, now,
+                           {k: v.get("etp_url") for k, v in cache.items() if v.get("etp_url")})
+    new_rows, skipped, known = [], collections.Counter(), 0
+    for it in items:
+        lot_id = str(it.get("lot_id") or "")
+        if not lot_id:
+            continue
+        if lot_id in sheet_state.lot_row:  # уже в листе: свежие фото и описание - в кэш
+            cache[lot_id] = etp_lots.cache_entry(it, it.get("read_at"))
+            known += 1
+            continue
+        if bidding_schedule.is_closed_status(it.get("status")) or                 _final_deadline_passed(it.get("applications_end"), it.get("bidding_periods"), now):
+            skipped["приём заявок закончился"] += 1
+            continue
+        same, why = dedup.find(it)
+        if same:
+            skipped[why] += 1
+            continue
+        row = {k: it.get(k) for k in etp_lots.SHEET_FIELDS}
+        row["scraped_at"] = now.isoformat(timespec="seconds")
+        row["status_checked_at"] = row["etp_checked_at"] = it.get("read_at")
+        new_rows.append(row)
+        dedup.add(row)
+        cache[lot_id] = etp_lots.cache_entry(it, it.get("read_at"))
+    written = 0
+    try:
+        written = sheet_state.append_many(new_rows)
+    except Exception as e:  # сеть/Google - лоты придут в следующий прогон
+        automation.alert(f"Лоты с площадок: не записались в лист ({str(e)[:150]}), придут в следующий прогон.")
+    export_to_miniapp._save_cache(cache)
+    print(f"  с площадок: {len(items)} лотов, новых в лист: {written}, уже в листе: {known}"
+          + "".join(f", {why}: {n}" for why, n in skipped.items()))
+    for row in new_rows[:written]:
+        print(f"    {row['lot_id']}: {(row.get('title') or '')[:90]}")
+    return written
+
+
 def pull_server_statuses(sheet_state):
     """Статусы, которые сервер мини-аппа прочитал сам (GET /api/lot-statuses), -> в лист lots.
     Сервер не настроен или недоступен - 0: тогда refresh_public_offers проверит всё сам.
@@ -269,8 +365,8 @@ def refresh_public_offers(worksheet, sheet_state, session, skip_lot_ids):
     fresh = 0
     for r in sheets_writer.read_rows(worksheet):
         lot_id = r.get("lot_id")
-        if not lot_id or lot_id in skip_lot_ids or not r.get("url"):
-            continue
+        if not lot_id or lot_id in skip_lot_ids or not r.get("url") or etp_lots.is_etp_lot_id(lot_id):
+            continue  # у лотов с площадок карточки агрегатора нет - статус им проверяет сервер
         r["_broken_text"] = nextjs_json.is_text_ref(r.get("title")) or nextjs_json.is_text_ref(r.get("description"))
         if not (r["_broken_text"] or bidding_schedule.is_public_offer(r.get("trade_kind"))):
             continue
@@ -386,6 +482,10 @@ def run():
 
     sheet_state = sheets_writer.SheetState(worksheet)
     print(f"Уже в таблице: {len(sheet_state)} лотов")
+    # лоты, уже пришедшие с площадок: такой же лот агрегатора не заносим (etp_lots.Dedup)
+    from_etp = etp_lots.Dedup([r for r in sheet_state.records if etp_lots.is_etp_lot_id(r.get("lot_id"))])
+    etp_dups = _load_etp_duplicates()
+    newest_aggregator_lot = _newest_aggregator_lot(sheet_state)
 
     page = 1
     total_new = 0
@@ -426,8 +526,8 @@ def run():
 
         for lot_stub in result["lots"]:
             lot_id = lot_stub["lot_id"]
-            if lot_id in sheet_state.lot_row:
-                continue  # уже занесён раньше - пропускаем, не тратим лишние запросы
+            if lot_id in sheet_state.lot_row or lot_id in etp_dups:
+                continue  # уже занесён раньше (или пришёл с площадки) - не тратим лишние запросы
 
             print(f"  Новый лот {lot_id}: {lot_stub['title']}")
             time.sleep(config.DELAY_BETWEEN_LOT_REQUESTS)
@@ -454,6 +554,12 @@ def run():
             if _final_deadline_passed(lot_data.get("applications_end"), lot_data.get("bidding_periods"),
                                       datetime.datetime.now()):
                 print(f"    приём заявок закончился {lot_data.get('applications_end')} - не заношу")
+                continue
+
+            same, why = from_etp.find(lot_data)
+            if same:
+                print(f"    уже пришёл с площадки (лот {same}: {why}) - не заношу")
+                etp_dups[lot_id] = same
                 continue
 
             # пробег: сначала то, что нашли в самой карточке лота,
@@ -485,7 +591,12 @@ def run():
         automation.alert("Поиск на сайте агрегатора не отдал лоты (пустая первая страница) - новых лотов "
                          "за этот прогон нет не потому, что их нет. Если повторится завтра - смотреть сайт.")
     elif not total_new and newest_on_site:
-        _alert_if_no_new_lots(sheet_state.newest_scraped_at, newest_on_site)
+        _alert_if_no_new_lots(newest_aggregator_lot, newest_on_site)
+    if etp_dups:
+        _save_etp_duplicates(etp_dups)
+
+    print("\nЛоты прямо с площадок (собирает сервер мини-аппа)...")
+    pull_etp_lots(sheet_state)
 
     print("\nОбновляю статус и график публичных предложений...")
     pull_server_statuses(sheet_state)

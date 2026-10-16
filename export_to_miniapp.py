@@ -39,6 +39,11 @@ BACKUP_KEEP последних. Сервер и сам делает копию �
 если пропадёт диск, останется копия здесь. В базе невосстановимое -
 пользователи, избранное, статистика; лоты восстановимы новой выгрузкой.
 
+Лоты, собранные прямо с площадок (номер от etp_lots.ETP_ID_BASE, url - страница лота на
+ЭТП): карточки у агрегатора у них нет, фото, график и описание кладёт в кэш шаг 1
+(main.pull_etp_lots) из того, что прочитал сервер, - здесь их карточки не скачиваются, и
+их итоги для избранного проверяет сам сервер (status_refresh.py).
+
 Лоты-призраки. Агрегатор иногда создаёт страницу лота по ошибке и потом
 удаляет её (01.10.2026 - лот 7159530, дубль Renault Logan с другой ценой).
 Такая страница отдаётся с кодом 200, но без данных лота и с общим
@@ -73,6 +78,7 @@ from google.oauth2.service_account import Credentials
 import automation
 import bidding_schedule
 import config
+import etp_lots
 import etp_status
 import lot_metrics
 import main
@@ -171,6 +177,15 @@ def fetch_details(url, session):
     }
 
 
+def lot_id_of(row):
+    """Номер лота строки листа: колонка lot_id, у старых строк - из ссылки агрегатора."""
+    lot_id = str(row.get("lot_id") or "").strip()
+    if lot_id.isdigit():
+        return lot_id
+    m = LOT_ID_RE.search(row.get("url") or "")
+    return m.group(1) if m else None
+
+
 def _hours_since(value):
     try:
         return (datetime.datetime.now() - datetime.datetime.fromisoformat(value)).total_seconds() / 3600
@@ -186,7 +201,9 @@ def is_ghost(entry):
     return since is not None and since >= GHOST_CONFIRM_HOURS
 
 
-def _needs_refresh(entry):
+def _needs_refresh(entry, lot_id=None):
+    if etp_lots.is_etp_lot_id(lot_id):
+        return False  # лот с площадки: кэш заполняет main.pull_etp_lots, у агрегатора карточки нет
     if entry and entry.get("not_found_checks"):
         # подозрение на призрак - перепроверяем, но не чаще чем через GHOST_CONFIRM_HOURS
         if is_ghost(entry):
@@ -222,7 +239,7 @@ def _sheet_periods(text):
 
 
 def build_lot(row, details, damage=None):
-    lot_id = LOT_ID_RE.search(row.get("url") or "").group(1)
+    lot_id = lot_id_of(row)
     # Пробег больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника:
     # показываем оценку по году (как и оценивает такой лот Авто.ру).
     mileage = lot_metrics.plausible_mileage(row.get("mileage_km"))
@@ -269,8 +286,9 @@ def build_lot(row, details, damage=None):
         "trade_form": trade_form,
         "is_public_offer": is_public_offer,
         "status": row.get("status") or d.get("status"),
-        "platform": d.get("platform"),
-        "etp_url": d.get("etp_url"),  # ссылка на лот на ЭТП (карточки, скачанные до 15.10.2026, - без неё)
+        "platform": d.get("platform") or row.get("platform") or None,
+        # ссылка на лот на ЭТП (карточки, скачанные до 15.10.2026, - без неё)
+        "etp_url": d.get("etp_url") or row.get("etp_url") or None,
         "applications_end": applications_end,
         "bidding_start": row.get("bidding_start") or None,
         "periods": periods,
@@ -307,7 +325,8 @@ def refresh_watchlist(api_url, token, session, cache):
     try:
         resp = requests.get(f"{api_url}/api/watchlist", headers=headers, timeout=60)
         resp.raise_for_status()
-        watch = [w for w in resp.json().get("lots", []) if w.get("url")]
+        # итоги лотов с площадок сервер проверяет сам, на площадке (status_refresh.py)
+        watch = [w for w in resp.json().get("lots", []) if w.get("url") and not etp_lots.is_etp_lot_id(w.get("lot_id"))]
     except requests.RequestException as e:
         print(f"  Не удалось получить список избранного для перепроверки: {e}")
         return
@@ -383,19 +402,19 @@ def run(dry_run=False):
     print(f"Читаю лист {SOURCE_SHEET}...")
     rows, seen = [], set()
     for r in read_sheet():
-        m = LOT_ID_RE.search(r.get("url") or "")
-        if m and m.group(1) not in seen:  # дубли по лоту - берём первую строку
-            seen.add(m.group(1))
+        lot_id = lot_id_of(r)
+        if lot_id and lot_id not in seen:  # дубли по лоту - берём первую строку
+            seen.add(lot_id)
             rows.append(r)
     print(f"  лотов: {len(rows)}")
 
     cache = _load_cache()
-    todo = [r for r in rows if _needs_refresh(cache.get(LOT_ID_RE.search(r["url"]).group(1)))]
+    todo = [r for r in rows if _needs_refresh(cache.get(lot_id_of(r)), lot_id_of(r))]
     print(f"Карточек лотов для скачивания (новые + устаревший кэш): {len(todo)}")
     session = requests.Session()
     cards = main.CardFailures("Мини-апп, карточки лотов")
     for i, row in enumerate(todo, start=1):
-        lot_id = LOT_ID_RE.search(row["url"]).group(1)
+        lot_id = lot_id_of(row)
         try:
             cache[lot_id] = fetch_details(row["url"], session)
             d = cache[lot_id]
@@ -424,16 +443,15 @@ def run(dry_run=False):
     _save_cache(cache)
     cards.report(len(todo))
 
-    ghosts = [r for r in rows if is_ghost(cache.get(LOT_ID_RE.search(r["url"]).group(1)))]
+    ghosts = [r for r in rows if is_ghost(cache.get(lot_id_of(r)))]
     if ghosts:
-        print(f"Лоты, пропавшие с сайта (не выгружаю): {', '.join(LOT_ID_RE.search(r['url']).group(1) for r in ghosts)}")
+        print(f"Лоты, пропавшие с сайта (не выгружаю): {', '.join(lot_id_of(r) for r in ghosts)}")
     ghost_ids = {id(r) for r in ghosts}
     damage = {}
     if os.path.exists(DAMAGE_CACHE_FILE):
         with open(DAMAGE_CACHE_FILE, encoding="utf-8") as f:
             damage = json.load(f)
-    payload = {"lots": [build_lot(r, cache.get(LOT_ID_RE.search(r["url"]).group(1)),
-                                  damage.get(LOT_ID_RE.search(r["url"]).group(1)))
+    payload = {"lots": [build_lot(r, cache.get(lot_id_of(r)), damage.get(lot_id_of(r)))
                         for r in rows if id(r) not in ghost_ids]}
 
     if dry_run:

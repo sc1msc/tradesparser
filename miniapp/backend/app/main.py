@@ -24,6 +24,8 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    нажали "Перейти на Pro" (остальное пишет сервер)
   GET    /api/lot-statuses       - (ключ импорта) статусы торгов, которые сервер прочитал
                                    сам на агрегаторе и ЭТП (status_refresh.py) - ПК пишет их в лист
+  GET    /api/etp-lots           - (ключ импорта) лоты, которые сервер сам собрал с площадок
+                                   (etp_collect.py) - ПК дописывает новые в лист lots
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
                                    торгов ещё неизвестен - ПК перечитывает их на сайте
   POST   /api/lot-status         - (ключ импорта) статусы, перечитанные с сайта
@@ -52,7 +54,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, billing, db, lots, site, status_refresh, watchdog
+from . import auth, backup, billing, db, etp_collect, lots, site, status_refresh, watchdog
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -65,6 +67,7 @@ async def lifespan(_app):
     watchdog.start()  # давно нет выгрузки с ПК - сообщение администратору
     billing.start()   # автопродление подписок (только если оплата включена)
     status_refresh.start()  # статус торгов: агрегатор и ЭТП несколько раз в день
+    etp_collect.start()     # новые лоты прямо с площадок, вместе с агрегатором
     yield
 
 
@@ -209,6 +212,13 @@ def api_lot_statuses(x_import_token: str = Header(default="")):
     """Статусы, которые сервер прочитал сам (status_refresh.py) - ПК пишет их в лист lots в шаге 1."""
     _check_import_token(x_import_token)
     return {"lots": status_refresh.statuses()}
+
+
+@app.get("/api/etp-lots")
+def api_etp_lots(x_import_token: str = Header(default="")):
+    """Лоты, собранные сервером с площадок (etp_collect.py) - ПК дописывает новые в лист lots в шаге 1."""
+    _check_import_token(x_import_token)
+    return {"lots": etp_collect.export()}
 
 
 @app.get("/api/watchlist")

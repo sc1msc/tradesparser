@@ -11,12 +11,12 @@ set -euo pipefail
 HOST="${HONESTLOT_HOST:-honestlot@84.201.144.182}"
 cd "$(git rev-parse --show-toplevel)"
 
-if ! git diff --quiet HEAD -- lot_metrics.py bidding_schedule.py etp_status.py parse_lot.py nextjs_json.py miniapp; then
-  echo "Внимание: есть незакоммиченные правки в miniapp/ или в общих модулях (lot_metrics, bidding_schedule, etp_status, parse_lot, nextjs_json) - они НЕ будут выложены."
+if ! git diff --quiet HEAD -- lot_metrics.py bidding_schedule.py etp_status.py etp_lots.py parse_lot.py nextjs_json.py miniapp; then
+  echo "Внимание: есть незакоммиченные правки в miniapp/ или в общих модулях (lot_metrics, bidding_schedule, etp_status, etp_lots, parse_lot, nextjs_json) - они НЕ будут выложены."
 fi
 
 echo "Отправляю $(git rev-parse --short HEAD) на $HOST ..."
-git archive --format=tar HEAD lot_metrics.py bidding_schedule.py etp_status.py parse_lot.py nextjs_json.py miniapp | ssh "$HOST" 'mkdir -p ~/honestlot && tar -x -C ~/honestlot'
+git archive --format=tar HEAD lot_metrics.py bidding_schedule.py etp_status.py etp_lots.py parse_lot.py nextjs_json.py miniapp | ssh "$HOST" 'mkdir -p ~/honestlot && tar -x -C ~/honestlot'
 
 ssh "$HOST" 'set -e
 cd ~/honestlot/miniapp

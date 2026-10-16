@@ -324,17 +324,15 @@ class SheetState:
         self.col_idx = {name: header.index(name) + 1 for name in COLUMNS if name in header}
 
         data_rows = values[HEADER_ROW:]  # всё, что после заголовка
+        # Строки как словари - для поиска повторов лотов с площадок (main.pull_etp_lots,
+        # etp_lots.Dedup), чтобы не читать лист второй раз.
+        self.records = [dict(zip(header, row + [""] * (len(header) - len(row)))) for row in data_rows]
         for offset, row in enumerate(data_rows):
             row_num = FIRST_DATA_ROW + offset
             if row and row[0]:
                 self.lot_row[row[0]] = row_num
 
         self.next_row = FIRST_DATA_ROW + len(data_rows)
-        # Когда занесён самый свежий лот (ISO-строки сравниваются как даты) -
-        # для уведомления «новых лотов нет N дней» (main.py).
-        col = header.index("scraped_at") if "scraped_at" in header else None
-        self.newest_scraped_at = max((r[col] for r in data_rows if col is not None and len(r) > col and r[col]),
-                                     default=None)
         # Размер сетки листа (не число заполненных строк) - спрашиваем у
         # Google заново, а не берём worksheet.row_count: gspread запоминает
         # его при открытии листа и не обновляет после remove_expired_lots
@@ -422,6 +420,45 @@ class SheetState:
         if cell_updates:
             batch_update_retry(self.worksheet, cell_updates)
         return self.lot_row[str(lot_id)]
+
+    def append_many(self, rows, per_request=50):
+        """
+        Новые лоты (которых в листе нет) - пачками по per_request лотов на запрос, а не
+        запросом на лот, как upsert(): лоты с площадок приходят сотней за раз
+        (main.pull_etp_lots), а квота Google - 60 запросов записи в минуту. Пишутся
+        колонки COLUMNS, которые есть в data. Лот, который уже в листе, пропускается.
+        Возвращает число записанных лотов.
+        """
+        written = 0
+        batch, cells = [], []
+
+        def send():
+            try:
+                batch_update_retry(self.worksheet, cells)
+            except Exception:
+                # пачка не записалась - её строки свободны (они последние), лоты - в следующий прогон
+                for lot_id in batch:
+                    del self.lot_row[lot_id]
+                self.next_row -= len(batch)
+                raise
+            return len(batch)
+
+        for data in rows:
+            lot_id = str(data.get("lot_id") or "")
+            if not lot_id or lot_id in self.lot_row:
+                continue
+            row_num = self.next_row
+            self._ensure_row(row_num)
+            self.lot_row[lot_id] = row_num
+            self.next_row += 1
+            cells.extend(self._field_cells(lot_id, {c: data.get(c) for c in COLUMNS if c in data}))
+            batch.append(lot_id)
+            if len(batch) >= per_request:
+                written += send()
+                batch, cells = [], []
+        if cells:
+            written += send()
+        return written
 
     def update_fields_many(self, items):
         """

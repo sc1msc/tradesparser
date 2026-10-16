@@ -27,6 +27,8 @@ expenses/
 damage_check_cache.json
 damage_check_cache.json.tmp
 damage_check_report.html
+etp_duplicates.json
+etp_duplicates.json.tmp
 logs/
 
 # Отчёты еженедельного ревью кода (.claude/skills/weekly-review): репозиторий публичный
