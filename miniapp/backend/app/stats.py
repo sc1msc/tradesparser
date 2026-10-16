@@ -28,7 +28,7 @@ import datetime
 import sqlite3
 import sys
 
-from . import db
+from . import db, lots
 
 DAYS = 14
 
@@ -46,6 +46,9 @@ def run():
 
     total = _q(c, "SELECT COUNT(*) n FROM users")[0]["n"]
     print(f"Пользователей всего: {total}")
+    ph = lots.photo_sources()
+    print(f"Фото в ленте: оригиналы {ph['original']}, со знаком площадки {ph['platform']}, "
+          f"с агрегатора {ph['aggregator']}, без фото {ph['none']}" + (f", прочие {ph['other']}" if ph['other'] else ""))
     print("\nПо источникам (первый вход):")
     for r in _q(c, "SELECT COALESCE(source, 'без метки') s, COUNT(*) n FROM users GROUP BY s ORDER BY n DESC"):
         print(f"  {r['s']:<30} {r['n']}")

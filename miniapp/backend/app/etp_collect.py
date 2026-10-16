@@ -31,6 +31,12 @@ RUN_HOURS по Москве проходит по площадкам из etp_lo
     поменялась вёрстка, нужна правка etp_lots.py.
 Состояние (что уже сообщали, итог прохода) - в STATE_FILE рядом с базой.
 
+Фото (photo_pass, после сбора): лотам ленты от агрегатора, у которых есть ссылка на лот на
+площадке из etp_lots.PHOTO_KIND, фото берутся прямо со страницы площадки (у агрегатора поверх
+его водяной знак) - не больше PHOTO_MAX_PER_PASS страниц за проход, повтор раз в PHOTO_RECHECK_DAYS.
+Мини-апп показывает их вместо фото агрегатора (lots.py). Добор вручную, без ограничения:
+  docker compose exec api python -m app.etp_collect --photos
+
 Выключить: HONESTLOT_ETP_COLLECT=0 в .env (так при локальном запуске,
 miniapp/run_local.py). Один проход вручную, на сервере:
   docker compose exec api python -m app.etp_collect
@@ -43,7 +49,7 @@ import time
 
 import etp_lots
 
-from . import db, status_refresh
+from . import db, imgproxy, lots, status_refresh
 
 MSK = status_refresh.MSK
 RUN_HOURS = (6, 14, 20)   # проходы по Москве; проверка статусов - в 5, 11, 16, 21
@@ -51,6 +57,8 @@ DELAY_SECONDS = 2.0       # пауза между запросами к площ
 REREAD_DAYS = 3           # прочитанный лот перечитывается целиком не чаще (цена, график, фото)
 KEEP_DAYS = 30            # лот хранится столько дней после окончания приёма заявок
 ALERT_REPEAT_HOURS = 24
+PHOTO_MAX_PER_PASS = 300  # страниц площадок за проход (по 2 с) - около 10 минут
+PHOTO_RECHECK_DAYS = 14   # фото лота перечитываются не чаще (фото у лота почти не меняются)
 
 _lock = threading.Lock()  # проход из потока и вручную не идут одновременно
 
@@ -83,12 +91,12 @@ def _stamp():
     return datetime.datetime.now(MSK).replace(tzinfo=None).isoformat(timespec="seconds")
 
 
-def _stale(read_at, now):
+def _stale(read_at, now, days=REREAD_DAYS):
     try:
         read = datetime.datetime.fromisoformat(read_at).replace(tzinfo=MSK)
     except (TypeError, ValueError):
         return True
-    return now - read >= datetime.timedelta(days=REREAD_DAYS)
+    return now - read >= datetime.timedelta(days=days)
 
 
 def _complete(lot):
@@ -179,6 +187,45 @@ def _report(stats, now, send=None):
     save_state(state)
 
 
+def photo_candidates(now):
+    """Лоты ленты от агрегатора со ссылкой на площадку, где фото берём сами, ещё не проверенные
+    (или проверенные давно), - сначала никогда не проверенные."""
+    out = []
+    for r in db.conn().execute("SELECT lot_id, etp_url, etp_photos_at FROM lots WHERE in_source = 1 "
+                               "AND etp_url IS NOT NULL AND etp_url != ''"):
+        if etp_lots.is_etp_lot_id(r["lot_id"]) or etp_lots.etp_status.host(r["etp_url"]) not in etp_lots.PHOTO_KIND:
+            continue
+        if r["etp_photos_at"] and not _stale(r["etp_photos_at"], now, PHOTO_RECHECK_DAYS):
+            continue
+        out.append((r["etp_photos_at"] or "", r["lot_id"], r["etp_url"]))
+    return [(lot_id, url) for _, lot_id, url in sorted(out)]
+
+
+def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO_MAX_PER_PASS):
+    """Фото со страниц площадок для лотов ленты -> etp_photos. -> сводка."""
+    now = now or datetime.datetime.now(MSK)
+    todo = photo_candidates(now)[:limit] if limit else photo_candidates(now)
+    st = {"pages": len(todo), "with_photos": 0, "photos": 0, "empty": 0, "skipped": 0, "fail": 0}
+    for lot_id, url in todo:
+        try:
+            photos = etp_lots.page_photos(url, get(url))
+        except Exception:  # сеть, 403 - попробуем в следующий проход
+            st["fail"] += 1
+            sleep(DELAY_SECONDS)
+            continue
+        if photos is None:
+            st["skipped"] += 1
+            photos = []  # несколько лотов на странице - чьи фото, не понять; отмечаем, что смотрели
+        st["with_photos" if photos else "empty"] += 1
+        st["photos"] += len(photos)
+        db.save_live(lot_id, {"etp_photos": json.dumps(photos, ensure_ascii=False), "etp_photos_at": _stamp()})
+        sleep(DELAY_SECONDS)
+    lots.invalidate()
+    print(f"[фото с площадок] страниц {st['pages']}: с фото {st['with_photos']} ({st['photos']} фото), без фото "
+          f"{st['empty']}, не разобрано {st['skipped']}, сбоев {st['fail']}", flush=True)
+    return st
+
+
 def export(now=None):
     """Для ПК (GET /api/etp-lots): лоты с площадок, приём заявок по которым ещё идёт
     (или кончился не больше суток назад - ПК сам отбросит закончившиеся)."""
@@ -205,6 +252,11 @@ def _loop():
             run_pass()
         except Exception as e:  # поток не должен умирать из-за одного прохода
             print(f"[лоты с ЭТП] проход упал: {type(e).__name__}: {e}", flush=True)
+        try:
+            photo_pass()
+            imgproxy.cleanup()
+        except Exception as e:
+            print(f"[фото с площадок] проход упал: {type(e).__name__}: {e}", flush=True)
 
 
 def start():
@@ -213,5 +265,9 @@ def start():
 
 
 if __name__ == "__main__":
-    for host, s in run_pass().items():
-        print(host, s)
+    import sys
+    if "--photos" in sys.argv:  # только добор фото, без ограничения числа страниц
+        print(photo_pass(limit=None))
+    else:
+        for host, s in run_pass().items():
+            print(host, s)

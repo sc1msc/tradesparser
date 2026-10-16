@@ -323,9 +323,7 @@ class TorgGroup:
         price_start = money(f("Начальная цена продажи"))
         price_current = money(f("Текущая цена")) or price_start
         description = f("Сведения об имуществе") or title
-        photos = []
-        for pid in dict.fromkeys(re.findall(r'<img src="(/Picture/Show/\d+)"', html)):
-            photos.append({"full": self.base + pid, "thumb": self.base + pid})
+        photos = page_photos(url, html) or []
         applications_end = ru_datetime(f("Дата и время (МСК) окончания представления заявок"))
         count = re.search(r"Количество предоставленных заявок[^:]*:\s*(\d+)", html)
         region = f("Регион местонахождения имущества")
@@ -513,8 +511,7 @@ class Mets:
         vin = (f("Идентификационный номер (VIN)") or "").strip().upper()
         vin = vin if len(vin) == 17 else (lot_metrics.find_vin(title) or lot_metrics.find_vin(description))
         mileage = money(f("Пробег"))
-        photos = [{"full": self.base + "/" + full, "thumb": self.base + "/" + thumb} for full, thumb in dict.fromkeys(
-            re.findall(r'href="(download/[^"]+)"[^>]*data-lightbox="lotpics\d+"[^>]*data-thumb="([^"]+)"', html))]
+        photos = page_photos(url, html) or []
         applications_end = ru_datetime(f("Окончание предоставления заявок"))
         count = re.search(r"Количество заявок:\s*(\d+)", html)
         region = f("Регион местонахождения имущества")
@@ -577,6 +574,66 @@ def _mileage(text):
 
 
 COLLECTORS = [TorgGroup(), Mets()]
+
+
+# --- фото со страницы лота на площадке ---
+# Фото агрегатора - его копии фото площадки с его водяным знаком «Торги России» поверх (у МЭТС и ЦДТ
+# под ним ещё знак самой площадки). Сервер берёт фото прямо со страницы лота на площадке
+# (status_refresh.py - со страниц, которые и так читает; etp_collect.photo_pass - остальные лоты
+# ленты), мини-апп показывает их вместо фото агрегатора (lots.py). Проверено 16.10.2026:
+#   clean    - оригиналы без водяных знаков: ТоргГрупп (и АУКЦИОНПРО - тот же движок);
+#   platform - со знаком самой площадки, но без знака агрегатора: МЭТС, ЦДТ.
+# Остальные крупные площадки (НИС, ELECTRO-TORGI, Фабрикант, РАД, Центр реализации, Профит) фото в
+# странице не отдают - у их лотов остаются фото агрегатора.
+PHOTO_KIND = {"bankrot.torggroup.org": "clean", "au-pro.ru": "clean", "m-ets.ru": "platform",
+              "torgi.cdtrf.ru": "platform"}
+# Площадки, которые не пускают зарубежные адреса (МЭТС отвечает 403): у пользователя с VPN их фото не
+# откроются, поэтому мини-апп показывает их через свой сервер (GET /img, miniapp/backend/app/imgproxy.py).
+PROXY_PHOTO_HOSTS = {"m-ets.ru"}
+
+_CDT_IMAGE_RE = re.compile(r"https://webapi\.torgi\.cdtrf\.ru/LotImage/public\?LotImageSize=Large&(?:amp;)?"
+                           r"ImageId=([0-9a-f-]{36})&(?:amp;)?LotId=(\d+)&(?:amp;)?TradeId=(\d+)&(?:amp;)?_v=([0-9a-f-]{36})")
+
+
+def page_photos(url, html):
+    """Фото со страницы лота на площадке -> [{full, thumb}] (пустой список - фото на странице нет);
+    None - площадку не разбираем (или на странице несколько лотов и чьи фото - не понять)."""
+    host = etp_status.host(url)
+    html = html or ""
+    if host in ("bankrot.torggroup.org", "au-pro.ru"):
+        base = f"https://{host}"
+        return [{"full": base + p, "thumb": base + p}
+                for p in dict.fromkeys(re.findall(r'<img src="(/Picture/Show/\d+)"', html))]
+    if host == "m-ets.ru":
+        base = "https://m-ets.ru/"
+        return [{"full": base + full, "thumb": base + thumb} for full, thumb in dict.fromkeys(
+            re.findall(r'href="(download/[^"]+)"[^>]*data-lightbox="lotpics\d+"[^>]*data-thumb="([^"]+)"', html))]
+    if host == "torgi.cdtrf.ru":
+        # страница торгов: фото - ссылки на webapi с номером лота; в торгах несколько лотов - не берём
+        found = {}
+        for image, lot, trade, version in _CDT_IMAGE_RE.findall(html_lib.unescape(html)):
+            found.setdefault(lot, {}).setdefault(image, (trade, version))
+        if len(found) > 1:
+            return None
+        out = []
+        for lot, images in found.items():
+            for image, (trade, version) in images.items():
+                q = f"ImageId={image}&LotId={lot}&TradeId={trade}&_v={version}"
+                out.append({"full": f"https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&{q}",
+                            "thumb": f"https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Medium&{q}"})
+        return out
+    return None
+
+
+def photo_kind(url):
+    """Чьё фото по адресу: original (без водяных знаков) / platform (знак площадки) / aggregator / other."""
+    host = etp_status.host(url)
+    if not host and (url or "").startswith("/img?"):
+        return "platform"  # фото площадки через наш сервер (сейчас только МЭТС)
+    if host == etp_status.AGGREGATOR_HOST:
+        return "aggregator"
+    kind = PHOTO_KIND.get(host) or PHOTO_KIND.get(host.replace("webapi.", ""))
+    return {"clean": "original", "platform": "platform"}.get(kind, "other")
 
 
 def collector_for(url):

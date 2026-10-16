@@ -26,6 +26,9 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    сам на агрегаторе и ЭТП (status_refresh.py) - ПК пишет их в лист
   POST   /api/notify             - (ключ импорта) уведомление пайплайна с ПК -> администратору
                                    через бота уведомлений (с ПК Telegram без VPN закрыт)
+  GET    /img?u=<адрес>          - фото площадки, которая не пускает зарубежные адреса (МЭТС), через
+                                   наш сервер (imgproxy.py); только разрешённые адреса
+  GET    /api/stats/photos       - (ключ импорта) сколько лотов ленты с какими фото (сводка с ПК)
   GET    /api/etp-lots           - (ключ импорта) лоты, которые сервер сам собрал с площадок
                                    (etp_collect.py) - ПК дописывает новые в лист lots
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
@@ -56,7 +59,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, billing, db, etp_collect, lots, site, status_refresh, watchdog
+from . import auth, backup, billing, db, etp_collect, imgproxy, lots, site, status_refresh, watchdog
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -287,6 +290,26 @@ def api_import(payload: ImportPayload, x_import_token: str = Header(default=""),
     imported, hidden = db.import_lots(payload.lots, _now_iso())
     lots.invalidate()
     return {"imported": imported, "left_source": hidden}
+
+
+@app.get("/img")
+def img(u: str = ""):
+    """Фото МЭТС и других площадок из etp_lots.PROXY_PHOTO_HOSTS - через сервер (imgproxy.py)."""
+    try:
+        path = imgproxy.get(u)
+    except imgproxy.Refused:
+        raise HTTPException(status_code=404, detail="нет такого фото")
+    except Exception as e:  # площадка не отдала фото
+        raise HTTPException(status_code=502, detail=f"фото не загрузилось: {type(e).__name__}")
+    return FileResponse(path, media_type=imgproxy.media_type(u),
+                        headers={"Cache-Control": f"public, max-age={imgproxy.BROWSER_CACHE_SECONDS}"})
+
+
+@app.get("/api/stats/photos")
+def api_photo_stats(x_import_token: str = Header(default="")):
+    """Сколько лотов ленты с какими фото (lots.photo_sources) - для еженедельной сводки с ПК."""
+    _check_import_token(x_import_token)
+    return lots.photo_sources()
 
 
 @app.get("/api/backup")

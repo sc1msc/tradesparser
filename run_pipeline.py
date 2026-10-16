@@ -53,6 +53,8 @@ import sys
 import time
 import traceback
 
+import requests
+
 import automation
 import build_lot_selections
 import build_lots_current_month
@@ -194,7 +196,25 @@ def _weekly_summary(now):
             lines.append(f"Баланс TRONK: {bal:.0f} руб.")
     except Exception as e:
         lines.append(f"(учёт расходов недоступен: {e})")
+    lines.append(_photo_line())
     return "\n".join(lines)
+
+
+def _photo_line():
+    """Строка сводки: сколько лотов ленты с фото без водяных знаков, со знаком площадки, с фото агрегатора
+    (GET /api/stats/photos; сервер считает по ленте в памяти - доли секунды)."""
+    api_url = (config.MINIAPP_API_URL or "").rstrip("/")
+    if not api_url or not config.MINIAPP_IMPORT_TOKEN:
+        return "Фото: сервер мини-аппа не настроен."
+    try:
+        r = requests.get(f"{api_url}/api/stats/photos", headers={"X-Import-Token": config.MINIAPP_IMPORT_TOKEN},
+                         timeout=30)
+        r.raise_for_status()
+        ph = r.json()
+    except (requests.RequestException, ValueError) as e:
+        return f"Фото: счётчик недоступен ({str(e)[:80]})."
+    return (f"Фото в ленте: без водяных знаков {ph.get('original', 0)}, со знаком площадки {ph.get('platform', 0)}, "
+            f"с агрегатора {ph.get('aggregator', 0)}, без фото {ph.get('none', 0)}.")
 
 
 def run_auto():

@@ -50,8 +50,10 @@ import datetime
 import json
 import re
 import threading
+import urllib.parse
 
 import bidding_schedule
+import etp_lots
 import etp_status
 import lot_metrics
 
@@ -398,10 +400,42 @@ def _apply_live(lot, now=None):
                 pass
         if lot.get("live_end"):
             lot["applications_end"] = lot["live_end"]
+    # фото со страницы площадки (без водяного знака агрегатора) - вместо фото агрегатора
+    if lot.get("etp_photos"):
+        try:
+            photos = json.loads(lot["etp_photos"])
+        except ValueError:
+            photos = []
+        if photos:
+            lot["photos"] = photos
+    lot["photos"] = [_public_photo(p) for p in lot.get("photos") or []]
     etp_fresh = _fresh(lot.get("etp_checked_at"), now)
     if etp_fresh and lot.get("etp_state") == "closed" and lot.get("etp_outcome") in etp_status.OUTCOME_TEXT:
         lot["status"] = etp_status.OUTCOME_TEXT[lot["etp_outcome"]]
     lot["_etp_pending"] = etp_fresh and lot.get("etp_state") == "pending"
+
+
+def _proxied(url):
+    """Фото с площадки, которая не пускает зарубежные адреса (МЭТС), - через наш сервер (GET /img)."""
+    if url and etp_status.host(url) in etp_lots.PROXY_PHOTO_HOSTS:
+        return "/img?u=" + urllib.parse.quote(url, safe="")
+    return url
+
+
+def _public_photo(p):
+    return {**p, "full": _proxied(p.get("full")), "thumb": _proxied(p.get("thumb") or p.get("full"))}
+
+
+def photo_sources():
+    """Сколько лотов ленты с какими фото (по первому фото): original - без водяных знаков,
+    platform - со знаком площадки, aggregator - копии агрегатора с его знаком, none - без фото."""
+    out = {"original": 0, "platform": 0, "aggregator": 0, "other": 0, "none": 0}
+    for lot in load():
+        if not lot.get("in_source"):
+            continue
+        photos = lot.get("photos") or []
+        out[etp_lots.photo_kind(photos[0].get("full")) if photos else "none"] += 1
+    return out
 
 
 def _prepare(lot, catalog=None):

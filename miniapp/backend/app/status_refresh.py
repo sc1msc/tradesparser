@@ -210,7 +210,11 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
             h = etp_status.host(etp_url)
             st = stats["etp"].setdefault(h, {"ok": 0, "unknown": 0, "error": ""})
             try:
-                res = etp_status.parse(etp_url, get(etp_url), {"vin": lot.get("vin"), "plate": lot.get("plate")})
+                page = get(etp_url)
+                res = etp_status.parse(etp_url, page, {"vin": lot.get("vin"), "plate": lot.get("plate")})
+                photos = etp_lots.page_photos(etp_url, page)  # фото площадки вместо фото агрегатора
+                if photos is not None:
+                    live.update({"etp_photos": json.dumps(photos, ensure_ascii=False), "etp_photos_at": stamp})
             except urllib.error.HTTPError as e:
                 res = etp_status.UNKNOWN
                 st["error"] = f"HTTP {e.code}"

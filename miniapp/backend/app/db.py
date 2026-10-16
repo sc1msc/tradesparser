@@ -95,6 +95,8 @@ CREATE TABLE IF NOT EXISTS lots (
     etp_text          TEXT,
     etp_outcome       TEXT,
     etp_checked_at    TEXT,
+    etp_photos        TEXT,
+    etp_photos_at     TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -168,7 +170,10 @@ MIGRATIONS = {
              # live_*, etp_* - пишет сервер сам (status_refresh.py), импорт с ПК их не трогает
              ("live_status", "TEXT"), ("live_price", "INTEGER"), ("live_periods", "TEXT"), ("live_end", "TEXT"),
              ("live_checked_at", "TEXT"), ("etp_state", "TEXT"), ("etp_text", "TEXT"), ("etp_outcome", "TEXT"),
-             ("etp_checked_at", "TEXT")],
+             ("etp_checked_at", "TEXT"),
+             # фото со страницы лота на площадке (etp_lots.page_photos) - мини-апп показывает их вместо фото
+             # агрегатора; пишет сервер (status_refresh, etp_collect.photo_pass), импорт не трогает
+             ("etp_photos", "TEXT"), ("etp_photos_at", "TEXT")],
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }
@@ -272,7 +277,7 @@ def import_lots(lots, now_iso):
 
 
 LIVE_FIELDS = ("live_status", "live_price", "live_periods", "live_end", "live_checked_at",
-               "etp_url", "etp_state", "etp_text", "etp_outcome", "etp_checked_at")
+               "etp_url", "etp_state", "etp_text", "etp_outcome", "etp_checked_at", "etp_photos", "etp_photos_at")
 
 
 def save_live(lot_id, fields):
