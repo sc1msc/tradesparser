@@ -249,4 +249,17 @@ if __name__ == "__main__":
     elif "--auto" in sys.argv:
         run_auto()
     else:
-        run()
+        # Ручной прогон тоже под блокировкой: два прогона сразу (ручной и утренний из Планировщика)
+        # удаляют истёкшие строки и пишут по номерам строк - сдвиги и дубли в листе lots.
+        os.makedirs(LOG_DIR, exist_ok=True)
+        if not _take_lock():
+            print(f"Другой прогон ещё идёт ({LOCK_FILE}). Дождитесь его конца; если он завис - "
+                  f"удалите этот файл (через {LOCK_STALE_HOURS} ч он считается зависшим сам).")
+            sys.exit(1)
+        try:
+            run()
+        finally:
+            try:
+                os.remove(LOCK_FILE)
+            except OSError:
+                pass

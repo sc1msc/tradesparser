@@ -60,7 +60,8 @@ BACKUP_KEEP последних. Сервер и сам делает копию �
 
 Отдельный запуск: python export_to_miniapp.py
   (--dry-run - всё собрать, но не отправлять; сохранит payload в
-   miniapp_export_preview.json для проверки)
+   miniapp_export_preview.json для проверки; --force - отправить, даже если выгрузка
+   скрыла бы больше половины ленты: сервер такую не принимает без этого флага)
 """
 import datetime
 import glob
@@ -393,7 +394,7 @@ def download_backup(api_url, token):
           f"пользователей {users}, в избранном {favs})")
 
 
-def run(dry_run=False):
+def run(dry_run=False, force=False):
     api_url = (config.MINIAPP_API_URL or "").rstrip("/")
     token = config.MINIAPP_IMPORT_TOKEN
     if not dry_run and (not api_url or not token):
@@ -401,13 +402,21 @@ def run(dry_run=False):
         return
 
     print(f"Читаю лист {SOURCE_SHEET}...")
-    rows, seen = [], set()
+    rows, seen, no_id = [], set(), []
     for r in read_sheet():
         lot_id = lot_id_of(r)
-        if lot_id and lot_id not in seen:  # дубли по лоту - берём первую строку
+        if not lot_id:
+            no_id.append(r)
+        elif lot_id not in seen:  # дубли по лоту - берём первую строку
             seen.add(lot_id)
             rows.append(r)
     print(f"  лотов: {len(rows)}")
+    if no_id:
+        # Так 16.10.2026 молча не ушли в мини-апп 148 лотов с площадок (номер брали только из ссылки
+        # агрегатора). Строку без номера выгрузить нельзя - значит, ссылка нового вида.
+        automation.alert(f"Выгрузка в мини-апп: у {len(no_id)} строк среза не определился номер лота, они не "
+                         f"выгружены (например, {(no_id[0].get('url') or 'без ссылки')[:80]}). Нужна правка "
+                         f"export_to_miniapp.lot_id_of / etp_lots.lot_id_from_url.")
 
     cache = _load_cache()
     todo = [r for r in rows if _needs_refresh(cache.get(lot_id_of(r)), lot_id_of(r))]
@@ -463,7 +472,7 @@ def run(dry_run=False):
 
     print(f"Отправляю {len(payload['lots'])} лотов в {api_url}/api/import ...")
     try:
-        resp = requests.post(f"{api_url}/api/import", json=payload,
+        resp = requests.post(f"{api_url}/api/import" + ("?force=1" if force else ""), json=payload,
                              headers={"X-Import-Token": token}, timeout=120)
         resp.raise_for_status()
     except requests.RequestException as e:
@@ -479,4 +488,4 @@ def run(dry_run=False):
 
 
 if __name__ == "__main__":
-    run(dry_run="--dry-run" in sys.argv)
+    run(dry_run="--dry-run" in sys.argv, force="--force" in sys.argv)

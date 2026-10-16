@@ -325,7 +325,8 @@ class SheetState:
 
         data_rows = values[HEADER_ROW:]  # всё, что после заголовка
         # Строки как словари - для поиска повторов лотов с площадок (main.pull_etp_lots,
-        # etp_lots.Dedup), чтобы не читать лист второй раз.
+        # etp_lots.Dedup), чтобы не читать лист второй раз. upsert/append_many дописывают сюда новые
+        # лоты: иначе лоты, занесённые в этом же прогоне, повтором не узнаются.
         self.records = [dict(zip(header, row + [""] * (len(header) - len(row)))) for row in data_rows]
         for offset, row in enumerate(data_rows):
             row_num = FIRST_DATA_ROW + offset
@@ -364,6 +365,7 @@ class SheetState:
             self.lot_row[lot_id] = row_num
             self.next_row += 1
             self._ensure_row(row_num)
+            self.records.append({c: str(data.get(c, "") or "") for c in COLUMNS})
 
         # Пишем каждую колонку в её РЕАЛЬНУЮ позицию отдельным элементом
         # batch_update - но одним запросом к API на лот (как и раньше),
@@ -431,6 +433,10 @@ class SheetState:
         """
         written = 0
         batch, cells = [], []
+        by_id = {str(d.get("lot_id") or ""): d for d in rows}
+
+        def rows_of(ids):
+            return [by_id[i] for i in ids]
 
         def send():
             try:
@@ -455,9 +461,11 @@ class SheetState:
             batch.append(lot_id)
             if len(batch) >= per_request:
                 written += send()
+                self.records.extend({c: str(d.get(c, "") or "") for c in COLUMNS} for d in rows_of(batch))
                 batch, cells = [], []
         if cells:
             written += send()
+            self.records.extend({c: str(d.get(c, "") or "") for c in COLUMNS} for d in rows_of(batch))
         return written
 
     def update_fields_many(self, items):

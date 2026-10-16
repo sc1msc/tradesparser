@@ -260,18 +260,30 @@ def api_lot_status(payload: StatusPayload, x_import_token: str = Header(default=
     return {"updated": n}
 
 
+IMPORT_GUARD_MIN_FEED = 100  # на маленькой ленте (локальный запуск, первые выгрузки) проверка не нужна
+
+
 class ImportPayload(BaseModel):
     lots: list[dict]
 
 
 @app.post("/api/import")
-def api_import(payload: ImportPayload, x_import_token: str = Header(default="")):
+def api_import(payload: ImportPayload, x_import_token: str = Header(default=""), force: bool = False):
     expected = os.environ.get("HONESTLOT_IMPORT_TOKEN", "")
     if not expected or not hmac.compare_digest(expected, x_import_token):
         raise HTTPException(status_code=403, detail="неверный ключ импорта")
     bad = [i for i, lot in enumerate(payload.lots) if not lot.get("lot_id")]
     if bad:
         raise HTTPException(status_code=400, detail=f"нет lot_id у записей: {bad[:10]}")
+    # Выгрузка - весь срез: чего в ней нет, уходит из ленты. Срез, по ошибке собранный наполовину
+    # (сбой пересборки, ссылки нового вида без номера лота - так 16.10.2026 пропали 148 лотов),
+    # скрыл бы половину ленты. Такую выгрузку не принимаем (ПК пришлёт тревогу); если сокращение
+    # настоящее - выгрузить с ?force=1 (python export_to_miniapp.py --force).
+    feed = db.feed_lot_ids()
+    leaving = len(feed - {str(lot["lot_id"]) for lot in payload.lots})
+    if not force and len(feed) >= IMPORT_GUARD_MIN_FEED and leaving * 2 > len(feed):
+        raise HTTPException(status_code=409, detail=f"выгрузка скрыла бы {leaving} из {len(feed)} лотов ленты - "
+                                                    f"не принята; если так и надо - выгрузить с --force")
     imported, hidden = db.import_lots(payload.lots, _now_iso())
     lots.invalidate()
     return {"imported": imported, "left_source": hidden}

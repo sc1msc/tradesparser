@@ -231,6 +231,11 @@ def all_lots():
     return [row_to_lot(r) for r in conn().execute("SELECT * FROM lots")]
 
 
+def feed_lot_ids():
+    """Номера лотов, которые сейчас в ленте (пришли последней выгрузкой)."""
+    return {r[0] for r in conn().execute("SELECT lot_id FROM lots WHERE in_source = 1")}
+
+
 def import_lots(lots, now_iso):
     """Upsert всех пришедших лотов; лоты, которых в этом импорте нет,
     помечаются in_source = 0 (но не удаляются). Всё в одной транзакции -

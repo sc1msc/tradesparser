@@ -57,8 +57,9 @@ etp_checked_at. У этих лотов status_checked_at свежий, и refres
 всё, как раньше).
 
 С 16.10.2026 новые лоты приходят и прямо с площадок (ЭТП): их собирает сервер мини-аппа
-(miniapp/backend/app/etp_collect.py, разбор - etp_lots.py), а шаг после поиска агрегатора
-забирает их одним запросом (pull_etp_lots) и дописывает в лист то, чего там нет. Повторы
+(miniapp/backend/app/etp_collect.py, разбор - etp_lots.py), а шаг ДО поиска агрегатора
+забирает их одним запросом (pull_etp_lots) и дописывает в лист то, чего там нет: если тот же лот за
+ночь опубликовал и агрегатор, остаётся версия с площадки. Повторы
 отсекает etp_lots.Dedup: тот же адрес лота на ЭТП, тот же VIN у открытого лота, то же название
 и цена. В обратную сторону так же: новый лот агрегатора, который уже пришёл с площадки, не
 заносится, а его номер запоминается в ETP_DUPLICATES_FILE, чтобы не скачивать карточку каждый
@@ -482,10 +483,16 @@ def run():
 
     sheet_state = sheets_writer.SheetState(worksheet)
     print(f"Уже в таблице: {len(sheet_state)} лотов")
-    # лоты, уже пришедшие с площадок: такой же лот агрегатора не заносим (etp_lots.Dedup)
+    newest_aggregator_lot = _newest_aggregator_lot(sheet_state)
+
+    # Лоты с площадок - ДО поиска агрегатора: сервер собирает их и днём (14:00, 20:00), а ПК
+    # забирает утром, и если агрегатор за ночь опубликовал те же торги, остаётся версия с площадки
+    # (свежий статус, фото без водяных знаков), а лот агрегатора узнаётся повтором ниже.
+    print("\nЛоты прямо с площадок (собирает сервер мини-аппа)...")
+    pull_etp_lots(sheet_state)
+    # лоты, пришедшие с площадок (и сейчас, и раньше): такой же лот агрегатора не заносим
     from_etp = etp_lots.Dedup([r for r in sheet_state.records if etp_lots.is_etp_lot_id(r.get("lot_id"))])
     etp_dups = _load_etp_duplicates()
-    newest_aggregator_lot = _newest_aggregator_lot(sheet_state)
 
     page = 1
     total_new = 0
@@ -594,9 +601,6 @@ def run():
         _alert_if_no_new_lots(newest_aggregator_lot, newest_on_site)
     if etp_dups:
         _save_etp_duplicates(etp_dups)
-
-    print("\nЛоты прямо с площадок (собирает сервер мини-аппа)...")
-    pull_etp_lots(sheet_state)
 
     print("\nОбновляю статус и график публичных предложений...")
     pull_server_statuses(sheet_state)
