@@ -33,13 +33,14 @@ def api_base():
     return (os.environ.get("HONESTLOT_TELEGRAM_API") or DEFAULT_API).rstrip("/")
 
 
-def call(method, http_timeout=15, **params):
+def call(method, http_timeout=15, bot_token=None, **params):
     """Метод Bot API -> поле result ответа. Ошибки -> TelegramError.
 
     http_timeout - таймаут самого HTTP-запроса в секундах. Называется не timeout,
-    потому что timeout - параметр Bot API (getUpdates).
+    потому что timeout - параметр Bot API (getUpdates). bot_token - другой бот
+    (бот уведомлений, watchdog._send); без него - @honestlot_bot (HONESTLOT_BOT_TOKEN).
     """
-    token = os.environ.get("HONESTLOT_BOT_TOKEN", "")
+    token = bot_token or os.environ.get("HONESTLOT_BOT_TOKEN", "")
     if not token:
         raise TelegramError("HONESTLOT_BOT_TOKEN не задан")
     req = urllib.request.Request(

@@ -97,7 +97,8 @@
 | `HONESTLOT_BOT_TOKEN` | токен @honestlot_bot: проверка подписи initData и бот |
 | `HONESTLOT_TELEGRAM_API` | `https://tg.honestlot.ru` — релей |
 | `HONESTLOT_IMPORT_TOKEN` | ключ выгрузки, тот же, что `MINIAPP_IMPORT_TOKEN` на ПК |
-| `HONESTLOT_ADMIN_CHAT_ID` | кому пишет сторож; пусто — сторож выключен |
+| `HONESTLOT_ADMIN_CHAT_ID` | кому идут все уведомления (сторож, статусы, сбор лотов, пайплайн с ПК); пусто — сторож выключен |
+| `HONESTLOT_NOTIFY_BOT_TOKEN` | токен бота уведомлений; пусто — уведомления идут от @honestlot_bot |
 | `HONESTLOT_ETP_COLLECT` | `0` — сервер не собирает лоты с площадок (`etp_collect.py`); по умолчанию собирает |
 
 Шаблон — `miniapp/.env.example`.

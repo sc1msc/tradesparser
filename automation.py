@@ -56,9 +56,37 @@ def alerts():
     return list(_alerts)
 
 
+def _hide_token(text):
+    """Токен бота - часть адреса запроса и попадает в текст ошибки requests: в лог его не пишем."""
+    token = getattr(config, "TELEGRAM_BOT_TOKEN", "") or ""
+    return text.replace(token, "<токен>") if len(token) > 10 else text
+
+
+def send_via_server(text):
+    """Через сервер мини-аппа (POST /api/notify) - он пересылает администратору ботом уведомлений
+    через релей. Так уведомления доходят и без VPN: из России api.telegram.org закрыт, и с 11.10.2026
+    до 16.10.2026 ни одно уведомление с ПК не дошло. -> True, если сервер отправил."""
+    api_url = (getattr(config, "MINIAPP_API_URL", "") or "").rstrip("/")
+    token = getattr(config, "MINIAPP_IMPORT_TOKEN", "")
+    if not api_url or not token:
+        return False
+    try:
+        r = requests.post(f"{api_url}/api/notify", json={"text": text[:4000]}, headers={"X-Import-Token": token},
+                          timeout=30)
+        if not r.ok:
+            print(f"Уведомление через сервер не отправлено: {r.status_code} {r.text[:200]}")
+        return r.ok
+    except requests.RequestException as e:
+        print(f"Уведомление через сервер не отправлено: {str(e)[:200]}")
+        return False
+
+
 def send_telegram(text):
-    """Сообщение в личку config.NOTIFY_CHAT_ID. Ошибки печатаются, не бросаются:
-    уведомление не должно ронять пайплайн. -> True, если отправлено."""
+    """Уведомление владельцу: сначала через сервер мини-аппа (send_via_server), не вышло - напрямую
+    ботом config.TELEGRAM_BOT_TOKEN в config.NOTIFY_CHAT_ID (работает только с VPN). Ошибки
+    печатаются, не бросаются: уведомление не должно ронять пайплайн. -> True, если отправлено."""
+    if send_via_server(text):
+        return True
     chat_id = getattr(config, "NOTIFY_CHAT_ID", None)
     if not chat_id or config.TELEGRAM_BOT_TOKEN.startswith("ВСТАВЬТЕ"):
         print("Уведомление не отправлено: нет TELEGRAM_BOT_TOKEN или NOTIFY_CHAT_ID в local_secrets.py")
@@ -68,8 +96,8 @@ def send_telegram(text):
                           json={"chat_id": chat_id, "text": text[:4000], "disable_web_page_preview": True},
                           timeout=30)
         if not r.ok:
-            print(f"Уведомление не отправлено: Telegram ответил {r.status_code} {r.text[:200]}")
+            print(f"Уведомление не отправлено: Telegram ответил {r.status_code} {_hide_token(r.text[:200])}")
         return r.ok
     except requests.RequestException as e:
-        print(f"Уведомление не отправлено: {e}")
+        print(f"Уведомление не отправлено: {_hide_token(str(e))}")
         return False

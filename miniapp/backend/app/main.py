@@ -24,6 +24,8 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    нажали "Перейти на Pro" (остальное пишет сервер)
   GET    /api/lot-statuses       - (ключ импорта) статусы торгов, которые сервер прочитал
                                    сам на агрегаторе и ЭТП (status_refresh.py) - ПК пишет их в лист
+  POST   /api/notify             - (ключ импорта) уведомление пайплайна с ПК -> администратору
+                                   через бота уведомлений (с ПК Telegram без VPN закрыт)
   GET    /api/etp-lots           - (ключ импорта) лоты, которые сервер сам собрал с площадок
                                    (etp_collect.py) - ПК дописывает новые в лист lots
   GET    /api/watchlist          - (ключ импорта) лоты из избранного, чей итог
@@ -212,6 +214,25 @@ def api_lot_statuses(x_import_token: str = Header(default="")):
     """Статусы, которые сервер прочитал сам (status_refresh.py) - ПК пишет их в лист lots в шаге 1."""
     _check_import_token(x_import_token)
     return {"lots": status_refresh.statuses()}
+
+
+class NotifyPayload(BaseModel):
+    text: str
+
+
+@app.post("/api/notify")
+def api_notify(payload: NotifyPayload, x_import_token: str = Header(default="")):
+    """Уведомление пайплайна с ПК (automation.send_telegram): ПК идёт в Telegram без VPN, а
+    api.telegram.org из России закрыт - сервер пересылает через релей, как свои уведомления."""
+    _check_import_token(x_import_token)
+    chat_id = watchdog.admin_chat_id()
+    if not chat_id:
+        raise HTTPException(status_code=503, detail="HONESTLOT_ADMIN_CHAT_ID не задан")
+    try:
+        watchdog._send(chat_id, payload.text[:4000])
+    except Exception as e:  # релей/Telegram - ПК попробует отправить напрямую
+        raise HTTPException(status_code=502, detail=f"Telegram: {str(e)[:200]}")
+    return {"sent": True}
 
 
 @app.get("/api/etp-lots")

@@ -37,11 +37,12 @@
 | Аккаунт | Роль | Токен |
 |---|---|---|
 | [@honestlot_bot](https://t.me/honestlot_bot) | мини-апп (кнопка меню и основное мини-приложение настроены в @BotFather на `https://honestlot.ru`), приветствие, сторож | `HONESTLOT_BOT_TOKEN` в `miniapp/.env` на ВМ |
-| @honest_torgi_bot | служебный: посты в канал, уведомления конвейера владельцу | `TELEGRAM_BOT_TOKEN` в `local_secrets.py` на ПК |
+| бот уведомлений (с 16.10.2026) | все уведомления владельцу: сторож выгрузок, проверка статусов, сбор лотов с площадок, пайплайн с ПК (через сервер, `POST /api/notify`), ревью кода | `HONESTLOT_NOTIFY_BOT_TOKEN` в `miniapp/.env` на ВМ |
+| @honest_torgi_bot | служебный: посты в канал (канал на паузе); запасной путь уведомлений с ПК, если сервер недоступен | `TELEGRAM_BOT_TOKEN` в `local_secrets.py` на ПК |
 | [@honestlot_support_bot](https://t.me/honestlot_support_bot) | поддержка, сюда ведёт кнопка «Написать в поддержку» | вне репозитория |
 | канал [@honestlot](https://t.me/honestlot) | подборки | `config.TELEGRAM_CHANNEL_ID` |
 
-Получатель уведомлений — `NOTIFY_CHAT_ID` (ПК) и `HONESTLOT_ADMIN_CHAT_ID` (ВМ). Чтобы бот мог
+Получатель уведомлений — `HONESTLOT_ADMIN_CHAT_ID` (ВМ); `NOTIFY_CHAT_ID` (ПК) — только для запасного пути. Чтобы бот мог
 написать человеку, тот должен хотя бы раз нажать «Старт» у этого бота.
 
 ## Где лежат секреты
@@ -55,7 +56,7 @@
 | `MINIAPP_API_URL`, `MINIAPP_IMPORT_TOKEN` | `local_secrets.py` | шаг 7 |
 | `ANTHROPIC_API_KEY` | `local_secrets.py` (пока пусто) | проверка фото |
 | `telegraph_token.txt` | файл на ПК | страницы Telegraph |
-| `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_TELEGRAM_API`, `HONESTLOT_IMPORT_TOKEN`, `HONESTLOT_ADMIN_CHAT_ID` | `miniapp/.env` на ВМ | сервер мини-аппа |
+| `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_TELEGRAM_API`, `HONESTLOT_IMPORT_TOKEN`, `HONESTLOT_ADMIN_CHAT_ID`, `HONESTLOT_NOTIFY_BOT_TOKEN` | `miniapp/.env` на ВМ | сервер мини-аппа |
 
 Все эти файлы в `.gitignore`. Никогда не вписывать ключи в `config.py`, скрипты или вики.
 `HONESTLOT_IMPORT_TOKEN` на ВМ и `MINIAPP_IMPORT_TOKEN` на ПК — одно и то же значение.
