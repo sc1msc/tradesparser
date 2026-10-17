@@ -94,6 +94,8 @@ def current_user(authorization, with_source=False):
     db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(),
                   source, ref_code)
     billing.claim_pending(int(user["id"]), user.get("username"))  # подарок Pro на ник, если ждал первого входа
+    if source not in (None, auth.SHARE_SOURCE, auth.WEB_SOURCE):
+        billing.claim_promo(int(user["id"]), source)  # подарочная ссылка автора курса (edu_...)
     return (int(user["id"]), source) if with_source else int(user["id"])
 
 
@@ -165,10 +167,12 @@ def api_web_login(payload: WebLoginPayload):
     # пришёл по ссылке «Поделиться» из веб-версии - как в мини-аппе: источник share и кто пригласил;
     # другие метки из адреса не принимаем, иначе любой мог бы вписать себе источник
     source, ref_code = auth.split_start_param(payload.start)
-    if source != auth.SHARE_SOURCE:
+    if source != auth.SHARE_SOURCE and not billing.promo(source):  # подарочная ссылка автора курса - тоже
         source, ref_code = auth.WEB_SOURCE, None
     db.touch_user(int(user["id"]), user.get("username"), user.get("first_name"), _now_iso(), source, ref_code)
     billing.claim_pending(int(user["id"]), user.get("username"))
+    if source != auth.SHARE_SOURCE:
+        billing.claim_promo(int(user["id"]), source)
     return {"token": auth.make_web_token(user), "first_name": user.get("first_name"), "username": user.get("username")}
 
 
@@ -176,6 +180,9 @@ def api_web_login(payload: WebLoginPayload):
 def api_me(authorization: str = Header(default="")):
     uid = current_user(authorization)
     me = {"ref": db.user_ref_code(uid)}
+    gift = billing.promo_notice(uid)  # «вам подарен Pro» по ссылке автора курса - один раз
+    if gift:
+        me["gift"] = gift
     if billing.enabled():
         # только признак Pro: что он даёт, пока не решено (wiki/monetization.md)
         me["pro"] = billing.is_pro(uid)

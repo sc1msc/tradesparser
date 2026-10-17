@@ -127,6 +127,20 @@ CREATE TABLE IF NOT EXISTS early_access (
     note        TEXT,
     created_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS promo_links (
+    code        TEXT PRIMARY KEY,              -- метка ссылки t.me/honestlot_bot?startapp=<code> (edu_<автор>)
+    months      INTEGER NOT NULL,              -- сколько Pro дарит ссылка
+    owner       TEXT,                          -- кому выдана (автор курса) - только в базе: репозиторий публичный
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS promo_grants (
+    telegram_id INTEGER PRIMARY KEY,           -- одна подарочная ссылка на человека
+    code        TEXT NOT NULL,
+    until       TEXT,                          -- до какого дня Pro после подарка
+    shown       INTEGER NOT NULL DEFAULT 0,    -- сообщение «вам подарен Pro» уже показано
+    created_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pending_grants (
     username    TEXT PRIMARY KEY,              -- ник Telegram в нижнем регистре, без @
     months      INTEGER NOT NULL,              -- подарок (gift) тому, кто ещё не открывал HonestLot:
@@ -636,6 +650,7 @@ def api_checkout(payload: CheckoutPayload, authorization: str = Header(default="
     if user:
         db.touch_user(tid, user.get("username"), user.get("first_name"), _iso(now_msk()))
         claim_pending(tid, user.get("username"))
+        claim_promo(tid, user.get("start_param"))
     try:
         return checkout(tid, payload.plan, payload.email, payload.autorenew)
     except ValueError as e:
@@ -777,6 +792,63 @@ def gift(who, months=1, now=None):
     return f"{who} ещё не открывал HonestLot - Pro на {months} мес. включится при первом входе"
 
 
+# ---------- подарочные ссылки для авторов курсов (17.10.2026) ----------
+# Автор курса получает свою ссылку t.me/honestlot_bot?startapp=edu_<автор> (или honestlot.ru/?startapp=...):
+# ученик, открывший по ней мини-апп или сайт, сразу получает Pro на months месяцев - без кнопок и
+# промокодов. Метки - в таблице promo_links (python -m app.billing promo add ...), не в коде: репозиторий
+# публичный. Одна подарочная ссылка на человека (promo_grants): по второй ссылке второго месяца нет.
+
+def promo(code):
+    """Действующая подарочная ссылка с такой меткой или None."""
+    if not code:
+        return None
+    return _conn().execute("SELECT * FROM promo_links WHERE code = ? AND active = 1", (str(code),)).fetchone()
+
+
+def claim_promo(tid, code):
+    """Вход по подарочной ссылке: Pro на months месяцев, один раз на человека. -> конец срока или None.
+    Метка не подарочная, уже дарили или ошибка - None; вход это не ломает."""
+    try:
+        link = promo(code)
+        if not link:
+            return None
+        c = _conn()
+        with db._lock:
+            with c:
+                fresh = c.execute("INSERT OR IGNORE INTO promo_grants (telegram_id, code, created_at) VALUES (?, ?, ?)",
+                                  (tid, link["code"], _iso(now_msk()))).rowcount == 1
+        if not fresh:
+            return None
+        try:
+            _, end = grant(tid, link["months"])
+        except Exception:
+            with db._lock:
+                with c:
+                    c.execute("DELETE FROM promo_grants WHERE telegram_id = ?", (tid,))
+            raise
+        with db._lock:
+            with c:
+                c.execute("UPDATE promo_grants SET until = ? WHERE telegram_id = ?", (_iso(end), tid))
+        print(f"[подарок по ссылке] {link['code']}: telegram_id {tid} - Pro до {_date_ru(end)}", flush=True)
+        return end
+    except Exception as e:
+        print(f"[подарок по ссылке] {code}: не выдан ({type(e).__name__}: {e})", flush=True)
+        return None
+
+
+def promo_notice(tid):
+    """Подарок по ссылке, о котором человеку ещё не сказали: {months, until} (один раз) или None."""
+    c = _conn()
+    with db._lock:
+        with c:
+            row = c.execute("SELECT g.until, l.months FROM promo_grants g JOIN promo_links l USING (code) "
+                            "WHERE g.telegram_id = ? AND g.shown = 0 AND g.until IS NOT NULL", (tid,)).fetchone()
+            if not row:
+                return None
+            c.execute("UPDATE promo_grants SET shown = 1 WHERE telegram_id = ?", (tid,))
+    return {"months": row["months"], "until": _date_ru(_dt(row["until"]))}
+
+
 def claim_pending(tid, username):
     """Вход пользователя: если на его ник есть отложенный подарок (gift) - выдать Pro и снять запись.
     Ошибки не мешают входу. Поиск по ключу таблицы - на каждый вход это незаметно."""
@@ -807,6 +879,32 @@ def _cli(argv):
                 c.execute("INSERT OR REPLACE INTO early_access (telegram_id, note, created_at) VALUES (?, ?, ?)",
                           (int(argv[1]), " ".join(argv[2:]) or None, _iso(now_msk())))
         print(f"Ранняя цена выдана: {argv[1]}")
+        return
+    if argv[:1] == ["promo"]:
+        # promo add <метка> [@кому] [мес] | promo off <метка> | promo [list]
+        if argv[1:2] == ["add"] and len(argv) >= 3:
+            months = int(argv[-1]) if argv[-1].isdigit() and len(argv) > 3 else 1
+            owner = next((a for a in argv[3:] if not a.isdigit()), None)
+            with db._lock:
+                with c:
+                    c.execute("INSERT OR REPLACE INTO promo_links (code, months, owner, active, created_at) "
+                              "VALUES (?, ?, ?, 1, ?)", (argv[2], months, owner, _iso(now_msk())))
+            print(f"Ссылка: https://t.me/honestlot_bot?startapp={argv[2]}  (сайт: https://honestlot.ru/?startapp="
+                  f"{argv[2]}) - Pro на {months} мес." + (f", для {owner}" if owner else ""))
+            return
+        if argv[1:2] == ["off"] and len(argv) >= 3:
+            with db._lock:
+                with c:
+                    n = c.execute("UPDATE promo_links SET active = 0 WHERE code = ?", (argv[2],)).rowcount
+            print(f"Ссылка {argv[2]} выключена" if n else f"Ссылки {argv[2]} нет")
+            return
+        rows = c.execute("SELECT l.*, (SELECT COUNT(*) FROM users u WHERE u.source = l.code) came, "
+                         "(SELECT COUNT(*) FROM promo_grants g WHERE g.code = l.code) got "
+                         "FROM promo_links l ORDER BY l.created_at").fetchall()
+        print(f"{'метка':<22} {'кому':<20} {'мес':>3} {'пришли':>7} {'получили Pro':>13}  ссылка")
+        for r in rows:
+            print(f"{r['code']:<22} {(r['owner'] or '-'):<20} {r['months']:>3} {r['came']:>7} {r['got']:>13}  "
+                  f"https://t.me/honestlot_bot?startapp={r['code']}" + ("" if r["active"] else "  (выключена)"))
         return
     if argv[:1] == ["gift"] and len(argv) >= 2:
         months = int(argv[-1]) if argv[-1].isdigit() else 1

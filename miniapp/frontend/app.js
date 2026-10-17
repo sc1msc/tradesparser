@@ -134,13 +134,13 @@ const store = {
 let toastTimer;
 // action - необязательная кнопка в уведомлении: {label, onclick}. С кнопкой
 // уведомление висит дольше - чтобы успеть нажать.
-function toast(text, action) {
+function toast(text, action, ms) {
   document.querySelectorAll(".toast").forEach((t) => t.remove());
   const t = h("div", { class: "toast" + (action ? " with-action" : "") }, h("span", {}, text),
     action ? h("button", { class: "toast-act", onclick: () => { t.remove(); action.onclick(); } }, action.label) : null);
   document.body.append(t);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.remove(), action ? 4500 : 2200);
+  toastTimer = setTimeout(() => t.remove(), ms || (action ? 4500 : 2200));
 }
 const haptic = (kind) => { try { tg && tg.HapticFeedback.impactOccurred(kind || "light"); } catch { /* вне Telegram */ } };
 function openLink(url) { if (IN_TG) tg.openLink(url); else window.open(url, "_blank", "noopener"); }
@@ -1312,6 +1312,8 @@ async function start() {
   // Pro - до того, как построить ленту: без Pro сохранённые раньше фильтры не применяем
   const me = await loadMe();
   proLocked = me.pro === false;
+  // пришёл по подарочной ссылке автора курса - сервер уже включил Pro, скажем об этом один раз
+  if (me.gift) setTimeout(() => toast(`Вам подарен HonestLot Pro на ${me.gift.months === 1 ? "месяц" : me.gift.months + " мес."} — до ${me.gift.until}`, null, 5000), 600);
   if (proLocked) state.filters = emptyFilters();
   if (WEB) document.getElementById("app").append(webHeader(me.pro));
   document.getElementById("app").append(root, overlay);
