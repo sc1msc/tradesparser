@@ -1313,7 +1313,7 @@ async function start() {
   const me = await loadMe();
   proLocked = me.pro === false;
   // пришёл по подарочной ссылке автора курса - сервер уже включил Pro, скажем об этом один раз
-  if (me.gift) setTimeout(() => toast(`Вам подарен HonestLot Pro на ${me.gift.months === 1 ? "месяц" : me.gift.months + " мес."} — до ${me.gift.until}`, null, 5000), 600);
+  if (me.gift) setTimeout(() => toast("Ваша подписка Pro активна", null, 5000), 600);
   if (proLocked) state.filters = emptyFilters();
   if (WEB) document.getElementById("app").append(webHeader(me.pro));
   document.getElementById("app").append(root, overlay);
