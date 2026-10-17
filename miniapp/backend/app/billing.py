@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS promo_grants (
 );
 CREATE TABLE IF NOT EXISTS pending_grants (
     username    TEXT PRIMARY KEY,              -- ник Telegram в нижнем регистре, без @
-    months      INTEGER NOT NULL,              -- подарок (gift) тому, кто ещё не открывал HonestLot:
+    months      INTEGER NOT NULL,              -- подарок (gift) тому, кто ещё не открывал HonestLot (0 - бессрочно):
     note        TEXT,                          -- включится при первом входе (claim_pending)
     created_at  TEXT NOT NULL
 );
@@ -772,6 +772,59 @@ def grant(who, months=1, now=None):
     return tid, end
 
 
+# Бессрочный Pro (подарок авторам курсов и своим, 17.10.2026; так же с 14.10.2026 у владельца):
+# подписка за 0 ₽ без автопродления и без карты до FOREVER.
+FOREVER = datetime.datetime(2099, 12, 31, 23, 59, tzinfo=MSK)
+
+
+def _who_id(who):
+    """telegram_id по @нику или числу; нет в базе - ValueError."""
+    if str(who).startswith("@"):
+        row = _conn().execute("SELECT telegram_id FROM users WHERE lower(username) = ?", (str(who)[1:].lower(),)).fetchone()
+        if not row:
+            raise ValueError(f"{who} нет в базе - пусть откроет мини-апп или сайт")
+        return row["telegram_id"]
+    return int(who)
+
+
+def grant_forever(who, now=None):
+    """Бессрочный Pro: подписка за 0 ₽ до FOREVER, без автопродления и сохранённой карты (с карты больше
+    ничего не спишется). -> (telegram_id, FOREVER)."""
+    now = now or now_msk()
+    tid = _who_id(who)
+    c = _conn()
+    early = int(_early_for(c, tid))
+    with db._lock:
+        with c:
+            if subscription(tid):
+                c.execute("UPDATE subscriptions SET plan_id = 'month', price = 0, status = 'active', autorenew = 0, "
+                          "period_end = ?, payment_method_id = NULL, payment_method_title = NULL, renew_attempts = 0, "
+                          "next_attempt_at = NULL, reminded_for = NULL, updated_at = ? WHERE telegram_id = ?",
+                          (_iso(FOREVER), _iso(now), tid))
+            else:
+                c.execute("INSERT INTO subscriptions (telegram_id, email, plan_id, price, early, status, autorenew, "
+                          "period_end, created_at, updated_at) VALUES (?, '', 'month', 0, ?, 'active', 0, ?, ?, ?)",
+                          (tid, early, _iso(FOREVER), _iso(now), _iso(now)))
+    return tid, FOREVER
+
+
+def gift_forever(who, now=None):
+    """Как gift, но бессрочно: кто в базе - сразу, кто ещё не открывал HonestLot - при первом входе."""
+    try:
+        tid, _ = grant_forever(who, now)
+        return f"Pro бессрочно: {who} (telegram_id {tid})"
+    except ValueError:
+        if not str(who).startswith("@"):
+            raise
+    name = str(who)[1:].strip().lower()
+    c = _conn()
+    with db._lock:
+        with c:
+            c.execute("INSERT OR REPLACE INTO pending_grants (username, months, created_at) VALUES (?, 0, ?)",
+                      (name, _iso(now or now_msk())))
+    return f"{who} ещё не открывал HonestLot - бессрочный Pro включится при первом входе"
+
+
 def gift(who, months=1, now=None):
     """Подарок Pro (16.10.2026): как grant, но если человек ещё ни разу не открывал мини-апп или сайт
     (его нет в базе, а Pro привязан к telegram_id), подарок записывается на ник и включается сам при
@@ -787,6 +840,8 @@ def gift(who, months=1, now=None):
     with db._lock:
         with c:
             row = c.execute("SELECT months FROM pending_grants WHERE username = ?", (name,)).fetchone()
+            if row and row["months"] == 0:  # уже ждёт бессрочный - месяц ничего не добавит
+                return f"{who} уже ждёт бессрочный Pro"
             c.execute("INSERT OR REPLACE INTO pending_grants (username, months, created_at) VALUES (?, ?, ?)",
                       (name, months + (row["months"] if row else 0), _iso(now or now_msk())))
     return f"{who} ещё не открывал HonestLot - Pro на {months} мес. включится при первом входе"
@@ -862,7 +917,7 @@ def claim_pending(tid, username):
                 row = c.execute("SELECT months FROM pending_grants WHERE username = ?", (name,)).fetchone()
                 if not row or c.execute("DELETE FROM pending_grants WHERE username = ?", (name,)).rowcount != 1:
                     return
-        _, end = grant(tid, row["months"])
+        _, end = grant_forever(tid) if row["months"] == 0 else grant(tid, row["months"])
         print(f"[подарок] @{name} (telegram_id {tid}) открыл HonestLot - Pro до {_date_ru(end)}", flush=True)
     except Exception as e:  # вход важнее подарка
         print(f"[подарок] @{name}: не выдан ({type(e).__name__}: {e})", flush=True)
@@ -906,13 +961,18 @@ def _cli(argv):
             print(f"{r['code']:<22} {(r['owner'] or '-'):<20} {r['months']:>3} {r['came']:>7} {r['got']:>13}  "
                   f"https://t.me/honestlot_bot?startapp={r['code']}" + ("" if r["active"] else "  (выключена)"))
         return
+    if argv[:1] == ["forever"] and len(argv) >= 2:  # forever @ник [@ник ...] - бессрочный Pro
+        for who in argv[1:]:
+            print(gift_forever(who if who.startswith("@") or who.isdigit() else "@" + who))
+        return
     if argv[:1] == ["gift"] and len(argv) >= 2:
         months = int(argv[-1]) if argv[-1].isdigit() else 1
         for who in [a for a in argv[1:] if not a.isdigit()]:
             print(gift(who if who.startswith("@") or who.isdigit() else "@" + who, months))
         waiting = c.execute("SELECT username, months FROM pending_grants ORDER BY created_at").fetchall()
         if waiting:
-            print("Ждут первого входа: " + ", ".join(f"@{r['username']} ({r['months']} мес.)" for r in waiting))
+            print("Ждут первого входа: " + ", ".join(
+                f"@{r['username']} ({'бессрочно' if r['months'] == 0 else str(r['months']) + ' мес.'})" for r in waiting))
         return
     if argv[:1] == ["grant"] and len(argv) >= 2:
         tid, end = grant(argv[1], int(argv[2]) if len(argv) > 2 else 1)
