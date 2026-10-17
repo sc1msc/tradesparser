@@ -42,7 +42,7 @@ r"""
 import html as html_lib
 import re
 from collections import namedtuple
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 Result = namedtuple("Result", "state text outcome")
 UNKNOWN = Result("unknown", None, None)
@@ -75,6 +75,7 @@ LABEL_HOSTS = {
     "bankrot.torggroup.org", "au-pro.ru", "bankrupt.etpu.ru", "bankrupt.tender.one", "torgi.arbbitlot.ru",
     "torgibankrot.ru", "bankrupt.centerr.ru", "bankrotstvo.electro-torgi.ru", "uralbidin.ru",
     "nistp.ru", "rus-on.ru", "sistematorg.com", "promkonsalt.ru",
+    "etp-profit.ru",  # новый сайт Профита (с осени 2026) - «Статус торгов ...», как у ELECTRO-TORGI
 }
 # Те же движки на новых площадках - по виду ссылки.
 LABEL_URL_RE = re.compile(
@@ -104,8 +105,43 @@ def etp_link(lot):
     links = {(x.get("title") or "").strip().lower(): x.get("link") for x in lot.get("source_links") or []}
     for url in (links.get("лот на этп"), links.get("торги на этп"), lot.get("trade_link")):
         if url and url.startswith("http") and "fedresurs" not in url and AGGREGATOR_HOST not in url:
-            return url
+            return normalize_etp_url(url)
     return None
+
+
+# Профит перешёл на новый сайт: старые ссылки агрегатора - поиск /etp/trade/list.html?number=<N>–<вид>
+# (вид в cp1251: ОАОФ, ОТПП...) - отвечают 301 на главную (тестировщик, 16.10.2026, 33 лота). Страница
+# торгов на новом сайте - /<вид латиницей>/<N> (/oaof/22425, /otpp/22251).
+_PROFIT_SEARCH_RE = re.compile(r"https?://(?:www\.)?etp-profit\.ru/etp/trade/list\.html\?number=(\d+)(%96|%E2%80%93|-|–)([^&]+)", re.I)
+_RU_LAT = str.maketrans("ОАФТПЗКРСЕ", "oaftpzkrse")
+
+
+def normalize_etp_url(url):
+    """Ссылка на ЭТП, которая устарела, -> рабочая (сейчас - старый поиск Профита). Остальные - как есть."""
+    m = _PROFIT_SEARCH_RE.match(url or "")
+    if not m:
+        return url
+    kind = unquote(m.group(3), encoding="cp1251").strip().upper().translate(_RU_LAT)
+    if not re.fullmatch(r"[a-z]{3,5}", kind):
+        return url
+    return f"https://etp-profit.ru/{kind}/{m.group(1)}"
+
+
+# ЕФРСБ: агрегатор даёт старый адрес сообщения (old.bankrot.fedresurs.ru/MessageWindow.aspx?ID=<32 hex>), а
+# он не пускает зарубежные адреса (у пользователя с VPN - 403). Новый сайт открывается везде (17.10.2026):
+# fedresurs.ru/bankruptmessages/<тот же ID с дефисами>.
+_EFRSB_MESSAGE_RE = re.compile(r"MessageWindow\.aspx\?ID=([0-9A-Fa-f]{32})")
+
+
+def efrsb_link(lot):
+    """Объявление о торгах на ЕФРСБ из JSON карточки агрегатора (новый адрес Федресурса) или None. Для
+    лотов без ЭТП («Торги, проводимые вне ЭТП») кнопка мини-аппа ведёт сюда, а не на агрегатор."""
+    links = {(x.get("title") or "").strip().lower(): x.get("link") for x in lot.get("source_links") or []}
+    m = _EFRSB_MESSAGE_RE.search(links.get("объявление на ефрсб") or "")
+    if not m:
+        return None
+    h = m.group(1).lower()
+    return f"https://fedresurs.ru/bankruptmessages/{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
 
 
 def engine(url):

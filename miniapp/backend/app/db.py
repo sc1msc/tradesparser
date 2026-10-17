@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS lots (
     etp_checked_at    TEXT,
     etp_photos        TEXT,
     etp_photos_at     TEXT,
+    efrsb_url         TEXT,
     in_source         INTEGER NOT NULL DEFAULT 1,
     first_seen_at     TEXT NOT NULL,
     updated_at        TEXT NOT NULL
@@ -154,7 +155,7 @@ LOT_FIELDS = [
     "applications_end", "bidding_start", "periods", "photos", "description",
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
     "lot_kind", "model_source", "title_brand", "title_model", "photo_verdict", "photo_signs",
-    "engine_type", "displacement", "power", "drive", "transmission", "etp_url",
+    "engine_type", "displacement", "power", "drive", "transmission", "etp_url", "efrsb_url",
 ]
 JSON_FIELDS = {"periods", "photos", "photo_signs"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
@@ -173,7 +174,8 @@ MIGRATIONS = {
              ("etp_checked_at", "TEXT"),
              # фото со страницы лота на площадке (etp_lots.page_photos) - мини-апп показывает их вместо фото
              # агрегатора; пишет сервер (status_refresh, etp_collect.photo_pass), импорт не трогает
-             ("etp_photos", "TEXT"), ("etp_photos_at", "TEXT")],
+             ("etp_photos", "TEXT"), ("etp_photos_at", "TEXT"),
+             ("efrsb_url", "TEXT")],  # объявление на ЕФРСБ (кнопка лота без ЭТП), приходит выгрузкой
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }

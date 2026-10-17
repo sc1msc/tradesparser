@@ -174,6 +174,7 @@ def fetch_details(url, session):
         "description": resolve_text_ref(payload, lot.get("information")),
         "applications_end": stages.get("end_bid_time"),
         "etp_url": etp_link(lot),
+        "efrsb_url": etp_status.efrsb_link(lot),  # объявление на ЕФРСБ: кнопка лота «вне ЭТП» ведёт сюда
         "fetched_at": datetime.datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -214,6 +215,8 @@ def _needs_refresh(entry, lot_id=None):
         return last is None or last >= GHOST_CONFIRM_HOURS
     if not entry or entry.get("error"):
         return True
+    if "efrsb_url" not in entry and not entry.get("etp_url"):
+        return True  # лот «вне ЭТП», скачанный до 17.10.2026: нужна ссылка на ЕФРСБ для кнопки
     try:
         fetched = datetime.datetime.fromisoformat(entry["fetched_at"])
     except (KeyError, ValueError):
@@ -289,8 +292,10 @@ def build_lot(row, details, damage=None):
         "is_public_offer": is_public_offer,
         "status": row.get("status") or d.get("status"),
         "platform": d.get("platform") or row.get("platform") or None,
-        # ссылка на лот на ЭТП (карточки, скачанные до 15.10.2026, - без неё)
-        "etp_url": d.get("etp_url") or row.get("etp_url") or None,
+        # ссылка на лот на ЭТП (карточки, скачанные до 15.10.2026, - без неё); устаревшие (старый поиск
+        # Профита) - в рабочий вид
+        "etp_url": etp_status.normalize_etp_url(d.get("etp_url") or row.get("etp_url")) or None,
+        "efrsb_url": d.get("efrsb_url"),
         "applications_end": applications_end,
         "bidding_start": row.get("bidding_start") or None,
         "periods": periods,

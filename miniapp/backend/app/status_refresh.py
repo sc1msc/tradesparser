@@ -244,7 +244,7 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
             db.save_live(lot["lot_id"], _direct(lot, stats, stamp, get))
             sleep(DELAY_SECONDS)
             continue
-        etp_url = lot.get("etp_url")
+        etp_url = etp_status.normalize_etp_url(lot.get("etp_url"))  # устаревшие ссылки (старый поиск Профита)
         engine = etp_status.engine(etp_url) if etp_url else None
         live = {}
         if full or not engine:
@@ -260,7 +260,7 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
                 live = {"live_status": data.get("status"), "live_price": _int(data.get("price_current")),
                         "live_periods": data.get("bidding_periods") or None,
                         "live_end": data.get("applications_end") or None, "live_checked_at": stamp}
-                etp_url = data.get("etp_url") or etp_url
+                etp_url = etp_status.normalize_etp_url(data.get("etp_url")) or etp_url
                 engine = etp_status.engine(etp_url) if etp_url else None
                 if etp_url:
                     live["etp_url"] = etp_url
@@ -282,6 +282,11 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
             except urllib.error.HTTPError as e:
                 res = etp_status.UNKNOWN
                 st["error"] = f"HTTP {e.code}"
+                if e.code in (404, 410):
+                    # страницы торгов на площадке нет (Профит не перенёс часть торгов на новый сайт, 17.10.2026):
+                    # etp_state = missing - кнопка мини-аппа ведёт на объявление на ЕФРСБ (lots.detail)
+                    live.update({"etp_state": "missing", "etp_text": "страницы торгов нет на площадке",
+                                 "etp_outcome": None, "etp_checked_at": stamp})
             except Exception as e:
                 res = etp_status.UNKNOWN
                 st["error"] = f"{type(e).__name__}: {str(e)[:100]}"

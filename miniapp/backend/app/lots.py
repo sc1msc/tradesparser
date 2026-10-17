@@ -692,7 +692,11 @@ def detail(lot, now, favorites):
     out.update({
         "title": lot.get("title"),
         "url": lot.get("url"),
-        "etp_url": lot.get("etp_url"),  # лот на самой площадке; нет - кнопка ведёт на url
+        # лот на самой площадке (устаревшие ссылки - в рабочий вид); нет ЭТП - объявление на ЕФРСБ; нет и его -
+        # кнопка ведёт на url (агрегатор)
+        "etp_url": None if lot.get("etp_state") == "missing" and _fresh(lot.get("etp_checked_at"), now)
+        else (etp_status.normalize_etp_url(lot.get("etp_url")) or None),
+        "efrsb_url": lot.get("efrsb_url"),
         "vin": lot.get("vin"),
         "plate": lot.get("plate"),
         "price_start": lot.get("price_start"),

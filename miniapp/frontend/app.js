@@ -888,7 +888,9 @@ async function renderLot(id) {
         `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null);
   const bottomBar = h("div", { class: "bottombar" },
     h("button", { class: "btn share", "aria-label": "Поделиться", html: ICONS.share, onclick: () => shareLot(lot, "bottom") }),
-    h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.etp_url || lot.url); } }, "Открыть лот на сайте торгов"));
+    // площадка торгов; торги без ЭТП - объявление о торгах на ЕФРСБ (Федресурс), а не агрегатор (17.10.2026)
+    h("button", { class: "btn", onclick: () => { track("source_click", lot.id); openLink(lot.etp_url || lot.efrsb_url || lot.url); } },
+      lot.etp_url || !lot.efrsb_url ? "Открыть лот на сайте торгов" : "Открыть объявление на Федресурсе"));
   const blocks = [
     deadlineBlock,
     damageBox(lot),

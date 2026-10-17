@@ -108,6 +108,7 @@ def parse_lot_html(html, url=None):
         "trade_section": trade_section,
         "platform": platform,
         "etp_url": etp_status.etp_link(lot),  # лот на самой ЭТП (нет у торгов «вне ЭТП»)
+        "efrsb_url": etp_status.efrsb_link(lot),  # объявление на ЕФРСБ - туда кнопка, если ЭТП нет
         "applications_start": applications_start,
         # Для публичного предложения applications_end - окончание торгов
         # целиком: позднейшее из stages.end_bid_time и конца графика (они не
