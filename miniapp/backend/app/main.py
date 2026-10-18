@@ -41,6 +41,15 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    (billing.py; выключено, пока HONESTLOT_PAYMENTS_ENABLED не "1")
   GET    /api/backup             - (ключ импорта) свежая копия базы для ПК;
                                    ежедневные копии сервер делает сам (backup.py)
+  GET    /api/searches           - сохранённые поиски (Pro; searches.py), настройки уведомлений
+  POST   /api/searches           - сохранить поиск {params, name?, notify?}
+  PATCH  /api/searches/{id}      - переименовать, поменять фильтры, включить/выключить уведомления
+  DELETE /api/searches/{id}      - удалить
+  GET/POST /api/notify/settings  - каналы уведомлений (notify.py): {tg, fav_events, email_on}
+  POST   /api/notify/email       - почта для писем {email}: ссылка подтверждения
+  GET    /notify/confirm?t=      - подтверждение почты (ссылка из письма)
+  GET/POST /notify/unsubscribe?t= - отписка от писем (страница с кнопкой; POST - и из почты)
+  (поиски и уведомления выключены, пока не задан HONESTLOT_SAVED_SEARCHES, см. searches.py)
 
 Фронтенд (miniapp/frontend) раздаётся этим же приложением с корня "/" -
 один процесс на всё, отдельный веб-сервер для статики не нужен (на
@@ -55,11 +64,12 @@ import hmac
 import os
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, backup, billing, db, etp_collect, imgproxy, lots, site, status_refresh, watchdog
+from . import (auth, backup, billing, db, etp_collect, imgproxy, lots, notify, searches, site, status_refresh,
+               watchdog)
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend"
@@ -73,6 +83,7 @@ async def lifespan(_app):
     billing.start()   # автопродление подписок (только если оплата включена)
     status_refresh.start()  # статус торгов: агрегатор и ЭТП несколько раз в день
     etp_collect.start()     # новые лоты прямо с площадок, вместе с агрегатором
+    notify.start()          # уведомления по сохранённым поискам и избранному (если включены)
     yield
 
 
@@ -186,6 +197,8 @@ def api_me(authorization: str = Header(default="")):
     if billing.enabled():
         # только признак Pro: что он даёт, пока не решено (wiki/monetization.md)
         me["pro"] = billing.is_pro(uid)
+    if searches.enabled_for(uid):
+        me["searches"] = True  # сохранённые поиски и уведомления (включаются HONESTLOT_SAVED_SEARCHES)
     return me
 
 
@@ -203,14 +216,16 @@ SHARE_PLACES = {"top", "bottom", "toast"}
 def api_event(payload: EventPayload, authorization: str = Header(default="")):
     uid, start_param = current_user(authorization, with_source=True)
     # с фронта принимаем только то, что сервер сам не видит
-    if payload.type not in ("open", "source_click", "share", "paywall", "paywall_go"):
+    if payload.type not in ("open", "source_click", "share", "paywall", "paywall_go", "notify_open"):
         raise HTTPException(status_code=400, detail="неизвестный тип события")
     # events.source: для open - метка источника, для share - место кнопки
     source = start_param if payload.type == "open" else None
     if payload.type == "share" and payload.place in SHARE_PLACES:
         source = payload.place
-    if payload.type in ("paywall", "paywall_go") and payload.place in ("filters", "favs"):
-        source = payload.place  # что пытались открыть в веб-версии без Pro
+    if payload.type in ("paywall", "paywall_go") and payload.place in ("filters", "favs", "searches"):
+        source = payload.place  # что пытались открыть без Pro
+    if payload.type == "notify_open" and payload.place in ("notify", "email"):
+        source = payload.place  # открыли мини-апп из уведомления в Telegram / из письма
     db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id, source=source)
     return {"ok": True}
 
@@ -298,7 +313,126 @@ def api_import(payload: ImportPayload, x_import_token: str = Header(default=""),
                                                     f"не принята; если так и надо - выгрузить с --force")
     imported, hidden = db.import_lots(payload.lots, _now_iso())
     lots.invalidate()
+    notify.kick()  # новые лоты - сразу проход уведомлений по сохранённым поискам
     return {"imported": imported, "left_source": hidden}
+
+
+# ---------- сохранённые поиски и уведомления (searches.py, notify.py) ----------
+
+class SearchPayload(BaseModel):
+    params: dict | None = None
+    name: str | None = None
+    notify: bool | None = None
+
+
+class NotifySettingsPayload(BaseModel):
+    tg: bool | None = None
+    fav_events: bool | None = None
+    email_on: bool | None = None
+
+
+class EmailPayload(BaseModel):
+    email: str
+
+
+def _searches_user(authorization):
+    uid = current_user(authorization)
+    if not searches.enabled_for(uid):
+        raise HTTPException(status_code=404)
+    return uid
+
+
+def _searches_state(uid):
+    return {"items": searches.list_for(uid), "limit": searches.MAX_PER_USER, "pro": searches.can_create(uid),
+            "settings": notify.settings(uid)}
+
+
+@app.get("/api/searches")
+def api_searches(authorization: str = Header(default="")):
+    return _searches_state(_searches_user(authorization))
+
+
+@app.post("/api/searches")
+def api_search_create(payload: SearchPayload, authorization: str = Header(default="")):
+    uid = _searches_user(authorization)
+    if not searches.can_create(uid):
+        raise HTTPException(status_code=403, detail="Сохранённые поиски - в HonestLot Pro")
+    try:
+        sid = searches.create(uid, payload.params or {}, _now_iso(), payload.name, payload.notify is not False)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    notify.touch_pass(uid, _now_iso())
+    db.log_event(uid, "search_save", _now_iso())
+    return {"id": sid, **_searches_state(uid)}
+
+
+@app.patch("/api/searches/{search_id}")
+def api_search_update(search_id: int, payload: SearchPayload, authorization: str = Header(default="")):
+    uid = _searches_user(authorization)
+    try:
+        searches.update(uid, search_id, _now_iso(), name=payload.name, params=payload.params, notify=payload.notify)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="поиск не найден")
+    return _searches_state(uid)
+
+
+@app.delete("/api/searches/{search_id}")
+def api_search_delete(search_id: int, authorization: str = Header(default="")):
+    uid = _searches_user(authorization)
+    if not searches.delete(uid, search_id):
+        raise HTTPException(status_code=404, detail="поиск не найден")
+    return _searches_state(uid)
+
+
+@app.get("/api/notify/settings")
+def api_notify_settings(authorization: str = Header(default="")):
+    return notify.settings(_searches_user(authorization))
+
+
+@app.post("/api/notify/settings")
+def api_notify_settings_set(payload: NotifySettingsPayload, authorization: str = Header(default="")):
+    uid = _searches_user(authorization)
+    if payload.tg is not None:
+        notify.set_tg(uid, payload.tg, _now_iso())
+    if payload.fav_events is not None:
+        notify.set_fav_events(uid, payload.fav_events, _now_iso())
+    if payload.email_on is not None:
+        notify.set_email_on(uid, payload.email_on, _now_iso())
+    return notify.settings(uid)
+
+
+@app.post("/api/notify/email")
+def api_notify_email(payload: EmailPayload, authorization: str = Header(default="")):
+    uid = _searches_user(authorization)
+    try:
+        status = notify.request_email(uid, payload.email, _now_iso())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": status, **notify.settings(uid)}
+
+
+@app.get("/notify/confirm", response_class=HTMLResponse)
+def notify_confirm(t: str = ""):
+    if notify.confirm(t, _now_iso()) is None:
+        return HTMLResponse(site.message_page("Ссылка устарела", "Откройте HonestLot и укажите почту для "
+                                              "уведомлений ещё раз - придёт новая ссылка."), status_code=400)
+    return site.message_page("Почта подтверждена", "Раз в день сюда будут приходить новые лоты по "
+                             "сохранённым поискам и изменения в избранном. Отписаться можно по ссылке в письме.")
+
+
+@app.get("/notify/unsubscribe", response_class=HTMLResponse)
+def notify_unsubscribe_page(t: str = ""):
+    return site.message_page("Отписаться от писем HonestLot", "Письма с новыми лотами и изменениями в "
+                             "избранном перестанут приходить. Уведомления в Telegram это не отключит.",
+                             form_button="Отписаться")
+
+
+@app.post("/notify/unsubscribe", response_class=HTMLResponse)
+def notify_unsubscribe(t: str = ""):
+    if notify.unsubscribe(t, _now_iso()) is None:
+        return HTMLResponse(site.message_page("Ссылка не подошла", "Отключить письма можно в HonestLot: "
+                                              "«Поиски» → «Уведомления»."), status_code=400)
+    return site.message_page("Письма отключены", "Включить их снова можно в HonestLot: «Поиски» → «Уведомления».")
 
 
 @app.get("/img")

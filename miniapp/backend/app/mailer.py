@@ -41,19 +41,20 @@ def _log(text):
     print(text.encode(enc, "replace").decode(enc), flush=True)
 
 
-def send(to, subject, text):
+def send(to, subject, text, headers=None):
     """-> True, если письмо ушло. Никакие ошибки не бросаются: письмо не
-    должно ронять оплату или продление (они к этому моменту уже записаны)."""
+    должно ронять оплату или продление (они к этому моменту уже записаны).
+    headers - дополнительные заголовки (List-Unsubscribe у рассылки уведомлений, notify.py)."""
     if not to:
         return False
     try:
-        return _send(to, subject, text)
+        return _send(to, subject, text, headers)
     except Exception as e:  # noqa: BLE001 - что угодно, кроме падения оплаты
         _log(f"Письмо не отправлено ({to}, {subject}): {e!r}")
         return False
 
 
-def _send(to, subject, text):
+def _send(to, subject, text, headers=None):
     if not configured():
         _log(f"[письмо не отправлено - SMTP не настроен] кому: {to} | {subject}\n{text}\n")
         return False
@@ -70,6 +71,8 @@ def _send(to, subject, text):
     msg["Message-ID"] = make_msgid(domain=sender.rpartition("@")[2] or None)
     if os.environ.get("HONESTLOT_SMTP_REPLY_TO"):
         msg["Reply-To"] = os.environ["HONESTLOT_SMTP_REPLY_TO"]
+    for name, value in (headers or {}).items():
+        msg[name] = value
     msg.set_content(text)
     try:
         if port == 465:

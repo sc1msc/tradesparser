@@ -108,6 +108,21 @@ def values():
     }
 
 
+def message_page(title, text, form_button=None):
+    """Короткая страница-ответ без индексации: почта подтверждена, письма отключены (notify.py).
+    form_button - кнопка, которая отправляет эту же страницу POST-запросом (отписка: по GET ничего не
+    меняем - почтовые сканеры сами открывают ссылки из писем)."""
+    action = (f'<form method="post"><button class="btn" type="submit">{html.escape(form_button)}</button></form>'
+              if form_button else '<p><a class="btn" href="/">Открыть HonestLot</a></p>')
+    content = f'<h1>{html.escape(title)}</h1><div class="card"><p>{html.escape(text)}</p>{action}</div>'
+    out = _read("layout.html").replace("{{CONTENT}}", content)
+    out = out.replace("{{ROBOTS}}", f'<meta name="robots" content="{NOINDEX}">')
+    out = out.replace("{{TITLE}}", html.escape(f"{title} — HonestLot")).replace("{{PAGE}}", "message")
+    for key, value in values().items():
+        out = out.replace("{{" + key + "}}", html.escape(value))
+    return out
+
+
 def render(page):
     name, title, noindex = PAGES[page]
     out = _read("layout.html").replace("{{CONTENT}}", _read(name))
