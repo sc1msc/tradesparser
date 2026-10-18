@@ -100,7 +100,8 @@ HonestLot не организует торги, не продаёт машины
 | Изменили | Поправить страницы |
 |---|---|
 | `miniapp/frontend/app.js` (надписи, экраны, фильтры) | miniapp-guide, faq |
-| `miniapp/backend/app/lots.py` (видимость, сортировка, избранное) | numbers, miniapp-guide, miniapp-internals |
+| `miniapp/backend/app/lots.py` (видимость, сортировка, избранное, поиск) | numbers, miniapp-guide, miniapp-internals |
+| `miniapp/backend/app/catalog.py` (справочник марок и моделей, ежемесячная проверка) | miniapp-internals, miniapp-guide, runbook |
 | `lot_metrics.py` (процент, «битые», тип лота, VIN, госномер) | numbers, glossary |
 | `bidding_schedule.py` (цена и срок публичного предложения) | numbers |
 | `etp_lots.py`, `etp_status.py`, `miniapp/backend/app/etp_collect.py`, `status_refresh.py` (лоты и статусы с площадок) | miniapp-internals, pipeline, data-sources, runbook |

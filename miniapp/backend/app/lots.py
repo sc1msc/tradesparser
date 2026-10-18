@@ -57,7 +57,7 @@ import etp_lots
 import etp_status
 import lot_metrics
 
-from . import db
+from . import catalog, db
 
 MSK = datetime.timezone(datetime.timedelta(hours=3))
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -75,7 +75,7 @@ BRAND_ALIASES = {
     "MOSCVICH": "МОСКВИЧ", "MOSKVICH": "МОСКВИЧ",
     "ГАЗ": "GAZ", "УАЗ": "UAZ",
 }
-BRAND_LABELS = {"SSANGYONG": "SsangYong", "LIXIANG": "LiXiang"}
+BRAND_LABELS = {"SSANGYONG": "SsangYong", "LIXIANG": "LiXiang", "ROLLS-ROYCE": "Rolls-Royce"}
 
 # Известные марки (ключ - как в BRAND_ALIASES/ленте) и их написания в
 # документах торгов. Нужны, когда в поле марки попал кусок фразы ("Тс:
@@ -88,7 +88,7 @@ KNOWN_BRANDS = {
     "HYUNDAI", "INFINITI", "ISUZU", "IVECO", "JAC", "JAECOO", "JAGUAR", "JEEP", "JETOUR",
     "KAIYI", "KIA", "LADA", "LAND ROVER", "LEXUS", "LIFAN", "LIVAN", "LIXIANG", "MAZDA",
     "MERCEDES-BENZ", "MG", "MINI", "MITSUBISHI", "МОСКВИЧ", "NISSAN", "OMODA", "OPEL",
-    "PEUGEOT", "PORSCHE", "RENAULT", "SAAB", "SKODA", "SMART", "SSANGYONG", "SUBARU",
+    "PEUGEOT", "PORSCHE", "RENAULT", "ROLLS-ROYCE", "SAAB", "SKODA", "SMART", "SSANGYONG", "SUBARU",
     "SUZUKI", "SWM", "TANK", "TESLA", "TOYOTA", "UAZ", "VOLKSWAGEN", "VOLVO", "VORTEX",
     "WEY", "ZAZ", "ZOTYE",
 }
@@ -107,6 +107,9 @@ BRAND_SPELLINGS = {
     "ЛЕНД РОВЕР": "LAND ROVER", "ЛЭНД РОВЕР": "LAND ROVER", "ЯГУАР": "JAGUAR", "ДЖИП": "JEEP",
     "ФИАТ": "FIAT", "ГАЗ": "GAZ", "УАЗ": "UAZ", "ВАЗ": "LADA", "ЛАДА": "LADA",
     "ТЕСЛА": "TESLA", "ГРЕЙТ ВОЛЛ": "GREAT WALL", "ЗАЗ": "ZAZ",
+    # аудит справочника 18.10.2026 (решение владельца)
+    "КАДИЛАК": "CADILLAC", "КАДДИЛАК": "CADILLAC", "ЧЕРРИ": "CHERY",
+    "РОЛЛС-РОЙС": "ROLLS-ROYCE", "РОЛЛС РОЙС": "ROLLS-ROYCE", "ROLLS ROYCE": "ROLLS-ROYCE",
     "SSANG YONG": "SSANGYONG", "MERCEDES": "MERCEDES-BENZ", "MERCEDES BENZ": "MERCEDES-BENZ",
     "VAZ": "LADA", "CHERYEXEED": "EXEED",
 }
@@ -245,7 +248,9 @@ def resolve_brand_model(brand, model, title):
 def _model_tail(brand_key, rest):
     """Хвост после марки -> модель: до первой запятой/скобки, без
     разделителей и повторного названия марки ("Чери/Chery Tiggo7" -> "Tiggo7")."""
-    rest = re.split(r"[,;(]", rest or "", maxsplit=1)[0]
+    # «ГАЗ, модель: 3302, год выпуска...», «марки: LIVAN, модели: X6 PRO, ...» - модель после слова «модель»
+    rest = re.sub(r"^[\s,;:.]*(модел[а-я]*|model)\s*[:–-]?\s*", "", rest or "", flags=re.IGNORECASE)
+    rest = re.split(r"[,;(]", rest, maxsplit=1)[0]
     words = rest.replace("/", " ").split()
     while words and BRAND_SPELLINGS.get(words[0].upper(), words[0].upper()) == brand_key:
         words = words[1:]
@@ -257,9 +262,13 @@ def clean_model(value, brand_label):
     model = re.sub(r"^\W*(модель|model|тс|т\.с\.)\s*[:–-]?\s*", "", model, flags=re.IGNORECASE)
     model = re.sub(r"^\W*(модель|model)\s*[:–-]?\s*", "", model, flags=re.IGNORECASE)
     model = re.sub(r"^\([^)]*\)\s*", "", model)  # "(lada) 2190 Granta" -> "2190 Granta"
+    model = re.sub(r"\s*\[.*$", "", model)  # "NUOVO DUCATO [NUOVO DUCATO 2006 (2006-2014)]" -> "NUOVO DUCATO"
     # Документы торгов смешивают в одном слове кириллицу с латиницей
-    # ("Sаnта FЕ") - в словах, где есть латиница, двойники меняем на латиницу.
-    model = " ".join(w.translate(CYR_LOOKALIKES) if re.search("[A-Za-z]", w) else w for w in model.split())
+    # ("Sаnта FЕ") - в словах, где есть латиница, двойники меняем на латиницу. Так же короткие слова
+    # с цифрами: «Х5» кириллицей - это X5 (аудит справочника 18.10.2026).
+    model = " ".join(w.translate(CYR_LOOKALIKES)
+                     if re.search("[A-Za-z]", w) or (len(w) <= 4 and re.search(r"\d", w)) else w
+                     for w in model.split())
     # Модель из Autodoc иногда начинается с марки ("Audi A6 ...") - убираем повтор.
     if brand_label and _norm_key(model).startswith(_norm_key(brand_label) + " "):
         model = model[len(brand_label):].strip()
@@ -482,20 +491,28 @@ def photo_sources():
     return out
 
 
-def _prepare(lot, catalog=None):
+def _prepare(lot, models_index=None):
     """Статичные (не зависящие от времени) производные поля - один раз на
-    загрузку кэша. catalog - словарь моделей Авто.ру (build_catalog)."""
+    загрузку кэша. models_index - словарь моделей Авто.ру (build_catalog)."""
     _apply_live(lot)
     brand_key, brand, raw_model = resolve_brand_model(lot.get("brand"), lot.get("model"), lot.get("title"))
     if not brand_key:  # название вида "Автомобиль" - марку ищем в описании
         found, rest = find_brand(lot.get("description"))
         if found:
             brand_key, brand, raw_model = found, BRAND_LABELS.get(found) or pretty_name(found), _model_tail(found, rest)
+    if brand_key and not (raw_model or "").strip():  # марка есть, модели нет - ищем её в названии после марки
+        found, rest = find_brand(lot.get("title"))
+        if found == brand_key:
+            raw_model = _model_tail(found, rest)
+    if lot.get("model_source") == "autoru":
+        raw_model = catalog.code_to_model(raw_model)  # CR_V -> CR-V, X_TRAIL -> X-TRAIL
     model = clean_model(raw_model, brand) if brand else ""
     if brand_key and lot.get("model_source") != "autoru":
-        code = snap_model(brand_key, model, f"{lot.get('title') or ''} {lot.get('description') or ''}", catalog)
+        code = snap_model(brand_key, model, f"{lot.get('title') or ''} {lot.get('description') or ''}", models_index)
         if code:
-            model = clean_model(code, brand)
+            model = clean_model(catalog.code_to_model(code), brand)
+    # справочник: семейства (Niva, Priora...), единые подписи (RAV4, Santa Fe), ручные правки из базы
+    brand_key, brand, model = catalog.normalize(brand_key, brand, model, lot, clean_brand)
     lot["brand_label"] = brand
     lot["model_label"] = model
     lot["brand_key"] = brand_key
@@ -525,6 +542,7 @@ def _prepare(lot, catalog=None):
     lot["search_text"] = _norm_key(" ".join(
         str(x or "") for x in (brand, model, lot.get("title"), lot.get("vin"), lot.get("plate"))
     ))
+    _search_index(lot, brand, model)
     # График: [[bid_end, price], ...] (формат листа, см. bidding_schedule).
     # Старые записи базы - списком словарей с карточки сайта.
     pairs = []
@@ -565,8 +583,9 @@ def load():
             _cache["lots"] = None
         if _cache["lots"] is None:
             raw = db.all_lots()
-            catalog = build_catalog(raw)
-            prepared = [_prepare(lot, catalog) for lot in raw]
+            catalog.load_fixes()  # ручные правки справочника (python -m app.catalog fix/rename)
+            models_index = build_catalog(raw)
+            prepared = [_prepare(lot, models_index) for lot in raw]
             cars = {}
             for lot in prepared:
                 if lot["car"]:
@@ -805,6 +824,8 @@ def parse_filters(params):
             models.setdefault(_norm_key(b), set()).add(_norm_key(m))
     return {
         "q": _norm_key(params.get("q")),
+        "q_tokens": _query_tokens(_norm_key(params.get("q"))),
+        "q_skel": _skeleton(params.get("q")),
         "brands": {_norm_key(b) for b in _split(params.get("brands"))},
         "models": models,
         "year_from": _num(params.get("year_from")),
@@ -827,6 +848,125 @@ def parse_filters(params):
     }
 
 
+# ---------- поиск по тексту ----------
+# До 18.10.2026 слово запроса искалось подстрокой в марке, модели и названии лота как есть: «rav4» не
+# находил «RAV 4», «камри» - Camry, «солярис» - 8 лотов из 40, «шкода октавия» - 6 из 30, а «рио» находил
+# «Приору». Теперь (для поиска в ленте и для сохранённых поисков) слово запроса совпадает, если:
+#   - с него начинается слово марки, модели или названия (кириллические двойники = латиница: «Х5» = X5);
+#     слово из 1-2 знаков - только целиком («x5», «6» у Mazda 6, а не любая цифра VIN; буквы - ещё и
+#     началом марки или модели: «ки» = Kia, пока пользователь печатает); слово с цифрами или
+#     дефисом от 3 знаков - подстрокой, как раньше (кусок VIN, госномер, «cx-5»);
+#   - это марка по-русски (ШКОДА -> Skoda, МЕРСЕДЕС -> Mercedes-Benz);
+#   - со «скелета» (только буквы и цифры, кириллица транслитом) начинается слово или пара соседних слов
+#     марки и модели: «rav4» = RAV 4, «crv» = CR-V, «xtrail» = X-Trail;
+#   - слово из одних букв на слух совпадает со словом марки или модели (двойные буквы = одна): те же
+#     согласные и не больше одной другой буквы
+#     (двух - у слов одной длины от 6 букв): «камри» = Camry (но не Camaro), «солярис» = Solaris, «крета» = Creta
+#     (но не Cerato), «лансер» = Lancer.
+# Весь запрос «скелетом» тоже сверяется с маркой и моделью: «мазда 6» = Mazda 6, «санта фе» = Santa Fe.
+
+_WORD_SPLIT_RE = re.compile(r"[^A-ZА-Я0-9]+")
+_SOUND = (("DZH", "J"), ("ZH", "J"), ("Z", "S"), ("PH", "F"), ("TH", "T"), ("TS", "S"), ("CE", "SE"), ("CI", "SI"), ("CY", "SI"),
+          ("C", "K"), ("Q", "K"), ("W", "V"), ("X", "KS"), ("Y", "I"))
+_DOUBLE_RE = re.compile(r"(.)\1+")
+
+
+def _sound(skeleton):
+    """Написание «на слух»: двойные буквы = одна, Z = S, C = K (перед E/I/Y - S), Y = I...
+    «тиго» = TIGGO, «акорд» = ACCORD, «гетц» = «гетс» = GETZ, «церато» = CERATO."""
+    skeleton = _DOUBLE_RE.sub(r"\1", skeleton)
+    for a, b in _SOUND:
+        skeleton = skeleton.replace(a, b)
+    if skeleton.startswith("IKS"):
+        skeleton = skeleton[1:]  # «икстрейл» = X-TRAIL
+    return _DOUBLE_RE.sub(r"\1", skeleton)
+
+
+def _sound_cons(sound):
+    return re.sub("[AEIOU]", "", sound)
+
+
+def _search_index(lot, brand, model):
+    """Поля для поиска по тексту - один раз на загрузку кэша (_prepare)."""
+    words = " " + " ".join(_WORD_SPLIT_RE.split(lot["search_text"])) + " "
+    lot["search_lat"] = lot["search_text"].translate(CYR_LOOKALIKES)
+    lot["search_words"], lot["search_words_lat"] = words, words.translate(CYR_LOOKALIKES)
+    skels = [_skeleton(w) for w in f"{brand} {model}".split()]
+    skels = [w for w in skels if w]
+    pairs = [a + b for a, b in zip(skels, skels[1:])]
+    lot["search_skel"] = " " + " ".join(skels + pairs + [_skeleton(model)]) + " "
+    sounds = {}
+    for sk in skels + [_skeleton(model)]:
+        if not sk.isalpha():
+            continue  # коды с цифрами (X5, CS55) на слух не сравниваем: x5 - не CX-5
+        snd = _sound(sk)
+        sounds.setdefault(_sound_cons(snd), set()).add(snd)
+    lot["search_sound"] = sounds
+
+
+def _query_tokens(q):
+    """Слова запроса с вариантами написания (см. «поиск по тексту»)."""
+    out = []
+    for tok in (q or "").split():
+        sk = _skeleton(tok)
+        snd = _sound(sk)
+        out.append({"tok": tok, "lat": tok.translate(CYR_LOOKALIKES), "alpha": bool(re.fullmatch("[A-ZА-Я]+", tok)),
+                    "skel": sk, "sound": snd, "cons": _sound_cons(snd),
+                    "brand": BRAND_SPELLINGS.get(tok) or BRAND_ALIASES.get(tok)})
+    return out
+
+
+def _close(a, b):
+    """Расстояние Левенштейна не больше 1 (2 - у слов одной длины от 6 букв: «кулрей» = COOLRAY, но
+    «соната» - не SANTA)."""
+    limit = 2 if len(a) >= 6 and len(a) == len(b) else 1
+    if abs(len(a) - len(b)) > limit:
+        return False
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        if min(cur) > limit:
+            return False
+        prev = cur
+    return prev[-1] <= limit
+
+
+def _token_matches(t, lot):
+    tok, lat, sk = t["tok"], t["lat"], t["skel"]
+    if len(tok) <= 2:
+        if f" {tok} " in lot["search_words"] or f" {lat} " in lot["search_words_lat"]:
+            return True
+    elif t["alpha"]:
+        if f" {tok}" in lot["search_words"] or f" {lat}" in lot["search_words_lat"]:
+            return True
+    elif tok in lot["search_text"] or lat in lot["search_lat"]:
+        return True
+    if t["brand"] and t["brand"] == lot["brand_key"]:
+        return True
+    # начало слова марки/модели; цифры из 1-2 знаков - только целиком («6» - не 626)
+    if sk and (f" {sk} " if len(sk) <= 2 and not t["alpha"] else f" {sk}") in lot["search_skel"]:
+        return True
+    # на слух (только слова из букв): с допуском в букву - от 3 согласных или от 4 букв («тиго» = TIGGO),
+    # короче - только точно
+    if not t["alpha"]:
+        return False
+    sounds = lot["search_sound"].get(t["cons"], ())
+    if len(t["cons"]) >= 3 or len(t["sound"]) >= 4:
+        return any(_close(t["sound"], s) for s in sounds)
+    return len(t["sound"]) >= 3 and t["sound"] in sounds
+
+
+def text_matches(f, lot):
+    """Совпадает ли лот с текстом запроса (f - parse_filters)."""
+    if not f["q"]:
+        return True
+    if len(f["q_skel"]) >= 3 and f" {f['q_skel']}" in lot["search_skel"]:
+        return True
+    return all(_token_matches(t, lot) for t in f["q_tokens"])
+
+
 def _between(value, lo, hi):
     if lo is None and hi is None:
         return True
@@ -839,7 +979,7 @@ def _matches(item, lot, f, skip_damage=False):
     """skip_damage - не применять "Скрыть битые" (чтобы посчитать, сколько скрыто)."""
     if f["hide_damaged"] and lot["total_damage"] and not skip_damage:
         return False
-    if f["q"] and not all(tok in lot["search_text"] for tok in f["q"].split()):
+    if not text_matches(f, lot):
         return False
     if f["brands"] and lot["brand_key"] not in f["brands"]:
         return False
