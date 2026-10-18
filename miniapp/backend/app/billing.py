@@ -187,6 +187,9 @@ def _conn():
     if not _schema_ready:
         with db._lock:
             c.executescript(SCHEMA)
+            # срок подарочной ссылки в днях (admin_gift - 2 недели, 18.10.2026); в старых базах колонки нет
+            if "days" not in {r[1] for r in c.execute("PRAGMA table_info(promo_links)")}:
+                c.execute("ALTER TABLE promo_links ADD COLUMN days INTEGER NOT NULL DEFAULT 0")
             c.commit()
         _schema_ready = True
     return c
@@ -737,9 +740,9 @@ def fake_confirm(id: str, paid: int):
 
 # ---------- подарок: бесплатный Pro ----------
 
-def grant(who, months=1, now=None):
-    """Бесплатный Pro на months месяцев. who - telegram_id или @ник (пользователь должен хоть раз
-    открыть мини-апп или сайт). -> (telegram_id, новый конец срока)."""
+def grant(who, months=1, now=None, days=0):
+    """Бесплатный Pro на months месяцев (и days дней). who - telegram_id или @ник (пользователь должен
+    хоть раз открыть мини-апп или сайт). -> (telegram_id, новый конец срока)."""
     now = now or now_msk()
     c = _conn()
     if str(who).startswith("@"):
@@ -755,17 +758,17 @@ def grant(who, months=1, now=None):
         with c:
             if sub and sub["status"] in ("active", "past_due") and _dt(sub["period_end"]) > now:
                 # действующая подписка (в том числе платная с автопродлением) - продлеваем с её конца
-                end = add_months(_dt(sub["period_end"]), months)
+                end = add_months(_dt(sub["period_end"]), months) + datetime.timedelta(days=days)
                 c.execute("UPDATE subscriptions SET period_end = ?, status = 'active', renew_attempts = 0, "
                           "next_attempt_at = NULL, updated_at = ? WHERE telegram_id = ?", (_iso(end), _iso(now), tid))
             elif sub:
-                end = add_months(now, months)
+                end = add_months(now, months) + datetime.timedelta(days=days)
                 c.execute("UPDATE subscriptions SET plan_id = 'month', price = 0, early = ?, status = 'active', "
                           "autorenew = 0, period_end = ?, payment_method_id = NULL, payment_method_title = NULL, "
                           "renew_attempts = 0, next_attempt_at = NULL, reminded_for = NULL, updated_at = ? "
                           "WHERE telegram_id = ?", (early, _iso(end), _iso(now), tid))
             else:
-                end = add_months(now, months)
+                end = add_months(now, months) + datetime.timedelta(days=days)
                 c.execute("INSERT INTO subscriptions (telegram_id, email, plan_id, price, early, status, autorenew, "
                           "period_end, created_at, updated_at) VALUES (?, '', 'month', 0, ?, 'active', 0, ?, ?, ?)",
                           (tid, early, _iso(end), _iso(now), _iso(now)))
@@ -875,7 +878,7 @@ def claim_promo(tid, code):
         if not fresh:
             return None
         try:
-            _, end = grant(tid, link["months"])
+            _, end = grant(tid, link["months"], days=link["days"] or 0)
         except Exception:
             with db._lock:
                 with c:
@@ -938,14 +941,16 @@ def _cli(argv):
     if argv[:1] == ["promo"]:
         # promo add <метка> [@кому] [мес] | promo off <метка> | promo [list]
         if argv[1:2] == ["add"] and len(argv) >= 3:
-            months = int(argv[-1]) if argv[-1].isdigit() and len(argv) > 3 else 1
-            owner = next((a for a in argv[3:] if not a.isdigit()), None)
+            # срок: последний аргумент - месяцы (1) или дни с буквой d (14d)
+            term = argv[-1] if len(argv) > 3 else "1"
+            months, days = (0, int(term[:-1])) if term.lower().endswith("d") and term[:-1].isdigit() else                 ((int(term), 0) if term.isdigit() else (1, 0))
+            owner = next((a for a in argv[3:] if not a.isdigit() and a.lower() != term.lower()), None)
             with db._lock:
                 with c:
-                    c.execute("INSERT OR REPLACE INTO promo_links (code, months, owner, active, created_at) "
-                              "VALUES (?, ?, ?, 1, ?)", (argv[2], months, owner, _iso(now_msk())))
+                    c.execute("INSERT OR REPLACE INTO promo_links (code, months, days, owner, active, created_at) "
+                              "VALUES (?, ?, ?, ?, 1, ?)", (argv[2], months, days, owner, _iso(now_msk())))
             print(f"Ссылка: https://t.me/honestlot_bot?startapp={argv[2]}  (сайт: https://honestlot.ru/?startapp="
-                  f"{argv[2]}) - Pro на {months} мес." + (f", для {owner}" if owner else ""))
+                  f"{argv[2]}) - Pro на " + (f"{days} дн." if days else f"{months} мес.") + (f", для {owner}" if owner else ""))
             return
         if argv[1:2] == ["off"] and len(argv) >= 3:
             with db._lock:
@@ -956,9 +961,10 @@ def _cli(argv):
         rows = c.execute("SELECT l.*, (SELECT COUNT(*) FROM users u WHERE u.source = l.code) came, "
                          "(SELECT COUNT(*) FROM promo_grants g WHERE g.code = l.code) got "
                          "FROM promo_links l ORDER BY l.created_at").fetchall()
-        print(f"{'метка':<22} {'кому':<20} {'мес':>3} {'пришли':>7} {'получили Pro':>13}  ссылка")
+        print(f"{'метка':<22} {'кому':<20} {'срок':>6} {'пришли':>7} {'получили Pro':>13}  ссылка")
         for r in rows:
-            print(f"{r['code']:<22} {(r['owner'] or '-'):<20} {r['months']:>3} {r['came']:>7} {r['got']:>13}  "
+            term = f"{r['days']}д" if r["days"] else f"{r['months']}м"
+            print(f"{r['code']:<22} {(r['owner'] or '-'):<20} {term:>6} {r['came']:>7} {r['got']:>13}  "
                   f"https://t.me/honestlot_bot?startapp={r['code']}" + ("" if r["active"] else "  (выключена)"))
         return
     if argv[:1] == ["forever"] and len(argv) >= 2:  # forever @ник [@ник ...] - бессрочный Pro
