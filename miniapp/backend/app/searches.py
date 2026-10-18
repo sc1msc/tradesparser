@@ -24,7 +24,12 @@ FILTER_KEYS), в JSON. Совпадение лота с поиском счит�
 отправки - два прохода не могут прислать одно и то же.
 
 Включение. HONESTLOT_SAVED_SEARCHES в .env: пусто - выключено (API отвечает 404, интерфейса нет),
-"all" - всем, список telegram_id через запятую - только им (проверка на сервере перед запуском для всех).
+"all" - всем, список telegram_id или @ников через запятую - только им (проверка на сервере перед
+запуском для всех; ник ищется в users.username - человек должен хоть раз открыть приложение).
+
+«Новые» у поиска (вкладка «Поиски», метка «новый» на карточке) - лоты из уведомлений этого поиска
+(notify_events), пришедшие после того, как пользователь последний раз открывал поиск (opened_at), и
+всё ещё подходящие под него.
 Создать поиск может только пользователь с Pro (при включённой оплате); у кого Pro кончился, поиски
 остаются, но уведомления не приходят (notify.py).
 """
@@ -38,6 +43,7 @@ FILTER_KEYS = ("q", "brands", "models", "year_from", "year_to", "price_from", "p
                "regions", "kinds", "trade", "gap_min", "hide_damaged", "fuel", "gearbox", "drive",
                "vol_from", "vol_to", "power_from", "power_to")
 MAX_NAME = 60
+DEFAULT_PRICE_FROM = 300000  # «Цена от 300 тыс.» - начальный фильтр ленты (emptyFilters в app.js)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS saved_searches (
@@ -46,6 +52,7 @@ CREATE TABLE IF NOT EXISTS saved_searches (
     name        TEXT,               -- имя от пользователя; NULL - собирается из фильтров (describe)
     params      TEXT NOT NULL,      -- JSON: параметры ленты (FILTER_KEYS)
     notify      INTEGER NOT NULL DEFAULT 1,  -- присылать новые лоты
+    opened_at   TEXT,               -- когда пользователь последний раз открыл поиск (для «новых»)
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
@@ -72,6 +79,8 @@ def conn():
     if not _schema_ready:
         with db._lock:
             c.executescript(SCHEMA)
+            if "opened_at" not in {r[1] for r in c.execute("PRAGMA table_info(saved_searches)")}:
+                c.execute("ALTER TABLE saved_searches ADD COLUMN opened_at TEXT")  # базы до 19.10.2026
             c.commit()
         _schema_ready = True
     return c
@@ -89,7 +98,16 @@ def enabled_for(telegram_id):
     value = _allowed_ids()
     if not value:
         return False
-    return value == "all" or str(telegram_id) in {x.strip() for x in value.split(",")}
+    if value == "all":
+        return True
+    allowed = {x.strip().lower() for x in value.split(",") if x.strip()}
+    if str(telegram_id) in allowed:
+        return True
+    names = {x[1:] for x in allowed if x.startswith("@")}
+    if not names:
+        return False
+    row = db.conn().execute("SELECT username FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone()
+    return bool(row and row[0] and row[0].lower() in names)
 
 
 def can_create(telegram_id):
@@ -183,7 +201,10 @@ def describe(params):
     years = _range(num(p.get("year_from")), num(p.get("year_to")), lambda v: str(int(v)), "г.")
     if years:
         parts.append(years)
-    price = _range(num(p.get("price_from")), num(p.get("price_to")), _money, "₽")
+    price_from = num(p.get("price_from"))
+    if price_from == DEFAULT_PRICE_FROM:
+        price_from = None  # начальный фильтр ленты - в имени только шум
+    price = _range(price_from, num(p.get("price_to")), _money, "₽")
     if price:
         parts.append(price)
     if p.get("mileage_to"):
@@ -202,7 +223,7 @@ def describe(params):
     if p.get("trade"):
         parts.append(", ".join(TRADE_TEXT.get(t, t) for t in split(p["trade"])))
     if p.get("regions"):
-        parts.append(", ".join(split(p["regions"])))
+        parts.append(", ".join(r.replace("г. ", "") for r in split(p["regions"])))  # «г. Москва» -> «Москва»
     if p.get("kinds") == "multilot":
         parts.append("мультилоты")
     return " · ".join(parts) or "Все лоты"
@@ -210,17 +231,51 @@ def describe(params):
 
 # ---------- хранение ----------
 
-def _row(r, pairs):
+def _row(r, pairs, fresh):
     params = json.loads(r["params"])
+    found = matching(params, pairs)
+    # новые - машины из уведомлений этого поиска после последнего открытия, если всё ещё подходят
+    new_ids = [lot["lot_id"] for _, lot in found if car_key(lot) in fresh.get(r["id"], ())]
     return {"id": r["id"], "name": r["name"] or describe(params), "custom_name": bool(r["name"]),
             "filters": describe(params), "params": params, "notify": bool(r["notify"]),
-            "total": len(matching(params, pairs)), "created_at": r["created_at"]}
+            "total": len(found), "new_ids": new_ids, "created_at": r["created_at"]}
+
+
+def _fresh_cars(telegram_id, rows):
+    """{id поиска: машины из уведомлений после opened_at} (таблица событий - notify.py)."""
+    opened = {r["id"]: r["opened_at"] or r["created_at"] for r in rows}
+    out = {}
+    try:
+        events = conn().execute("SELECT search_id, car_key, created_at FROM notify_events "
+                                "WHERE telegram_id = ? AND kind = 'search'", (telegram_id,)).fetchall()
+    except Exception:  # таблицы ещё нет - уведомлений не было
+        return out
+    for e in events:
+        if e["search_id"] in opened and e["created_at"] > opened[e["search_id"]]:
+            out.setdefault(e["search_id"], set()).add(e["car_key"])
+    return out
 
 
 def list_for(telegram_id):
     rows = conn().execute("SELECT * FROM saved_searches WHERE telegram_id = ? ORDER BY id", (telegram_id,)).fetchall()
     pairs = lots.open_items(lots.Favs([])) if rows else []
-    return [_row(r, pairs) for r in rows]
+    fresh = _fresh_cars(telegram_id, rows)
+    return [_row(r, pairs, fresh) for r in rows]
+
+
+def preview(params):
+    """Окно «Сохранить поиск»: имя из фильтров и сколько лотов подходит сейчас."""
+    params = clean_params(params)
+    return {"name": describe(params), "total": len(matching(params)), "params": params}
+
+
+def mark_opened(telegram_id, search_id, now_iso):
+    with db._lock:
+        c = conn()
+        with c:
+            n = c.execute("UPDATE saved_searches SET opened_at = ? WHERE id = ? AND telegram_id = ?",
+                          (now_iso, search_id, telegram_id)).rowcount
+    return bool(n)
 
 
 def get(telegram_id, search_id):

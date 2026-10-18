@@ -85,6 +85,7 @@ disable-model-invocation: true
 | Выгрузка в мини-апп и проверка фото | `export_to_miniapp.py`, `check_damage_photos.py` |
 | Сервер: вход, база, копии | `miniapp/backend/app/auth.py`, `main.py`, `db.py`, `backup.py`, `watchdog.py`, `stats.py` |
 | Сервер: лоты и избранное | `miniapp/backend/app/lots.py`, `miniapp/backend/app/catalog.py` |
+| Сервер: сохранённые поиски и уведомления | `miniapp/backend/app/searches.py`, `miniapp/backend/app/notify.py` |
 | Оплата Pro и страницы сайта | `miniapp/backend/app/billing.py`, `pay_providers.py`, `mailer.py`, `site.py`, `site_pages/`, `miniapp/frontend/pay/` |
 | Интерфейс мини-аппа и сайта | `miniapp/frontend/app.js`, `index.html`, `site/account.js` |
 | Сервер, бот и релей | `miniapp/backend/Dockerfile`, `miniapp/docker-compose.yml`, `miniapp/Caddyfile`, `miniapp/deploy.sh`, `miniapp/set_env.sh`, `miniapp/backend/app/bot.py`, `telegram.py`, `relay/*.sh` |

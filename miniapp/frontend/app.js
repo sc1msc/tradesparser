@@ -77,6 +77,7 @@ const ICONS = {
   filter: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
   heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.6 7.8 3.9 4.5 7.3 4.5c2 0 3.5 1.1 4.7 2.7 1.2-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.3 4.5 6.7-1.7 4.7-9.2 9.3-9.2 9.3z"/></svg>',
   heartOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.6 7.8 3.9 4.5 7.3 4.5c2 0 3.5 1.1 4.7 2.7 1.2-1.6 2.7-2.7 4.7-2.7 3.4 0 5.7 3.3 4.5 6.7-1.7 4.7-9.2 9.3-9.2 9.3z"/></svg>',
+  bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="7" height="7" rx="2"/><rect x="3" y="13" width="7" height="7" rx="2"/><path d="M13 6h8M13 9h5M13 15h8M13 18h5"/></svg>',
   car: '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 16H3v-4l2-5h14l2 5v4h-2M7 16h10"/><circle cx="7" cy="16.5" r="1.8"/><circle cx="17" cy="16.5" r="1.8"/></svg>',
   back: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>',
@@ -163,7 +164,11 @@ async function api(path, opts = {}) {
     },
   });
   if (r.status === 401) throw new AuthError(await r.text());
-  if (!r.ok) throw Object.assign(new Error(`Ошибка ${r.status}`), { status: r.status });
+  if (!r.ok) {
+    let detail = null;  // текст ошибки от сервера («можно сохранить до 10 поисков…») - для показа
+    try { detail = (await r.json()).detail; } catch { /* не JSON */ }
+    throw Object.assign(new Error(`Ошибка ${r.status}`), { status: r.status, detail: typeof detail === "string" ? detail : null });
+  }
   return r.json();
 }
 
@@ -186,6 +191,12 @@ const state = {
   total: 0,
   facets: null,
   favIds: new Set(),
+  searchesOn: false,    // сохранённые поиски включены (/api/me searches)
+  searches: null,       // сохранённые поиски (GET /api/searches)
+  searchLimit: 10,
+  notifySettings: null, // каналы уведомлений
+  activeSearch: null,   // открытый из «Поисков» поиск: окно сохранения предложит его обновить
+  newIds: new Set(),    // лоты открытого поиска, пришедшие после прошлого открытия - метка «новый»
   stack: [],       // открытые поверх вкладок экраны: {kind: "lot"|"filters", ...}
   scrolls: [],
   reqId: 0,
@@ -290,6 +301,7 @@ function thumbBox(it) {
 function card(it) {
   if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
   const thumb = thumbBox(it);
+  if (state.newIds.has(it.id)) thumb.append(h("span", { class: "newb" }, "новый"));  // из уведомления по поиску
   const meta = [kmText(it), regionShort(it.region)].filter(Boolean).join(" · ");
   const specLine = specsShort(it);
   const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";
@@ -378,7 +390,7 @@ function buildFeed() {
   let t;
   feed.input.addEventListener("input", () => {
     clearTimeout(t);
-    t = setTimeout(() => { state.q = feed.input.value.trim(); loadFeed(true); }, 350);
+    t = setTimeout(() => { state.q = feed.input.value.trim(); renderActive(); loadFeed(true); }, 350);
   });
   feed.input.addEventListener("keydown", (e) => { if (e.key === "Enter") feed.input.blur(); });
   feed.badge = h("span", { class: "badge hidden" });
@@ -446,8 +458,9 @@ function activeChips(f) {
 function renderActive() {
   if (!feed.active) return;
   const chips = activeChips(state.filters);
-  feed.active.classList.toggle("hidden", !chips.length);
-  feed.active.replaceChildren(...chips.map(([label, clear]) => h("span", { class: "fchip" },
+  const save = saveChip();  // сохранённые поиски: «Сохранить поиск» / «Поиск сохранён»
+  feed.active.classList.toggle("hidden", !chips.length && !save);
+  feed.active.replaceChildren(...[save].filter(Boolean), ...chips.map(([label, clear]) => h("span", { class: "fchip" },
     h("button", { class: "fchip-l", onclick: () => { if (!locked("filters")) push({ kind: "filters" }); } }, label),
     h("button", { class: "fchip-x", "aria-label": `Убрать фильтр «${label}»`, onclick: () => {
       if (locked("filters")) return;
@@ -524,6 +537,302 @@ async function renderFavs() {
   }
 }
 
+// ---------- сохранённые поиски (вкладка) ----------
+// Поиск - фильтры ленты и текст под именем (searches.py на сервере), новые лоты по нему присылает бот
+// (notify.py). Сохранить - кнопка первой в строке фильтров ленты: видна, когда фильтры отличаются от
+// начальных (решения владельца 19.10.2026: вкладка «Поиски», кнопка в строке фильтров). Открыть поиск -
+// поставить его фильтры в ленту; лоты из уведомлений после прошлого открытия помечены «новый».
+// Включено, когда /api/me отдаёт searches (HONESTLOT_SAVED_SEARCHES на сервере); только в Pro.
+
+const searchesEl = h("div", { class: "screen" });
+
+const paramsOf = (filters, q) => Object.fromEntries(new URLSearchParams(queryString(filters, q, null)));
+const canon = (p) => JSON.stringify(Object.entries(p || {}).map(([k, v]) => [k, String(v)]).sort());
+
+// параметры поиска (как у /api/lots) -> фильтры ленты; обратное - paramsOf
+function filtersFromParams(p) {
+  const list = (k) => (p[k] ? String(p[k]).split(",").filter(Boolean) : []);
+  const num = (k) => (p[k] != null && p[k] !== "" ? Number(p[k]) : null);
+  const pair = (a, b) => (num(a) != null || num(b) != null ? [num(a), num(b)] : null);
+  const models = {};
+  for (const item of list("models")) {
+    const i = item.indexOf("|");
+    if (i > 0) (models[item.slice(0, i)] = models[item.slice(0, i)] || []).push(item.slice(i + 1));
+  }
+  return { ...emptyFilters(), brands: list("brands"), models, year: pair("year_from", "year_to"),
+    price: pair("price_from", "price_to"), mileageTo: num("mileage_to"), gapMin: num("gap_min"),
+    regions: list("regions"), trade: list("trade"), kinds: list("kinds"), fuel: list("fuel"),
+    gearbox: list("gearbox"), drive: list("drive"), volume: pair("vol_from", "vol_to"),
+    power: pair("power_from", "power_to"), hideDamaged: p.hide_damaged === "1" };
+}
+
+async function loadSearches() {
+  const data = await api("/searches");
+  state.searches = data.items;
+  state.searchLimit = data.limit;
+  state.notifySettings = data.settings;
+  renderTabs();
+  return data;
+}
+
+const newCount = () => (state.searches || []).reduce((n, s) => n + s.new_ids.length, 0);
+
+function saveChip() {
+  if (!state.searchesOn) return null;
+  const cur = paramsOf(state.filters, state.q);
+  if (canon(cur) === canon(paramsOf(emptyFilters(), ""))) return null;  // фильтры не трогали - сохранять нечего
+  const saved = (state.searches || []).find((s) => canon(s.params) === canon(cur));
+  if (saved) return h("button", { class: "savechip on", onclick: () => selectTab("searches") }, "✓ Поиск сохранён");
+  return h("button", { class: "savechip", onclick: () => { if (!locked("searches")) openSaveSheet(cur); } },
+    icon("bell"), "Сохранить поиск");
+}
+
+// Лист снизу (оформление - как у окна Pro): заголовок и содержимое. -> функция закрытия.
+function openSheet(title, ...body) {
+  const close = () => { bg.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const bg = h("div", { class: "paywall", onclick: (e) => { if (e.target === bg) close(); } },
+    h("div", { class: "pw-box sheet", role: "dialog", "aria-modal": "true", "aria-label": title }, h("h3", {}, title), ...body));
+  document.addEventListener("keydown", onKey);
+  document.body.append(bg);
+  return close;
+}
+
+function switchEl(on, onchange, label) {
+  const input = h("input", { type: "checkbox", checked: !!on, "aria-label": label,
+    onchange: (e) => onchange(e.target.checked, e.target) });
+  return h("label", { class: "sw", onclick: (e) => e.stopPropagation() }, input, h("span"));
+}
+
+async function setNotify(patch) {
+  state.notifySettings = await api("/notify/settings", { method: "POST", body: JSON.stringify(patch) });
+  return state.notifySettings;
+}
+
+// Бот может писать человеку, только если тот разрешил. Свой текст в запрос Telegram не вставить -
+// сначала своё объяснение (showPopup), потом requestWriteAccess. Кто уже разрешил (запускал бота),
+// тому ничего не показываем (allows_write_to_pm в initData). -> разрешено ли.
+async function ensureTelegram() {
+  if (!IN_TG) return false;
+  if (state.notifySettings && state.notifySettings.tg) return true;
+  const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
+  let allowed = !!(u && u.allows_write_to_pm);
+  if (!allowed) {
+    if (!(tg.isVersionAtLeast && tg.isVersionAtLeast("6.9"))) return false;
+    const choice = await new Promise((res) => {
+      try {
+        tg.showPopup({ title: "Уведомления в Telegram",
+          message: "Чтобы присылать новые лоты по вашим поискам, боту HonestLot нужно разрешение писать вам.",
+          buttons: [{ id: "later", type: "default", text: "Не сейчас" }, { id: "ok", type: "default", text: "Разрешить" }] }, res);
+      } catch { res("ok"); }
+    });
+    if (choice !== "ok") return false;
+    allowed = await new Promise((res) => { try { tg.requestWriteAccess((ok) => res(!!ok)); } catch { res(false); } });
+  }
+  try { await setNotify({ tg: allowed }); } catch { /* попробуем при следующем сохранении */ }
+  return allowed;
+}
+
+async function openSaveSheet(params) {
+  haptic();
+  const active = state.activeSearch && (state.searches || []).find((s) => s.id === state.activeSearch);
+  const full = (state.searches || []).length >= (state.searchLimit || 10);
+  const name = h("input", { class: "textin", type: "text", maxlength: "60", placeholder: "Название" });
+  const info = h("div", { class: "sub" }, "Считаем лоты…");
+  const notifyBox = h("input", { type: "checkbox", checked: true });
+  const err = h("div", { class: "sheet-err hidden" });
+  const save = full ? null : h("button", { class: "btn" }, active ? "Сохранить как новый" : "Сохранить");
+  const update = active ? h("button", { class: "btn" + (save ? " secondary wide" : "") },
+    active.name.includes("«") ? "Обновить сохранённый поиск" : `Обновить «${active.name}»`) : null;
+  const close = openSheet("Сохранить поиск",
+    h("label", { class: "fld" }, h("span", {}, "Название"), name),
+    info,
+    h("label", { class: "togglerow" }, notifyBox, h("span", {}, h("b", {}, "Присылать новые лоты"),
+      h("span", { class: "sub" }, (IN_TG ? "В этот чат, как только" : "Как только") + " появится подходящая машина. О каждой машине — один раз."))),
+    full ? h("div", { class: "sub" }, `Сохранено ${state.searchLimit} поисков — это максимум. Удалите ненужный во вкладке «Поиски».`) : null,
+    err,
+    h("div", { class: "sheet-acts" }, save, update));
+  api(`/searches/preview?${new URLSearchParams(params)}`).then((p) => {
+    name.placeholder = p.name;
+    info.textContent = `Сейчас подходит ${nf.format(p.total)} ${plural(p.total, "лот", "лота", "лотов")}`;
+  }).catch(() => { info.textContent = ""; });
+  const run = async (request) => {
+    [save, update].forEach((b) => b && (b.disabled = true));
+    try {
+      const data = await request();
+      state.searches = data.items;
+      state.notifySettings = data.settings;
+      state.activeSearch = null;
+      close();
+      renderActive();
+      renderTabs();
+      const notifyOn = notifyBox.checked;
+      const tgOk = notifyOn && await ensureTelegram();
+      const st = state.notifySettings || {};
+      if (!notifyOn) toast("Поиск сохранён");
+      else if (tgOk) toast("Поиск сохранён. Новые лоты придут в этот чат.", null, 3500);
+      else if (st.email_on) toast("Поиск сохранён. Новые лоты придут на почту.", null, 3500);
+      else toast("Поиск сохранён", { label: IN_TG ? "Уведомления ›" : "Указать почту ›", onclick: () => selectTab("searches") });
+    } catch (e) {
+      if (e instanceof AuthError) { close(); return showStub(); }
+      err.textContent = e.detail || "Не получилось сохранить, попробуйте ещё раз";
+      err.classList.remove("hidden");
+      [save, update].forEach((b) => b && (b.disabled = false));
+    }
+  };
+  const body = (extra) => JSON.stringify({ params, notify: notifyBox.checked, ...extra });
+  if (save) save.addEventListener("click", () => run(() => api("/searches", { method: "POST", body: body({ name: name.value.trim() || null }) })));
+  if (update) update.addEventListener("click", () => run(() => api(`/searches/${active.id}`, { method: "PATCH",
+    body: body(name.value.trim() ? { name: name.value.trim() } : {}) })));
+}
+
+// Открыть поиск: его фильтры и текст - в ленту; лоты из уведомлений с прошлого раза - «новый».
+// editFilters («Изменить фильтры» в меню поиска) - сразу экран фильтров, а окно сохранения предложит
+// обновить этот поиск; при простом открытии изменённые фильтры сохраняются новым поиском.
+function openSearch(s, editFilters) {
+  state.filters = filtersFromParams(s.params);
+  store.set("filters", state.filters);
+  state.q = s.params.q || "";
+  if (feed.input) feed.input.value = state.q;
+  state.activeSearch = editFilters ? s.id : null;
+  state.newIds = new Set(s.new_ids);
+  s.new_ids = [];
+  api(`/searches/${s.id}/open`, { method: "POST" }).catch(() => {});
+  selectTab("feed");
+  renderTabs();
+  renderBadge();
+  loadFeed(true);
+  if (editFilters) push({ kind: "filters" });
+}
+
+function searchCard(s) {
+  const fresh = s.new_ids.length;
+  return h("div", { class: "scard", role: "button", onclick: () => openSearch(s) },
+    h("div", { class: "sn" }, s.name),
+    s.custom_name ? h("div", { class: "sf" }, s.filters) : null,
+    h("div", { class: "sc" }, `${nf.format(s.total)} ${plural(s.total, "лот", "лота", "лотов")}`,
+      fresh ? h("b", {}, `+${fresh} ${plural(fresh, "новый", "новых", "новых")}`) : null),
+    switchEl(s.notify, async (on, input) => {
+      try {
+        const data = await api(`/searches/${s.id}`, { method: "PATCH", body: JSON.stringify({ notify: on }) });
+        state.searches = data.items;
+        if (on && IN_TG) await ensureTelegram();
+      } catch { input.checked = !on; toast("Не получилось, попробуйте ещё раз"); }
+    }, "Присылать новые лоты"),
+    h("button", { class: "sdots", "aria-label": "Действия с поиском", onclick: (e) => { e.stopPropagation(); searchMenu(s); } }, "···"));
+}
+
+function searchMenu(s) {
+  const box = h("div", { class: "menulist" });
+  const close = openSheet(s.name, box);
+  const act = (label, fn, cls) => h("button", { class: cls || "", onclick: fn }, label);
+  const draw = () => box.replaceChildren(
+    act("Изменить фильтры", () => { close(); openSearch(s, true); }),
+    act("Переименовать", () => { close(); renameSheet(s); }),
+    act("Удалить поиск", () => box.replaceChildren(
+      h("div", { class: "menunote" }, "Удалить поиск? Новые лоты по нему перестанут приходить."),
+      act("Удалить", async () => {
+        try {
+          const data = await api(`/searches/${s.id}`, { method: "DELETE" });
+          state.searches = data.items;
+          if (state.activeSearch === s.id) state.activeSearch = null;
+          close(); renderSearches(); renderActive();
+        } catch { toast("Не получилось удалить"); }
+      }, "danger"),
+      act("Отмена", draw)), "danger"));
+  draw();
+}
+
+function renameSheet(s) {
+  const input = h("input", { class: "textin", type: "text", maxlength: "60", value: s.custom_name ? s.name : "", placeholder: s.filters });
+  const save = h("button", { class: "btn" }, "Сохранить");
+  const close = openSheet("Название поиска", input,
+    h("div", { class: "sub" }, "Пустое — название по фильтрам."), h("div", { class: "sheet-acts" }, save));
+  save.addEventListener("click", async () => {
+    try {
+      const data = await api(`/searches/${s.id}`, { method: "PATCH", body: JSON.stringify({ name: input.value.trim() }) });
+      state.searches = data.items;
+      close(); renderSearches();
+    } catch { toast("Не получилось сохранить"); }
+  });
+  input.focus();
+}
+
+function setRow(title, sub, control, extra) {
+  return h("div", { class: "setrow" }, h("div", { class: "l" }, h("b", {}, title), sub ? h("span", { class: "sub" }, sub) : null, extra), control);
+}
+
+function emailRow(st) {
+  const form = (value) => {
+    const input = h("input", { class: "textin", type: "email", placeholder: "you@example.com", value: value || "", autocomplete: "email" });
+    const send = h("button", { class: "smallbtn" }, "Получать");
+    send.addEventListener("click", async () => {
+      send.disabled = true;
+      try {
+        const r = await api("/notify/email", { method: "POST", body: JSON.stringify({ email: input.value.trim() }) });
+        state.notifySettings = r;
+        toast(r.status === "verified" ? "Почта подключена" : "Отправили письмо — откройте ссылку в нём", null, 3500);
+        renderSearches();
+      } catch (e) { send.disabled = false; toast(e.detail || "Не получилось, проверьте адрес"); }
+    });
+    return h("div", { class: "emailform" }, input, send);
+  };
+  if (st.email_verified) {
+    const other = h("button", { class: "linkbtn" }, "Другой адрес");
+    const row = setRow("Почта", `${st.email} · одно письмо в день`,
+      switchEl(st.email_on, (on) => setNotify({ email_on: on }).catch(() => toast("Не получилось"))), other);
+    other.addEventListener("click", () => { other.replaceWith(form("")); });
+    return row;
+  }
+  if (st.email) {
+    return setRow("Почта", `Ждём подтверждения: письмо отправлено на ${st.email}. Не пришло — проверьте «Спам» или укажите адрес ещё раз.`,
+      null, form(st.email));
+  }
+  return setRow("Почта", "Одно письмо в день: новое по поискам и избранному", null, form(""));
+}
+
+function notifyBlock() {
+  const st = state.notifySettings || {};
+  const rows = [];
+  if (IN_TG) {
+    const sub = st.tg ? "Новые лоты приходят в этот чат сразу" : st.tg_blocked ? "Бот не может вам писать — включите, чтобы разрешить" : "Выключены";
+    rows.push(setRow("Telegram", sub, switchEl(st.tg, async (on, input) => {
+      if (on) { const ok = await ensureTelegram(); input.checked = ok; if (!ok) toast("Telegram не дал разрешение"); }
+      else { try { await setNotify({ tg: false }); } catch { input.checked = true; } }
+      renderSearches();
+    }, "Уведомления в Telegram")));
+  } else if (st.tg) {
+    rows.push(setRow("Telegram", "Новые лоты приходят в чат с ботом HonestLot", null));
+  }
+  rows.push(emailRow(st));
+  rows.push(setRow("Изменения в избранном", "Цена снизилась, машину выставили снова",
+    switchEl(st.fav_events !== false, (on) => setNotify({ fav_events: on }).catch(() => toast("Не получилось")), "Изменения в избранном")));
+  return [h("div", { class: "fav-title" }, "Уведомления"), h("div", { class: "setblock" }, rows)];
+}
+
+async function renderSearches() {
+  const head = h("div", { class: "topbar" }, h("div", { class: "brandline" }, h("div", { class: "word" }, "Поиски")));
+  if (proLocked) {
+    searchesEl.replaceChildren(head, h("div", { class: "lockcard" },
+      h("div", { class: "pw-tag" }, "HonestLot Pro"),
+      h("h3", {}, "Новые лоты сами придут к вам"),
+      h("p", {}, "Сохраните поиск — и бот напишет, как только появится подходящая машина. Если подешевеет машина из избранного или её выставят снова, тоже сообщим."),
+      IN_TG ? null : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, "searches") }, "Перейти на Pro")));
+    return;
+  }
+  if (!state.searches) searchesEl.replaceChildren(head, h("div", { class: "loader" }, "Загружаем…"));
+  try { await loadSearches(); } catch (e) {
+    if (e instanceof AuthError) return showStub();
+    searchesEl.replaceChildren(head, h("div", { class: "empty" }, h("b", {}, "Не удалось загрузить")));
+    return;
+  }
+  const list = state.searches.length ? h("div", { class: "list" }, state.searches.map(searchCard))
+    : h("div", { class: "empty" }, h("b", {}, "Сохранённых поисков пока нет"),
+      `Настройте фильтры в ленте и нажмите «Сохранить поиск» — новые лоты по нему придут ${IN_TG ? "в этот чат" : "на почту"}.`);
+  searchesEl.replaceChildren(head, list, ...notifyBlock(), ...[supportLink()].filter(Boolean));
+  renderActive();
+}
+
 // ---------- вкладки и навигация ----------
 
 const tabsEl = h("nav", { class: "tabs" });
@@ -534,14 +843,18 @@ function selectTab(key) {
   state.tab = key; renderTabs(); showTab();
 }
 function renderTabs() {
-  const tab = (key, label, ic) => h("button", { class: state.tab === key ? "on" : "", onclick: () => selectTab(key) }, icon(ic), label);
-  tabsEl.replaceChildren(tab("feed", "Лоты", "list"), tab("favs", "Избранное", "heart"));
+  const tab = (key, label, ic, n) => h("button", { class: state.tab === key ? "on" : "", onclick: () => selectTab(key) },
+    h("span", { class: "tabicon" }, icon(ic), n ? h("span", { class: "badge" }, n) : null), label);
+  tabsEl.replaceChildren(tab("feed", "Лоты", "list"), state.searchesOn ? tab("searches", "Поиски", "bell", newCount()) : null,
+    tab("favs", "Избранное", "heart"));
   if (webNav) webNav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
 }
 function showTab() {
   feed.el.classList.toggle("hidden", state.tab !== "feed");
   favsEl.classList.toggle("hidden", state.tab !== "favs");
+  searchesEl.classList.toggle("hidden", state.tab !== "searches");
   if (state.tab === "favs") renderFavs();
+  if (state.tab === "searches") renderSearches();
   window.scrollTo(0, 0);
 }
 
@@ -1205,6 +1518,7 @@ function locked(kind) {
 const PAYWALL = {
   filters: ["Фильтры — в подписке Pro", "Подбирайте лоты по марке и модели, году, цене, пробегу и скидке к рынку."],
   favs: ["Избранное — в подписке Pro", "Сохраняйте лоты и следите за итогами торгов и перевыставлением машин."],
+  searches: ["Сохранённые поиски — в подписке Pro", "Сохраните поиск — и бот напишет, как только появится подходящая машина."],
 };
 function showPaywall(kind) {
   haptic();
@@ -1293,7 +1607,7 @@ function webUserName() {
 let webNav = null;
 function webHeader(pro) {
   webNav = h("nav", { class: "wnav" },
-    [["feed", "Лоты"], ["favs", "Избранное"]].map(([key, label]) =>
+    [["feed", "Лоты"], ...(state.searchesOn ? [["searches", "Поиски"]] : []), ["favs", "Избранное"]].map(([key, label]) =>
       h("button", { "data-tab": key, class: state.tab === key ? "on" : "", onclick: () => selectTab(key) }, label)));
   const name = webUserName();
   return h("header", { class: "webhead" }, h("div", { class: "wh-in" },
@@ -1314,21 +1628,37 @@ async function start() {
   // Pro - до того, как построить ленту: без Pro сохранённые раньше фильтры не применяем
   const me = await loadMe();
   proLocked = me.pro === false;
+  state.searchesOn = !!me.searches;
   // пришёл по подарочной ссылке автора курса - сервер уже включил Pro, скажем об этом один раз
   if (me.gift) setTimeout(() => toast("Ваша подписка Pro активна", null, 5000), 600);
   if (proLocked) state.filters = emptyFilters();
   if (WEB) document.getElementById("app").append(webHeader(me.pro));
   document.getElementById("app").append(root, overlay);
-  root.append(buildFeed(), favsEl, tabsEl);
+  root.append(buildFeed(), searchesEl, favsEl, tabsEl);
   favsEl.classList.add("hidden");
+  searchesEl.classList.add("hidden");
   renderTabs();
-  loadFeed(true);
+  // открыли из уведомления (кнопка бота, ссылка в письме, notify.py): ?lot=, ?search=, ?tab=
+  const qp = new URLSearchParams(location.search);
+  const src = qp.get("src");
+  if (src === "notify" || src === "email") track("notify_open", null, src);
+  const searchParam = state.searchesOn && !proLocked && /^\d+$/.test(qp.get("search") || "") ? Number(qp.get("search")) : null;
+  if (!searchParam) loadFeed(true);
   track("open");
-  // открыли по ссылке "Поделиться" - сразу экран лота, "Назад" ведёт в ленту
-  const sharedId = startLotId();
+  // открыли по ссылке "Поделиться" (или из уведомления) - сразу экран лота, "Назад" ведёт в ленту
+  const sharedId = startLotId() || (/^\d+$/.test(qp.get("lot") || "") ? qp.get("lot") : null);
   if (sharedId) push({ kind: "lot", id: sharedId });
-  // в браузере убираем параметр из адреса: иначе обновление страницы снова откроет этот лот
-  if (sharedId && !IN_TG) history.replaceState(null, "", location.pathname + location.hash);
+  else if (qp.get("tab") === "favs") selectTab("favs");
+  else if (qp.get("tab") === "searches" && state.searchesOn) selectTab("searches");
+  if (state.searchesOn && !proLocked) {
+    loadSearches().then(() => {
+      renderActive();
+      const s = searchParam && state.searches.find((x) => x.id === searchParam);
+      if (s) openSearch(s); else if (searchParam) loadFeed(true);
+    }).catch(() => { if (searchParam) loadFeed(true); });
+  }
+  // в браузере убираем параметры из адреса: иначе обновление страницы снова откроет этот лот
+  if (!IN_TG && ["startapp", "lot", "search", "tab", "src"].some((k) => qp.has(k))) history.replaceState(null, "", location.pathname + location.hash);
   try {
     const [facets, favs] = await Promise.all([api("/facets"), api("/favorites")]);
     state.facets = facets;

@@ -42,7 +42,9 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
   GET    /api/backup             - (ключ импорта) свежая копия базы для ПК;
                                    ежедневные копии сервер делает сам (backup.py)
   GET    /api/searches           - сохранённые поиски (Pro; searches.py), настройки уведомлений
+  GET    /api/searches/preview   - имя и число лотов для окна «Сохранить поиск» (параметры как у ленты)
   POST   /api/searches           - сохранить поиск {params, name?, notify?}
+  POST   /api/searches/{id}/open - поиск открыт: его новые лоты просмотрены
   PATCH  /api/searches/{id}      - переименовать, поменять фильтры, включить/выключить уведомления
   DELETE /api/searches/{id}      - удалить
   GET/POST /api/notify/settings  - каналы уведомлений (notify.py): {tg, fav_events, email_on}
@@ -350,6 +352,21 @@ def _searches_state(uid):
 @app.get("/api/searches")
 def api_searches(authorization: str = Header(default="")):
     return _searches_state(_searches_user(authorization))
+
+
+@app.get("/api/searches/preview")
+def api_search_preview(request: Request, authorization: str = Header(default="")):
+    _searches_user(authorization)
+    return searches.preview(dict(request.query_params))
+
+
+@app.post("/api/searches/{search_id}/open")
+def api_search_open(search_id: int, authorization: str = Header(default="")):
+    """Пользователь открыл поиск: его «новые» лоты становятся просмотренными."""
+    uid = _searches_user(authorization)
+    if not searches.mark_opened(uid, search_id, _now_iso()):
+        raise HTTPException(status_code=404, detail="поиск не найден")
+    return {"ok": True}
 
 
 @app.post("/api/searches")

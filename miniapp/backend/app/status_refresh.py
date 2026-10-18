@@ -422,6 +422,8 @@ def _loop():
             run_pass()
         except Exception as e:  # поток не должен умирать из-за одного прохода
             print(f"[статусы] проход упал: {type(e).__name__}: {e}", flush=True)
+        from . import notify  # здесь: notify тянет lots и billing, при импорте модуля не нужен
+        notify.kick()  # новые цены и итоги - уведомления по поискам и избранному
 
 
 def start():

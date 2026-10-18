@@ -407,3 +407,53 @@ html.pv-open, html.pv-open body { overflow: hidden; }
 .pv-close { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 10px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; background: rgba(0, 0, 0, .55); color: #fff; font-size: 28px; line-height: 1; display: grid; place-items: center; }
 .pv-counter { position: absolute; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: rgba(0, 0, 0, .55); color: #fff; font-size: 13px; padding: 3px 10px; border-radius: 12px; pointer-events: none; }
 .pv-nav { z-index: 2; }
+
+/* сохранённые поиски (вкладка «Поиски», кнопка «Сохранить поиск» в строке фильтров) */
+.savechip { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--green); color: var(--green); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.savechip svg { width: 14px; height: 14px; }
+.savechip.on { box-shadow: none; background: var(--green-soft); }
+.newb { position: absolute; left: 5px; bottom: 5px; background: var(--green); color: #fff; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 1px 6px; }
+.scard { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 12px 64px 12px 14px; background: var(--bg); border-radius: var(--radius); cursor: pointer; }
+.scard .sn { font-weight: 600; }
+.scard .sf { color: var(--hint); font-size: 13px; }
+.scard .sc { display: flex; gap: 8px; color: var(--hint); font-size: 13px; }
+.scard .sc b { color: var(--green); }
+.scard .sw { position: absolute; top: 12px; right: 12px; }
+.sdots { position: absolute; right: 10px; bottom: 6px; width: 40px; height: 28px; color: var(--hint); font-size: 18px; letter-spacing: 1px; }
+.sw { position: relative; flex: none; display: inline-block; width: 44px; height: 26px; cursor: pointer; }
+.sw input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.sw span { position: absolute; inset: 0; border-radius: 13px; background: var(--neutral-soft); transition: background .15s; pointer-events: none; }
+.sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .15s; }
+.sw input:checked + span { background: var(--green); }
+.sw input:checked + span::after { transform: translateX(18px); }
+.sw input:focus-visible + span { outline: 2px solid var(--link); outline-offset: 2px; }
+.setblock { margin: 0 12px; background: var(--bg); border-radius: var(--radius); }
+.setrow { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--sep); }
+.setrow:last-child { border-bottom: 0; }
+.setrow .l { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.setrow .l b { font-size: 15px; font-weight: 600; }
+.setrow .l .sub { font-size: 13px; }
+.setrow .linkbtn { align-self: flex-start; margin-top: 4px; }
+.emailform { display: flex; gap: 8px; margin-top: 8px; }
+.textin { width: 100%; min-width: 0; height: 40px; border: 0; border-radius: 10px; background: var(--bg2); padding: 0 12px; outline: 0; font: inherit; color: inherit; }
+.smallbtn { flex: none; height: 40px; padding: 0 14px; border-radius: 10px; background: var(--green); color: #fff; font-weight: 600; }
+.smallbtn:disabled { opacity: .5; }
+.pw-box.sheet { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.pw-box.sheet h3 { margin: 0; }
+.fld { display: flex; flex-direction: column; gap: 4px; }
+.fld > span { font-size: 13px; color: var(--hint); }
+.sheet-acts { display: flex; flex-direction: column; gap: 8px; }
+.sheet-acts .btn { flex: none; width: 100%; }
+.sheet-err { color: var(--warn); font-size: 14px; }
+.menulist { display: flex; flex-direction: column; background: var(--bg2); border-radius: 12px; }
+.menulist button { padding: 13px 14px; border-bottom: 1px solid var(--sep); text-align: left; font-size: 15px; }
+.menulist button:last-child { border-bottom: 0; }
+.menulist .danger { color: #e5484d; }
+.menunote { padding: 13px 14px; border-bottom: 1px solid var(--sep); color: var(--hint); font-size: 14px; }
+.lockcard { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 24px 12px 0; padding: 24px 18px; background: var(--bg); border-radius: 18px; text-align: center; }
+.lockcard h3 { margin: 0; font-size: 18px; }
+.lockcard p { margin: 0; color: var(--hint); }
+.lockcard .btn { flex: none; width: 100%; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.tabicon { position: relative; display: inline-flex; }
+.tabs .badge { top: -4px; right: -10px; }
+html.web .scard, html.web .setblock, html.web .lockcard { box-shadow: inset 0 0 0 1px var(--sep); }

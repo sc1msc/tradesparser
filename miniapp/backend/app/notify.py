@@ -4,8 +4,12 @@ r"""
 (searches.py) и события избранного - «машину выставили снова» и «цена снизилась» («итоги торгов»
 заморожены). Каналы - бот @honestlot_bot и письмо раз в день.
 
-КАК. Фоновый поток в api (как billing, watchdog) раз в PASS_EVERY_SECONDS и сразу после выгрузки с ПК
-(kick из POST /api/import) делает проход (run_pass):
+КАК. Фоновый поток в api (как billing, watchdog) делает проход (run_pass), как только на сервере
+появились новые данные: после выгрузки с ПК (kick из POST /api/import - это и есть новые лоты) и после
+каждой проверки статусов (status_refresh.py: цены и итоги торгов); ещё раз в день в DIGEST_HOUR - для
+письма. Окна «только днём» нет (решение владельца 19.10.2026): новые лоты приходят сразу после прогона.
+Цена публичного предложения меняется по графику (часто в полночь) - такое событие уходит с ближайшей
+проверкой статусов (05, 11, 16, 21 по Москве).
   1. события - для каждого пользователя с Pro и включённой функцией (searches.enabled_for):
      - поиск: открытые лоты ленты под фильтры поиска, машины, о которых пользователь ещё не знает
        (notify_seen) и которых нет в его избранном (о них - события избранного). Отметка «знает» и
@@ -19,8 +23,7 @@ r"""
      события получают канал в момент создания: tg - если бот может писать пользователю, email - если
      почта подтверждена и письма включены; без каналов событие всё равно пишется (машина становится
      известной, и после включения канала не придёт пачка старого);
-  2. Telegram - с SEND_FROM_HOUR до SEND_TO_HOUR по Москве (ночью события ждут утра): одно сообщение на
-     поиск (до MAX_LINES лотов и «…и ещё N», кнопка открывает мини-апп с этим поиском) и одно на
+  2. Telegram - сразу: одно сообщение на поиск (до MAX_LINES лотов и «…и ещё N», кнопка открывает мини-апп с этим поиском) и одно на
      избранное. 403 / «chat not found» - пользователь заблокировал бота: Telegram ему больше не шлём,
      пока он снова не разрешит сообщения в мини-аппе. 429 или нет связи с релеем - стоп до следующего
      прохода (события ждут, но не дольше TG_TTL_HOURS). Таймаут ответа - сообщение, возможно, ушло:
@@ -47,12 +50,10 @@ import urllib.parse
 
 from . import billing, db, lots, mailer, searches, telegram
 
-SEND_FROM_HOUR, SEND_TO_HOUR = 9, 21   # Telegram - только днём по Москве
 DIGEST_HOUR = 10                       # письмо - раз в день, после 10:00
-PASS_EVERY_SECONDS = 600
 MAX_LINES = 5                          # лотов в одном сообщении, остальное - «…и ещё N»
 TG_TTL_HOURS = 24                      # событие, не доставленное в Telegram за сутки, - не шлём
-REBASELINE_HOURS = 48
+REBASELINE_HOURS = 72                  # проходы - минимум раз в день (письмо), обычно 5-6 раз
 CONFIRM_DAYS = 3
 SEND_PAUSE_SECONDS = 0.1               # между сообщениями (лимиты Telegram)
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
@@ -469,8 +470,6 @@ def deliver_tg(now=None, send=_send_tg):
     expired = [r[0] for r in c.execute("SELECT id FROM notify_events WHERE tg = 'pending' AND created_at < ?",
                                        (_iso(now - datetime.timedelta(hours=TG_TTL_HOURS)),))]
     _mark(expired, "tg", "expired", now_iso)
-    if not SEND_FROM_HOUR <= now.astimezone(lots.MSK).hour < SEND_TO_HOUR:
-        return stats
     rows = c.execute("SELECT * FROM notify_events WHERE tg = 'pending' ORDER BY telegram_id, id").fetchall()
     by_user = {}
     for r in rows:
@@ -583,13 +582,21 @@ def run_pass(now=None):
 
 
 def kick():
-    """После выгрузки с ПК - проход сразу, а не через PASS_EVERY_SECONDS."""
+    """Новые данные на сервере (выгрузка с ПК, проверка статусов) - проход сразу."""
     _kick.set()
+
+
+def _seconds_to_digest(now=None):
+    now = (now or lots.now_msk()).astimezone(lots.MSK)
+    at = now.replace(hour=DIGEST_HOUR, minute=1, second=0, microsecond=0)
+    if at <= now:
+        at += datetime.timedelta(days=1)
+    return (at - now).total_seconds()
 
 
 def _loop():
     while True:
-        _kick.wait(PASS_EVERY_SECONDS)
+        _kick.wait(_seconds_to_digest())  # новые данные - сразу; без них - в DIGEST_HOUR ради письма
         _kick.clear()
         try:
             out = run_pass()

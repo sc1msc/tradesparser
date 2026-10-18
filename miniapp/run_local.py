@@ -24,6 +24,9 @@ os.environ.setdefault("HONESTLOT_IMPORT_TOKEN", "dev")
 os.environ.setdefault("HONESTLOT_STATUS_REFRESH", "0")
 # и не собирает лоты с площадок (etp_collect.py)
 os.environ.setdefault("HONESTLOT_ETP_COLLECT", "0")
+# сохранённые поиски и уведомления (searches.py) - локально включены для проверки; без токена бота
+# сообщения не уходят (ошибка в логе), без SMTP письма печатаются в лог
+os.environ.setdefault("HONESTLOT_SAVED_SEARCHES", "all")
 
 import requests  # noqa: E402
 import uvicorn  # noqa: E402
