@@ -8,8 +8,10 @@ r"""
 появились новые данные: после выгрузки с ПК (kick из POST /api/import - это и есть новые лоты) и после
 каждой проверки статусов (status_refresh.py: цены и итоги торгов); ещё раз в день в DIGEST_HOUR - для
 письма. Окна «только днём» нет (решение владельца 19.10.2026): новые лоты приходят сразу после прогона.
-Цена публичного предложения меняется по графику (часто в полночь) - такое событие уходит с ближайшей
-проверкой статусов (05, 11, 16, 21 по Москве).
+Цена публичного предложения меняется по графику (часто в полночь) и событие появляется с проверкой
+статусов в 05:00, поэтому о публичных предложениях («цена снизилась», новый лот по поиску) Telegram
+пишет не раньше PUBLIC_OFFER_FROM_HOUR (8:00 по Москве, решение владельца 19.10.2026): до этого они
+ждут, в 08:01 поток просыпается сам. Аукционы и всё после 8:00 - сразу.
   1. события - для каждого пользователя с Pro и включённой функцией (searches.enabled_for):
      - поиск: открытые лоты ленты под фильтры поиска, машины, о которых пользователь ещё не знает
        (notify_seen) и которых нет в его избранном (о них - события избранного). Отметка «знает» и
@@ -51,6 +53,7 @@ import urllib.parse
 from . import billing, db, lots, mailer, searches, telegram
 
 DIGEST_HOUR = 10                       # письмо - раз в день, после 10:00
+PUBLIC_OFFER_FROM_HOUR = 8             # о публичных предложениях в Telegram - не раньше 8:00 (их цена падает ночью)
 MAX_LINES = 5                          # лотов в одном сообщении, остальное - «…и ещё N»
 TG_TTL_HOURS = 24                      # событие, не доставленное в Telegram за сутки, - не шлём
 REBASELINE_HOURS = 72                  # проходы - минимум раз в день (письмо), обычно 5-6 раз
@@ -461,6 +464,11 @@ def _mark(ids, column, value, now_iso):
                           [(value, now_iso, i) for i in ids])
 
 
+def _public_offer(lot_id):
+    lot = lots.get(lot_id)
+    return lot is not None and lot["trade"] == lots.TRADE_PUBLIC_OFFER
+
+
 def deliver_tg(now=None, send=_send_tg):
     """Неотправленные события -> сообщения в Telegram. -> {"sent": N, "failed": N, "stopped": причина}."""
     now = now or lots.now_msk()
@@ -471,6 +479,8 @@ def deliver_tg(now=None, send=_send_tg):
                                        (_iso(now - datetime.timedelta(hours=TG_TTL_HOURS)),))]
     _mark(expired, "tg", "expired", now_iso)
     rows = c.execute("SELECT * FROM notify_events WHERE tg = 'pending' ORDER BY telegram_id, id").fetchall()
+    if now.astimezone(lots.MSK).hour < PUBLIC_OFFER_FROM_HOUR:
+        rows = [r for r in rows if not _public_offer(r["lot_id"])]  # ждут утра (см. PUBLIC_OFFER_FROM_HOUR)
     by_user = {}
     for r in rows:
         by_user.setdefault(r["telegram_id"], []).append(r)
@@ -586,17 +596,20 @@ def kick():
     _kick.set()
 
 
-def _seconds_to_digest(now=None):
+def _seconds_to_wake(now=None):
+    """До ближайшего плана без новых данных: PUBLIC_OFFER_FROM_HOUR (отложенные ночью публичные
+    предложения) или DIGEST_HOUR (письмо)."""
     now = (now or lots.now_msk()).astimezone(lots.MSK)
-    at = now.replace(hour=DIGEST_HOUR, minute=1, second=0, microsecond=0)
-    if at <= now:
-        at += datetime.timedelta(days=1)
-    return (at - now).total_seconds()
+    times = []
+    for hour in (PUBLIC_OFFER_FROM_HOUR, DIGEST_HOUR):
+        at = now.replace(hour=hour, minute=1, second=0, microsecond=0)
+        times.append(at if at > now else at + datetime.timedelta(days=1))
+    return (min(times) - now).total_seconds()
 
 
 def _loop():
     while True:
-        _kick.wait(_seconds_to_digest())  # новые данные - сразу; без них - в DIGEST_HOUR ради письма
+        _kick.wait(_seconds_to_wake())  # новые данные - сразу; без них - в 08:01 и 10:01
         _kick.clear()
         try:
             out = run_pass()
