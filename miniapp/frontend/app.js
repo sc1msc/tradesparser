@@ -306,7 +306,7 @@ function card(it) {
   if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
   const thumb = thumbBox(it);
   if (state.newIds.has(it.id)) thumb.append(h("span", { class: "newb" }, "новый"));  // из уведомления по поиску
-  const meta = [kmText(it), regionShort(it.region)].filter(Boolean).join(" · ");
+  const meta = [kmText(it), regionShort(it.region), it.dtp_count ? `ДТП: ${it.dtp_count}` : null].filter(Boolean).join(" · ");
   const specLine = specsShort(it);
   const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";
   const deadline = it.is_open
@@ -949,7 +949,7 @@ const ZOOM_MAX = 4, ZOOM_TAP = 2.5;
 
 function openViewer(photos, start, onClose) {
   const frames = photos.map((p) => {
-    const img = h("img", { src: p.full, alt: "", draggable: "false" });
+    const img = h("img", { src: p.full, alt: "", draggable: "false", class: p.light ? "light" : null });
     return { frame: h("div", { class: "pv-frame" }, img), img, s: 1, x: 0, y: 0 };
   });
   const track = h("div", { class: "pv-track" }, frames.map((f) => f.frame));
@@ -1104,6 +1104,41 @@ function rows(pairs) {
     .map(([k, v]) => h("div", { class: "row" }, h("span", { class: "k" }, k), h("span", { class: "v" }, v))));
 }
 
+// ДТП по VIN (TRONK, с 19.10.2026; решения владельца): «ДТП: N» раскрывается - даты, места и схемы
+// повреждений (схема на весь экран - в просмотрщике фото); подробности только с Pro, число - всем.
+// Нет данных по машине - блока нет (это не «чистая машина»); данные есть, ДТП нет - «ДТП не найдены».
+const dtpDate = (iso) => (iso || "").slice(0, 10).split("-").reverse().join(".");
+function dtpBlock(lot) {
+  const d = lot.dtp;
+  if (!d) return null;
+  const asOf = d.as_of ? h("div", { class: "sub" }, `По данным Госавтоинспекции на ${dtpDate(d.as_of)}`) : null;
+  if (!d.count) return h("div", { class: "block dtp" }, h("div", { class: "dtp-head clean" }, "ДТП не найдены"), asOf);
+  const list = d.accidents || [];
+  const schemes = list.filter((a) => a.scheme).map((a) => ({ full: a.scheme, light: true }));
+  let open = false;
+  const items = h("div", { class: "dtp-list hidden" }, list.map((a) => {
+    const idx = schemes.findIndex((s) => s.full === a.scheme);
+    return h("div", { class: "dtp-item" },
+      h("div", { class: "dtp-text" },
+        h("b", {}, dtpDate(a.date) || "Дата неизвестна"),
+        h("span", {}, [a.type, a.region].filter(Boolean).join(" · "))),
+      a.scheme ? h("button", { class: "dtp-scheme", "aria-label": "Схема повреждений",
+        onclick: () => openViewer(schemes.slice(idx).concat(schemes.slice(0, idx)), 0) },
+        h("img", { src: a.scheme, alt: "Схема повреждений", loading: "lazy" })) : null);
+  }), h("div", { class: "sub" }, "Схема — места повреждений по данным Госавтоинспекции. Нажмите, чтобы увеличить."));
+  const last = list[0] && list[0].date ? ` · последнее ${dtpDate(list[0].date)}` : "";
+  const arrow = h("span", { class: "dtp-arrow" }, "▾");
+  const head = h("button", { class: "dtp-head", "aria-expanded": "false", onclick: () => {
+    if (locked("dtp")) return;
+    open = !open;
+    items.classList.toggle("hidden", !open);
+    arrow.textContent = open ? "▴" : "▾";
+    head.setAttribute("aria-expanded", String(open));
+    if (open) track("dtp_open", lot.id);
+  } }, h("span", {}, `ДТП: ${d.count}${last}`), arrow);
+  return h("div", { class: "block dtp" }, head, asOf, items);
+}
+
 function marketBlock(lot) {
   if (lot.kind === "multilot") {
     return h("div", { class: "block" }, h("h3", {}, "Рынок"),
@@ -1222,6 +1257,7 @@ async function renderLot(id) {
     deadlineBlock,
     damageBox(lot),
     marketBlock(lot),
+    dtpBlock(lot),
     periods,
     listingsBlock,
     historyBlock,
@@ -1554,6 +1590,7 @@ const PAYWALL = {
   filters: ["Фильтры — в подписке Pro", "Подбирайте лоты по марке и модели, году, цене, пробегу и скидке к рынку."],
   favs: ["Избранное — в подписке Pro", "Сохраняйте лоты и следите за итогами торгов и перевыставлением машин."],
   searches: ["Сохранённые поиски — в подписке Pro", "Сохраните поиск — и бот напишет, как только появится подходящая машина."],
+  dtp: ["История ДТП — в подписке Pro", "Даты, места и схемы повреждений из ДТП машины — чтобы понимать, куда был удар."],
 };
 function showPaywall(kind) {
   haptic();

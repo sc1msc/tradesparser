@@ -82,7 +82,7 @@ disable-model-invocation: true
 | Рыночная оценка и подборки | `evaluate_autoru_browser.py`, `autoru_valuation.py`, `build_lot_selections.py`, `lot_metrics.py` (процент, тип лота, битые), `bidding_schedule.py` |
 | Запуск пайплайна и тревоги | `run_pipeline.py`, `automation.py`, `run_pipeline_auto.bat`, `config.py` |
 | Дайджест в канал | `send_digest.py`, `telegraph_publish.py`, `selections.py` |
-| Выгрузка в мини-апп и проверка фото | `export_to_miniapp.py`, `check_damage_photos.py`, `check_completeness.py` |
+| Выгрузка в мини-апп и проверка фото | `export_to_miniapp.py`, `check_damage_photos.py`, `check_completeness.py`, `fill_dtp.py`, `tronk_dtp.py` |
 | Сервер: вход, база, копии | `miniapp/backend/app/auth.py`, `main.py`, `db.py`, `backup.py`, `watchdog.py`, `stats.py` |
 | Сервер: лоты и избранное | `miniapp/backend/app/lots.py`, `miniapp/backend/app/catalog.py` |
 | Сервер: сохранённые поиски и уведомления | `miniapp/backend/app/searches.py`, `miniapp/backend/app/notify.py` |

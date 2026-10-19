@@ -21,7 +21,8 @@ from urllib.parse import urlsplit
 
 from . import db, status_refresh
 
-ALLOWED_PREFIXES = {"m-ets.ru": "/download/"}
+# data.tronk.info - схемы ДТП (tronk_dtp.py): ссылка TRONK по http и с чужого сервера, отдаём со своего
+ALLOWED_PREFIXES = {"m-ets.ru": "/download/", "data.tronk.info": "/img.ashx"}
 MAX_BYTES = 8 * 1024 * 1024
 CACHE_DAYS = 45
 FETCH_TIMEOUT = 20

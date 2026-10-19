@@ -663,6 +663,8 @@ def summary(lot, state, now, favorites):
         "mileage_estimated": bool(lot.get("mileage_estimated")),
         # число владельцев - из рыночной оценки по VIN (фильтр «Владельцы», 19.10.2026)
         "owners": lot.get("autoru_owners") if lot["kind"] == lot_metrics.LOT_CAR else None,
+        # число ДТП по VIN (TRONK): None - нет данных, 0 - «ДТП не найдены» (метка в ленте)
+        "dtp_count": _dtp(lot)["count"] if _dtp(lot) else None,
         # пробег из отчёта (TRONK) - пересчитанное на сегодня показание: в ленте «~», на экране лота
         # «по записи из отчёта от …»; старые выгрузки без источника - как раньше
         "mileage_source": lot.get("mileage_source") or ("estimate" if lot.get("mileage_estimated") else None),
@@ -685,6 +687,32 @@ def summary(lot, state, now, favorites):
         "is_open": is_open(lot, state, now),
         "listings": 1,
         **specs(lot),
+    }
+
+
+DTP_SCHEME_URL = "https://data.tronk.info/img.ashx?mode=sr&id={}"
+
+
+def _dtp(lot):
+    """ДТП по VIN из выгрузки (export_to_miniapp.dtp_payload) - только у лота «одна машина»."""
+    d = lot.get("dtp")
+    return d if isinstance(d, dict) and lot["kind"] == lot_metrics.LOT_CAR and d.get("count") is not None else None
+
+
+def dtp_detail(lot):
+    """Блок «ДТП» экрана лота: схемы - через наш сервер (/img: кэш, без похода браузера к TRONK).
+    Даты и схемы мини-апп показывает только с Pro (app.js), число - всем."""
+    d = _dtp(lot)
+    if not d:
+        return None
+    return {
+        "count": d["count"],
+        "as_of": d.get("as_of"),
+        "accidents": [{
+            "date": a.get("date"), "type": a.get("type"), "region": a.get("region"),
+            "scheme": "/img?u=" + urllib.parse.quote(DTP_SCHEME_URL.format(int(a["scheme"])), safe="")
+            if str(a.get("scheme") or "").isdigit() else None,
+        } for a in d.get("accidents") or []],
     }
 
 
@@ -743,6 +771,7 @@ def detail(lot, now, favorites):
         "next_price_from": _iso(nxt["from"]) if nxt else None,
         "damage": lot["damage"],
         "photo_damage": lot["photo_damage"],
+        "dtp": dtp_detail(lot),
     })
     out["listings_list"], out["history"] = car_context(lot, now)
     out["listings"] = max(1, len(out["listings_list"]))

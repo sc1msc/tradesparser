@@ -76,6 +76,7 @@ NUMERIC_COLUMNS = {
     "autoru_tradein_low", "autoru_tradein_high",
     "autoru_uncertainty_percent", "autoru_year", "autoru_owners_count",
     "autoru_displacement", "autoru_power",
+    "dtp_count",
     "% below mkt",
 }
 

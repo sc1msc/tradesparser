@@ -224,9 +224,9 @@ def _needs_refresh(entry, lot_id=None):
     return datetime.datetime.now() - fetched > datetime.timedelta(days=config.MINIAPP_DETAILS_REFRESH_DAYS)
 
 
-def read_sheet():
+def read_sheet(name=SOURCE_SHEET):
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    ws = gspread.authorize(creds).open_by_key(config.SPREADSHEET_ID).worksheet(SOURCE_SHEET)
+    ws = gspread.authorize(creds).open_by_key(config.SPREADSHEET_ID).worksheet(name)
     values = ws.get_all_values()
     if not values:
         return []
@@ -251,7 +251,52 @@ def _mileage_source(row, mileage, estimated):
     return "report" if (row.get("mileage_probeg_status") or "").strip() == "ok" else "lot"
 
 
-def build_lot(row, details, damage=None):
+def read_dtp():
+    """ДТП по VIN из справочника vin_cache (их покупает fill_dtp.py, шаг 7): {VIN: строка справочника}.
+    Справочник недоступен - выгружаем без ДТП (не роняем выгрузку)."""
+    try:
+        rows = read_sheet("vin_cache")
+    except Exception as e:
+        automation.alert(f"Выгрузка в мини-апп: справочник vin_cache не прочитался ({e}) - ДТП не выгружены.")
+        return {}
+    return {(r.get("vin") or "").strip().upper(): r for r in rows if (r.get("dtp_status") or "").strip() == "ok"}
+
+
+def _letters(value):
+    return re.sub(r"[^A-ZА-ЯЁ]", "", (value or "").upper())
+
+
+def _same_brand(marka, brand):
+    """Марка из ответа TRONK - та же машина, что в лоте? Модель у TRONK бывает обобщённой («Прочие
+    модели Mazda»), поэтому только марка, и мягко: расхождение - только когда обе латиницей и ни одна
+    не начинается с другой («ВАЗ» против «LADA» не сравниваем)."""
+    a, b = _letters(marka), _letters(brand)
+    if not a or not b or not (a.isascii() and b.isascii()):
+        return True
+    return a.startswith(b[:4]) or b.startswith(a[:4])
+
+
+def dtp_payload(rec, brand):
+    """Строка справочника -> {count, as_of, accidents: [{date, type, region, scheme}]} или None (нет данных).
+    ДТП чужой марки (опечатка в VIN у организатора) отбрасываем; если отброшены все - «нет данных»,
+    а не «ДТП не найдены»."""
+    if not rec:
+        return None
+    try:
+        accidents = json.loads(rec.get("dtp_accidents") or "[]")
+    except ValueError:
+        return None
+    kept = [a for a in accidents if _same_brand(a.get("marka"), brand)]
+    if accidents and not kept:
+        return None
+    return {
+        "count": len(kept),
+        "as_of": (rec.get("dtp_as_of") or "")[:10] or None,
+        "accidents": [{k: a.get(k) for k in ("date", "type", "region", "scheme")} for a in kept],
+    }
+
+
+def build_lot(row, details, damage=None, dtp=None):
     lot_id = lot_id_of(row)
     # Пробег больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника:
     # показываем оценку по году (как и оценивает такой лот Авто.ру).
@@ -335,6 +380,9 @@ def build_lot(row, details, damage=None):
         # мини-апп прячет такие лоты галочкой "Скрыть битые"
         "photo_verdict": (damage or {}).get("verdict"),
         "photo_signs": (damage or {}).get("signs") or [],
+        # ДТП по VIN (fill_dtp.py -> vin_cache): None - не проверяли или данных нет; count 0 - «ДТП не найдены»
+        "dtp": dtp_payload((dtp or {}).get((row.get("vin") or "").strip().upper()),
+                           row.get("autoru_mark") or row.get("brand")),
     }
 
 
@@ -479,8 +527,10 @@ def run(dry_run=False, force=False):
     if os.path.exists(DAMAGE_CACHE_FILE):
         with open(DAMAGE_CACHE_FILE, encoding="utf-8") as f:
             damage = json.load(f)
-    payload = {"lots": [build_lot(r, cache.get(lot_id_of(r)), damage.get(lot_id_of(r)))
+    dtp = read_dtp()
+    payload = {"lots": [build_lot(r, cache.get(lot_id_of(r)), damage.get(lot_id_of(r)), dtp)
                         for r in rows if id(r) not in ghost_ids]}
+    print(f"  с данными о ДТП: {sum(1 for lot in payload['lots'] if lot['dtp'] is not None)}")
 
     if dry_run:
         with open(PREVIEW_FILE, "w", encoding="utf-8") as f:

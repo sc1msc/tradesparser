@@ -26,7 +26,10 @@
 |---|---|---|
 | `MILEAGE_METHOD` | `probeg` | метод TRONK для пробега |
 | `MILEAGE_MAX_PER_RUN` | 1000 | платных запросов пробега за прогон (уникальных VIN) |
-| `TRONK_MONTHLY_BUDGET_RUB` | 1000 | бюджет TRONK на месяц, ₽ |
+| `TRONK_MONTHLY_BUDGET_RUB` | 1500 | бюджет TRONK на месяц, ₽ (пробег и ДТП вместе; 1000 до 19.10.2026) |
+| `DTP_MAX_PER_RUN` | 1500 | платных запросов ДТП за прогон (уникальных VIN) |
+| `DTP_TTL_DAYS` | 180 | через столько дней VIN спрашивается снова |
+| `DELAY_BETWEEN_DTP_REQUESTS` | 0,3 | пауза между запросами ДТП, с |
 | `TRONK_LOW_BALANCE_DAYS` | 5 | предупреждать, если баланса хватит меньше чем на столько дней |
 | `TRONK_MAX_PER_RUN` | 10 | лимит старой оценки `evaluate_tronk.py` |
 | `ANNUAL_MILEAGE_KM` | 16 600 | км в год: пересчёт показания TRONK на сегодня и пробег по году |

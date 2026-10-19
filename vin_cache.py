@@ -18,7 +18,9 @@ EXPIRED_LOT_DAYS после окончательного дедлайна (вм�
     fill_missing_mileage.py при копировании);
   - оценка Авто.ру: autoru_* и estimated_mileage - действует
     config.AUTORU_ESTIMATE_TTL_DAYS дней (рынок меняется), потом лот
-    оценивается заново.
+    оценивается заново;
+  - ДТП TRONK (с 19.10.2026): dtp_status/count/accidents/as_of/checked_at -
+    действует config.DTP_TTL_DAYS дней (у машины могут появиться новые записи).
 
 Кто пишет и читает:
   - fill_missing_mileage.py (шаг 2): перед платным запросом ищет VIN здесь;
@@ -28,7 +30,10 @@ EXPIRED_LOT_DAYS после окончательного дедлайна (вм�
   - build_lots_current_month.py (шаг 4): подставляет в срез свежие оценки
     Авто.ру отсюда, а оценки, которые есть только в старой версии среза,
     сначала сохраняет сюда (absorb_autoru) - до пересборки;
-  - evaluate_autoru_browser.py (шаг 5): после оценки пишет сюда.
+  - evaluate_autoru_browser.py (шаг 5): после оценки пишет сюда;
+  - fill_dtp.py (шаг 7): ДТП по VIN - запрашивает только VIN без свежего
+    результата здесь, пишет сюда; export_to_miniapp.py (шаг 8) читает ДТП
+    отсюда для мини-аппа.
 
 Запись - пачкой (flush): квота Google - около 60 запросов записи в минуту,
 а запись в справочник по одной строке удвоила бы число запросов шагов 2 и 5.
@@ -65,7 +70,10 @@ AUTORU_SPEC_FIELDS = [
     "autoru_drive", "autoru_transmission", "autoru_modification",
 ]
 AUTORU_FIELDS = AUTORU_FIELDS + AUTORU_SPEC_FIELDS
-HEADER = ["vin"] + MILEAGE_FIELDS + AUTORU_FIELDS + ["updated_at"]
+# ДТП TRONK (fill_dtp.py, с 19.10.2026): статус ok / no_data / error: ..., число ДТП, список ДТП
+# компактным JSON (tronk_dtp.parse), дата данных TRONK, когда спрашивали.
+DTP_FIELDS = ["dtp_status", "dtp_count", "dtp_accidents", "dtp_as_of", "dtp_checked_at"]
+HEADER = ["vin"] + MILEAGE_FIELDS + AUTORU_FIELDS + DTP_FIELDS + ["updated_at"]
 
 # Результат TRONK, который повторять не нужно (см. fill_missing_mileage.SKIP_STATUSES).
 MILEAGE_FINAL = {"ok", "no_data", "suspicious"}
@@ -74,6 +82,8 @@ MILEAGE_FINAL = {"ok", "no_data", "suspicious"}
 # рынок): ответ без цены. Повторять каждый день бессмысленно - как и ok/ambiguous,
 # переоценивается по истечении AUTORU_ESTIMATE_TTL_DAYS.
 AUTORU_FINAL = {"ok", "ambiguous", "no_price"}
+# ДТП: ответ, который не нужно повторять до DTP_TTL_DAYS (ошибки - повторяются).
+DTP_FINAL = {"ok", "no_data"}
 
 FLUSH_EVERY = 25
 
@@ -149,6 +159,16 @@ class VinCache:
         if checked is None or (now or datetime.datetime.now()) - checked > datetime.timedelta(days=ttl_days):
             return None
         return {f: rec.get(f, "") for f in AUTORU_FIELDS}
+
+    def dtp(self, vin, ttl_days, now=None):
+        """Строка справочника, если ДТП по VIN уже запрошены и ответ моложе ttl_days, иначе None."""
+        rec = self.get(vin)
+        if not rec or (rec.get("dtp_status") or "").strip() not in DTP_FINAL:
+            return None
+        checked = _parse_dt(rec.get("dtp_checked_at"))
+        if checked is None or (now or datetime.datetime.now()) - checked > datetime.timedelta(days=ttl_days):
+            return None
+        return rec
 
     # ---------- запись ----------
 

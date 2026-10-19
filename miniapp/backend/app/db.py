@@ -156,9 +156,9 @@ LOT_FIELDS = [
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
     "lot_kind", "model_source", "title_brand", "title_model", "photo_verdict", "photo_signs",
     "engine_type", "displacement", "power", "drive", "transmission", "etp_url", "efrsb_url",
-    "mileage_source", "mileage_record_date",
+    "mileage_source", "mileage_record_date", "dtp",
 ]
-JSON_FIELDS = {"periods", "photos", "photo_signs"}
+JSON_FIELDS = {"periods", "photos", "photo_signs", "dtp"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 
 # Колонки, добавленные после первого запуска на сервере: CREATE TABLE IF NOT
@@ -178,7 +178,9 @@ MIGRATIONS = {
              ("etp_photos", "TEXT"), ("etp_photos_at", "TEXT"),
              ("efrsb_url", "TEXT"),  # объявление на ЕФРСБ (кнопка лота без ЭТП), приходит выгрузкой
              # откуда пробег (lot / report / estimate) и дата показания отчёта - для подписи в мини-аппе
-             ("mileage_source", "TEXT"), ("mileage_record_date", "TEXT")],
+             ("mileage_source", "TEXT"), ("mileage_record_date", "TEXT"),
+             # ДТП по VIN (TRONK, fill_dtp.py): JSON {count, as_of, accidents}; нет данных - пусто
+             ("dtp", "TEXT")],
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }
@@ -189,7 +191,7 @@ POST_MIGRATION_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users 
 # paywall / paywall_go - веб-версия показала предложение Pro / человек нажал "Перейти на Pro"
 # search_save - сохранил поиск, notify_open - открыл мини-апп из уведомления или письма (с 19.10.2026)
 EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share", "paywall", "paywall_go",
-               "search_save", "notify_open"}
+               "search_save", "notify_open", "dtp_open"}
 
 # Код для ссылок "Поделиться": без похожих 0/o, 1/l/i. 6 знаков - ~10^9
 # вариантов, совпадение при генерации всё равно проверяется (UNIQUE).

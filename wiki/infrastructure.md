@@ -53,7 +53,7 @@
 | `service_account.json` | файл на ПК | доступ к Google-таблице |
 | `TRONK_API_KEY` | `local_secrets.py` | шаг 2, учёт расходов |
 | `TELEGRAM_BOT_TOKEN`, `NOTIFY_CHAT_ID` | `local_secrets.py` | уведомления, `send_digest.py` |
-| `MINIAPP_API_URL`, `MINIAPP_IMPORT_TOKEN` | `local_secrets.py` | шаг 7 |
+| `MINIAPP_API_URL`, `MINIAPP_IMPORT_TOKEN` | `local_secrets.py` | шаг 8 |
 | `ANTHROPIC_API_KEY` | `local_secrets.py` (пока пусто) | проверка фото |
 | `telegraph_token.txt` | файл на ПК | страницы Telegraph |
 | `DOMAIN`, `HONESTLOT_BOT_TOKEN`, `HONESTLOT_TELEGRAM_API`, `HONESTLOT_IMPORT_TOKEN`, `HONESTLOT_ADMIN_CHAT_ID`, `HONESTLOT_NOTIFY_BOT_TOKEN` | `miniapp/.env` на ВМ | сервер мини-аппа |

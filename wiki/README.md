@@ -108,6 +108,7 @@ HonestLot не организует торги, не продаёт машины
 | `bidding_schedule.py` (цена и срок публичного предложения) | numbers |
 | `etp_lots.py`, `etp_status.py`, `miniapp/backend/app/etp_collect.py`, `status_refresh.py` (лоты и статусы с площадок) | miniapp-internals, pipeline, data-sources, runbook |
 | шаги `run_pipeline.py`, `config.py` | pipeline, config, runbook |
+| `fill_dtp.py`, `tronk_dtp.py` (ДТП по VIN) | pipeline, data-sources, miniapp-guide, faq, costs |
 | новые `automation.alert(...)` | runbook |
 | `.claude/skills/weekly-review/` (еженедельное ревью кода) | runbook |
 | серверы, домены, боты | infrastructure, architecture |
