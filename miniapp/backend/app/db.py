@@ -156,6 +156,7 @@ LOT_FIELDS = [
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
     "lot_kind", "model_source", "title_brand", "title_model", "photo_verdict", "photo_signs",
     "engine_type", "displacement", "power", "drive", "transmission", "etp_url", "efrsb_url",
+    "mileage_source", "mileage_record_date",
 ]
 JSON_FIELDS = {"periods", "photos", "photo_signs"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
@@ -175,7 +176,9 @@ MIGRATIONS = {
              # фото со страницы лота на площадке (etp_lots.page_photos) - мини-апп показывает их вместо фото
              # агрегатора; пишет сервер (status_refresh, etp_collect.photo_pass), импорт не трогает
              ("etp_photos", "TEXT"), ("etp_photos_at", "TEXT"),
-             ("efrsb_url", "TEXT")],  # объявление на ЕФРСБ (кнопка лота без ЭТП), приходит выгрузкой
+             ("efrsb_url", "TEXT"),  # объявление на ЕФРСБ (кнопка лота без ЭТП), приходит выгрузкой
+             # откуда пробег (lot / report / estimate) и дата показания отчёта - для подписи в мини-аппе
+             ("mileage_source", "TEXT"), ("mileage_record_date", "TEXT")],
     "favorites": [("vin", "TEXT")],
     "users": [("source", "TEXT"), ("last_source", "TEXT"), ("ref_code", "TEXT"), ("referred_by", "INTEGER")],
 }
@@ -184,7 +187,9 @@ MIGRATIONS = {
 POST_MIGRATION_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users (ref_code)"
 
 # paywall / paywall_go - веб-версия показала предложение Pro / человек нажал "Перейти на Pro"
-EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share", "paywall", "paywall_go"}
+# search_save - сохранил поиск, notify_open - открыл мини-апп из уведомления или письма (с 19.10.2026)
+EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share", "paywall", "paywall_go",
+               "search_save", "notify_open"}
 
 # Код для ссылок "Поделиться": без похожих 0/o, 1/l/i. 6 знаков - ~10^9
 # вариантов, совпадение при генерации всё равно проверяется (UNIQUE).

@@ -243,6 +243,14 @@ def _sheet_periods(text):
     return [p for p in pairs if isinstance(p, list) and len(p) == 2]
 
 
+def _mileage_source(row, mileage, estimated):
+    """lot / report / estimate / None. TRONK спрашивают только у лотов без пробега в описании
+    (fill_missing_mileage.py), поэтому статус ok - пробег из отчёта."""
+    if mileage is None:
+        return "estimate" if estimated is not None else None
+    return "report" if (row.get("mileage_probeg_status") or "").strip() == "ok" else "lot"
+
+
 def build_lot(row, details, damage=None):
     lot_id = lot_id_of(row)
     # Пробег больше lot_metrics.MAX_PLAUSIBLE_MILEAGE_KM - ошибка источника:
@@ -285,6 +293,11 @@ def build_lot(row, details, damage=None):
         # оценку показываем со значком "~".
         "mileage_km": mileage if mileage is not None else estimated,
         "mileage_estimated": mileage is None and estimated is not None,
+        # откуда пробег: lot - из описания лота, report - показание из отчёта TRONK, пересчитанное на
+        # сегодня (+ANNUAL_MILEAGE_KM в год), estimate - расчёт по году выпуска; дата показания отчёта
+        "mileage_source": _mileage_source(row, mileage, estimated),
+        "mileage_record_date": (row.get("mileage_probeg_date") or "")[:10] or None
+        if _mileage_source(row, mileage, estimated) == "report" else None,
         "price_start": _to_int(row.get("price_start")),
         "price_current": _to_int(row.get("price_current")),
         "region": row.get("region") or None,

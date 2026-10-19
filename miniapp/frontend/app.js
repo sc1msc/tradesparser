@@ -117,7 +117,9 @@ function timeLeft(iso, short) {
 }
 const isSoon = (iso) => new Date(iso) - Date.now() < 48 * 36e5;
 const regionShort = (r) => (r || "").replace(/^г\.\s*/, "").replace("Московская область", "МО");
-const kmText = (it) => it.mileage_km == null ? null : (it.mileage_estimated ? "~" : "") + nf.format(it.mileage_km) + " км";
+// «~» - пробег не из описания лота: расчётный по году выпуска или пересчитанная на сегодня запись из отчёта
+const mileageApprox = (it) => it.mileage_estimated || it.mileage_source === "report";
+const kmText = (it) => it.mileage_km == null ? null : (mileageApprox(it) ? "~" : "") + nf.format(it.mileage_km) + " км";
 
 function gapBadge(gap) {
   if (gap == null) return null;
@@ -1175,8 +1177,14 @@ async function renderLot(id) {
   const vin = lot.vin ? h("button", { class: "copy", onclick: () => {
     navigator.clipboard && navigator.clipboard.writeText(lot.vin).then(() => toast("VIN скопирован"), () => {});
   } }, lot.vin) : null;
-  const mileage = lot.mileage_km == null ? null :
-    (lot.mileage_estimated ? `~${nf.format(lot.mileage_km)} км (оценка по году)` : `${nf.format(lot.mileage_km)} км`);
+  // пробег: из описания лота - как есть; из отчёта по истории машины - пересчитан на сегодня (+16 600 км в
+  // год с даты записи), с датой записи; по году выпуска - «расчётный» (решение владельца 19.10.2026)
+  const recDate = lot.mileage_record_date && /^\d{4}-\d{2}-\d{2}/.test(lot.mileage_record_date)
+    ? lot.mileage_record_date.slice(0, 10).split("-").reverse().join(".") : null;
+  const mileage = lot.mileage_km == null ? null
+    : lot.mileage_estimated ? `~${nf.format(lot.mileage_km)} км (расчётный)`
+    : lot.mileage_source === "report" ? `~${nf.format(lot.mileage_km)} км (по записи из отчёта${recDate ? " от " + recDate : ""})`
+    : `${nf.format(lot.mileage_km)} км`;
 
   let descOpen = false;
   const desc = lot.description ? h("div", { class: "desc clamp" }, lot.description) : null;

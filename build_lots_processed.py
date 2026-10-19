@@ -150,12 +150,17 @@ def run():
     periods_idx = source_header.index("bidding_periods") if "bidding_periods" in source_header else None
     title_idx = source_header.index("title") if "title" in source_header else None
     desc_idx = source_header.index("description") if "description" in source_header else None
+    # пробег из отчёта TRONK (fill_missing_mileage.py): статус и дата показания - мини-апп пишет
+    # «по записи из отчёта от …», а не выдаёт пересчитанное показание за точный пробег
+    probeg_status_idx = source_header.index("mileage_probeg_status") if "mileage_probeg_status" in source_header else None
+    probeg_date_idx = source_header.index("mileage_probeg_date") if "mileage_probeg_date" in source_header else None
 
     # lot_kind - машина / мультилот / право требования / доля
     # (lot_metrics.lot_kind): по title И описанию - второй VIN мультилота или
     # "право требования" бывают только в описании, а дальше по пайплайну
     # описания нет.
-    header = [name for _, name in COLUMN_MAP] + ["photo_url", "status", "bidding_periods", "lot_kind"]
+    header = [name for _, name in COLUMN_MAP] + ["photo_url", "status", "bidding_periods", "lot_kind",
+                                                 "mileage_probeg_status", "mileage_probeg_date"]
     price_idx = header.index("price_current")
     end_idx = header.index("applications_end")
     out_rows_data = []
@@ -198,7 +203,8 @@ def run():
                 out_row[plate_idx] = plate
                 plate_filled += 1
         kind = lot_metrics.lot_kind(lot_text)
-        out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods, kind]
+        out_row += [by_idx(row, photo_idx), by_idx(row, status_idx), periods, kind,
+                    by_idx(row, probeg_status_idx), by_idx(row, probeg_date_idx)]
         if periods:
             price, deadline = bidding_schedule.effective_price_and_deadline(
                 out_row[price_idx], out_row[end_idx], periods, now

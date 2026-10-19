@@ -50,7 +50,7 @@ STANDARD_COLUMNS = [
     "brand", "name", "year", "vin", "plate", "url", "title", "mileage_km",
     "price_start", "price_current", "region", "applications_end",
     "bidding_start", "organizer_phone", "organizer_email", "photo_url",
-    "status", "bidding_periods", "lot_kind",
+    "status", "bidding_periods", "lot_kind", "mileage_probeg_status", "mileage_probeg_date",
 ]
 
 

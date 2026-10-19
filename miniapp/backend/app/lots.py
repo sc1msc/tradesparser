@@ -661,6 +661,10 @@ def summary(lot, state, now, favorites):
         # пробег мультилота - одной из машин, для лота целиком ничего не значит
         "mileage_km": lot.get("mileage_km") if lot["kind"] == lot_metrics.LOT_CAR else None,
         "mileage_estimated": bool(lot.get("mileage_estimated")),
+        # пробег из отчёта (TRONK) - пересчитанное на сегодня показание: в ленте «~», на экране лота
+        # «по записи из отчёта от …»; старые выгрузки без источника - как раньше
+        "mileage_source": lot.get("mileage_source") or ("estimate" if lot.get("mileage_estimated") else None),
+        "mileage_record_date": lot.get("mileage_record_date"),
         "price": state["price"],
         "gap": round(gap, 1) if gap is not None else None,
         # Авто.ру сам указывает большую погрешность (lot_metrics.estimate_is_uncertain) -
