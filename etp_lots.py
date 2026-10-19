@@ -605,6 +605,18 @@ class Cdt:
         return (f"{self.api}/Trade/trades?Declare=true&RecieveReq=true&PageSize={self.page_size}&PageNum={page}"
                 f"&Categories=1&RegionIds={ids}")
 
+    list_attempts = 3  # API списка бывает медленным (19.10.2026 в 14:00 - дольше 30 с): страница - до 3 попыток
+
+    def _get_retry(self, get, url, sleep=None):
+        for attempt in range(self.list_attempts):
+            try:
+                return get(url)
+            except Exception:
+                if attempt == self.list_attempts - 1:
+                    raise
+                if sleep:
+                    sleep()
+
     def photo_urls(self, trade_id, lot_id, images):
         """Фото лота -> [{full, thumb}] (адреса - как у page_photos: те же фото и со страницы)."""
         out = []
@@ -621,7 +633,7 @@ class Cdt:
         applications_end, list_status, region."""
         out = {}
         for page in range(1, self.max_pages + 1):
-            data = json.loads(get(self.list_url(page, regions)) or "{}")
+            data = json.loads(self._get_retry(get, self.list_url(page, regions), sleep) or "{}")
             items = data.get("items") or []
             for it in items:
                 trade = it.get("tradeId")

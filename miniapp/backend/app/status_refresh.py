@@ -67,6 +67,8 @@ FULL_HOUR = 5                   # проход, в котором перечит
 REPORT_HOUR = 9                 # с какого часа можно слать суточный отчёт о площадках без разбора
 DELAY_SECONDS = 2.0             # пауза между запросами (как у ПК)
 FETCH_TIMEOUT = 30
+# Медленные площадки: API списка ЦДТ отвечает за 5-10 с, а 19.10.2026 в 14:00 - дольше 30 с (сбор упал по таймауту).
+HOST_TIMEOUT = {"webapi.torgi.cdtrf.ru": 90}
 ALERT_REPEAT_HOURS = 12
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 # Площадки, которые банят за частоту, - не чаще раза в N секунд для КАЖДОГО запроса сервера (проверка статусов,
@@ -181,11 +183,12 @@ def fetch(url):
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Language": "ru-RU,ru;q=0.9"})
     try:
         try:
-            page = _read(urllib.request.urlopen(req, timeout=FETCH_TIMEOUT))
+            page = _read(urllib.request.urlopen(req, timeout=HOST_TIMEOUT.get(h, FETCH_TIMEOUT)))
         except urllib.error.URLError as e:
             if isinstance(e, urllib.error.HTTPError) or not isinstance(e.reason, ssl.SSLCertVerificationError):
                 raise
-            page = _read(urllib.request.urlopen(req, timeout=FETCH_TIMEOUT, context=ssl._create_unverified_context()))
+            page = _read(urllib.request.urlopen(req, timeout=HOST_TIMEOUT.get(h, FETCH_TIMEOUT),
+                                                context=ssl._create_unverified_context()))
     except urllib.error.HTTPError as e:
         note_response(h, e.code)
         raise
