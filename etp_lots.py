@@ -40,7 +40,7 @@ lot_id - номер торгов * 100 + номер лота.
 водяных знаков агрегатора), periods (график для кэша мини-аппа), efrsb_number,
 trade_number, lot_number, applications_count (число поданных заявок).
 
-Площадки (ТоргГрупп, МЭТС, с 19.10.2026 ЦДТ) - классы с host, platform, list_lots(get) и read_lot(get, url);
+Площадки (ТоргГрупп, МЭТС, с 19.10.2026 ЦДТ и Lot-online) - классы с host, platform, list_lots(get) и read_lot(get, url);
 cars_only - список уже отфильтрован категорией «легковой» самой площадки. Новая
 площадка: класс + запись в COLLECTORS и в PLATFORM_CODES (код не менять, на нём
 держатся номера лотов). get(url) -> текст страницы (на сервере - status_refresh.
@@ -60,7 +60,7 @@ import lot_metrics
 ETP_ID_BASE = 9_000_000_000
 ETP_ID_PLATFORM_STEP = 100_000_000
 # Код площадки в номере лота. Только дописывать: смена кода сменит номера лотов.
-PLATFORM_CODES = {"bankrot.torggroup.org": 1, "m-ets.ru": 2, "torgi.cdtrf.ru": 3}
+PLATFORM_CODES = {"bankrot.torggroup.org": 1, "m-ets.ru": 2, "torgi.cdtrf.ru": 3, "sales.lot-online.ru": 4}
 
 # Регионы сбора (как SEARCH_PARAMS агрегатора в config.py) - названия как у агрегатора.
 REGIONS = {77: "г. Москва", 50: "Московская область"}
@@ -738,6 +738,217 @@ class Cdt:
         }
 
 
+# --- Российский аукционный дом, Lot-online (sales.lot-online.ru) ---
+
+class LotOnline:
+    """Сама площадка (sales.lot-online.ru) - старое JSF-приложение: поиск - отправка формы с состоянием
+    страницы. Список берём из каталога РАД (catalog.lot-online.ru, обычный интернет-магазин): категория
+    44 «Легковые автомобили», фильтры features_hash: 171 - регион имущества (Москва, Московская обл),
+    172 - направление продаж «Имущество должников» (банкротство). 19.10.2026 - 53 машины, через
+    агрегатор у нас было 32 лота площадки. Статус в сочетании с этими фильтрами каталог не принимает
+    (404) - статус берём со страницы лота.
+    Карточка каталога (products.view): ссылка на лот на площадке (lotUnid - по ней узнаём лоты агрегатора),
+    регион и адрес имущества, код лота и процедуры, описание, начальная цена, фото (cdn/bkr - не больше
+    480x360: любой размер в адресе отдаёт тот же файл). Карточку читаем один раз на лот (_products живёт
+    в процессе сервера). Страница лота на площадке: статус (блок formMain:opStatus, etp_status), сроки,
+    текущая цена, график снижения публичного предложения, номер объявления на ЕФРСБ.
+    Номер лота площадки (lotUnid, 960000545623) в номер нашего лота входит без первых цифр - остаток от
+    деления на 10^8 (lot_id_for)."""
+
+    host = "sales.lot-online.ru"
+    platform = "Российский аукционный дом"
+    catalog = "https://catalog.lot-online.ru"
+    cars_only = True    # каталог отфильтрован категорией «Легковые автомобили»
+    max_pages = 10      # 96 карточек на странице; 19.10.2026 - одна страница
+    region_variants = {77: "323380", 50: "24373"}  # варианты фильтра 171 «Регион»
+    region_names = {"москва": REGIONS[77], "г. москва": REGIONS[77], "московская обл": REGIONS[50],
+                    "московская область": REGIONS[50]}
+
+    def __init__(self):
+        self._products = {}  # lotUnid -> данные карточки каталога
+        self._pid_unid = {}  # номер карточки каталога -> lotUnid
+
+    @staticmethod
+    def sales_url(unid):
+        # такой же вид, как у ссылок агрегатора, - повторы узнаются по адресу (listing_key)
+        return f"https://sales.lot-online.ru/e-auction/auctionLotProperty.xhtml?parm=lotUnid%3D{unid}%3Bmode%3Djust"
+
+    def lot_id_from_url(self, url):
+        m = re.search(r"lotUnid(?:%3D|=)(\d+)", url or "")
+        return lot_id_for(self.host, int(m.group(1)) % ETP_ID_PLATFORM_STEP) if m else None
+
+    def list_url(self, page, regions=REGIONS):
+        variants = "-".join(self.region_variants[r] for r in regions if r in self.region_variants)
+        return (f"{self.catalog}/index.php?dispatch=categories.view&category_id=44&items_per_page=96"
+                f"&features_hash=171-{variants}_172-186359&page={page}")
+
+    @staticmethod
+    def _photos(html):
+        """Фото cdn/bkr -> [{full, thumb}] в размере 480x360 (больше каталог не отдаёт)."""
+        out, seen = [], set()
+        for name, query in re.findall(r"https://catalog\.lot-online\.ru/cdn/bkr/(?:\d+x\d+/)?((?:img|ghallery)_\d+_\d+\.\w+)\?([^\"' ]+)",
+                                      html or ""):
+            if name in seen:
+                continue
+            seen.add(name)
+            u = f"https://catalog.lot-online.ru/cdn/bkr/480x360/{name}?{html_lib.unescape(query)}"
+            out.append({"full": u, "thumb": u})
+        return out
+
+    def parse_product(self, html):
+        """Карточка каталога -> dict (unid, title, region, address, description, price_start, photos,
+        lot_code, procedure, direction, kind) или None, если в ней нет ссылки на лот площадки."""
+        unid = re.search(r"auctionLotProperty\.xhtml\?parm=lotUnid=(\d+)", html or "")
+        if not unid:
+            return None
+        start = html.find("rad-product-block__main")
+        end = html.find("ty-grid-list__item", start)  # дальше - чужие лоты («похожие»)
+        main = html[start: end if end > start else start + 60000]
+        fields = {text_of(dt).strip(): text_of(dd).strip()
+                  for dt, dd in re.findall(r"<dt[^>]*>(.*?)</dt>\s*<dd[^>]*>(.*?)</dd>", main, re.S)}
+        h1 = re.search(r"<h1[^>]*>(.*?)</h1>", html, re.S)
+        desc = re.search(r'ty-product__full-description">(.*?)</div>', main, re.S)
+        price = re.search(r'start_price">\s*<label[^>]*>[^<]*</label>\s*<span class="ty-control-group__item">(.*?)</span>\s*</span>',
+                          main, re.S)
+        region = fields.get("Регион") or ""
+        return {
+            "unid": unid.group(1),
+            "title": text_of(h1.group(1)) if h1 else "",
+            "region": self.region_names.get(region.lower().strip(), region),
+            "address": fields.get("Адрес"),
+            "description": text_of(desc.group(1)) if desc else "",
+            "price_start": money(text_of(price.group(1)).replace("₽", "")) if price else None,
+            "photos": self._photos(main),
+            "lot_code": fields.get("Код лота"),
+            "procedure": fields.get("Код процедуры"),
+            "direction": fields.get("Направление продаж"),
+            "kind": fields.get("Вид процедуры"),
+        }
+
+    def list_lots(self, get, regions=REGIONS, sleep=None):
+        """-> [stub]: url, key, lot_number, trade_number, title, price_start, region, list_status.
+        Читает карточки каталога, которых ещё не видел (одна на лот за жизнь процесса)."""
+        pids = []
+        for page in range(1, self.max_pages + 1):
+            try:
+                html = get(self.list_url(page, regions))
+            except Exception:
+                if page == 1:
+                    raise
+                break  # страница за последней - каталог отвечает 404
+            new = [p for p in dict.fromkeys(re.findall(r"dispatch=products\.view&amp;product_id=(\d+)", html or ""))
+                   if p not in pids]
+            if sleep:
+                sleep()
+            if not new:
+                break
+            pids += new
+        out = []
+        for pid in pids:
+            unid = self._pid_unid.get(pid)
+            if unid is None:
+                prod = self.parse_product(get(f"{self.catalog}/index.php?dispatch=products.view&product_id={pid}"))
+                if sleep:
+                    sleep()
+                if not prod or prod.get("direction") not in (None, "", "Имущество должников"):
+                    continue
+                unid = self._pid_unid[pid] = prod["unid"]
+                self._products[unid] = prod
+            prod = self._products[unid]
+            url = self.sales_url(unid)
+            out.append({"url": url, "key": listing_key(url), "lot_number": unid, "trade_number": prod.get("procedure"),
+                        "title": prod.get("title") or "", "price_start": prod.get("price_start"),
+                        "region": prod.get("region"), "list_status": ""})
+        return out
+
+    @staticmethod
+    def _value(lines, label, n=1):
+        """Строки после подписи на странице лота (текст страницы построчно)."""
+        for i, line in enumerate(lines):
+            if line == label:
+                return lines[i + 1: i + 1 + n]
+        return []
+
+    def read_lot(self, get, url, with_trade=True):
+        """Страница лота на площадке (+ карточка каталога из list_lots) -> поля строки листа и данные
+        для мини-аппа. Нет названия или статуса - parse_error."""
+        m = re.search(r"lotUnid(?:%3D|=)(\d+)", url or "")
+        if not m:
+            return {"url": url, "lot_id": None, "title": None, "parse_error": "в адресе нет номера лота"}
+        unid = m.group(1)
+        prod = self._products.get(unid) or {}
+        html = get(url)
+        res = etp_status.parse(url, html)
+        raw_status = res.text or ""
+        status, state = aggregator_status(raw_status)
+        page = html_lib.unescape(re.sub(r"<script.*?</script>|<style.*?</style>", " ", html or "", flags=re.S))
+        lines = [x.strip() for x in re.sub(r"<[^>]+>", "\n", page).split("\n") if x.strip()]
+        description = prod.get("description") or ""
+        title = prod.get("title") or ""
+        if description and not is_vehicle(title):  # «Имущество Закопайло Д.Е. (авто)» - название по описанию
+            title = description[:250]
+        if not title or not status:
+            return {"url": url, "lot_id": None, "title": title,
+                    "parse_error": f"на странице лота нет названия или статуса ({raw_status or 'пусто'})"}
+        public_offer = "Продажа посредством публичного предложения" in page
+        periods = []
+        for tb in re.findall(r"<table[^>]*>(.*?)</table>", html or "", re.S):
+            if "Величина изменения" not in tb:  # таблица графика (в «Время начала периода» неразрывные пробелы)
+                continue
+            for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", tb, re.S):
+                cells = [text_of(c) for c in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
+                if len(cells) >= 5:
+                    begin, bid_end, end, price = ru_datetime(cells[0]), ru_datetime(cells[1]), ru_datetime(cells[2]), money(cells[4])
+                    if bid_end and price:
+                        periods.append({"begin": begin, "end": end or bid_end, "bid_end": bid_end, "price": price})
+        periods.sort(key=lambda p: p["bid_end"])
+        packed = bidding_schedule.pack_periods(periods)
+        span = self._value(lines, "Период проведения процедуры", 2) or self._value(lines, "Период приёма заявок", 2) \
+            or self._value(lines, "Период приема заявок", 2)
+        applications_start = ru_datetime(span[0]) if span else None
+        applications_end = ru_datetime(span[1]) if len(span) > 1 else None
+        auction = self._value(lines, "Время проведения процедуры", 2)
+        bidding_start = ru_datetime(" ".join(auction).replace("c ", "")) if auction and not public_offer else None
+        price_start = money((self._value(lines, "Начальная цена") or [""])[0]) or prod.get("price_start")
+        price_current = money((self._value(lines, "Текущая цена лота") or [""])[0]) or price_start
+        efrsb = (self._value(lines, "Номер объявления о проведении торгов в ЕФРСБ") or [""])[0]
+        photos = prod.get("photos") or []
+        text = f"{title} {description}"
+        return {
+            "url": url,
+            "lot_id": self.lot_id_from_url(url),
+            "title": title,
+            "status": status,
+            "etp_state": state,
+            "etp_status": raw_status,
+            "vin": lot_metrics.find_vin(text),
+            "vins_all": lot_metrics.lot_vins(text.upper()),
+            "plate": lot_metrics.find_plate(text),
+            "mileage_km": _mileage(description) or _mileage(title),
+            "photo_url": photos[0]["full"] if photos else None,
+            "photos": photos,
+            "region": prod.get("region") if prod.get("region") in REGIONS.values() else None,
+            "price_start": price_start,
+            "price_current": price_current,
+            "currency": "RUB",
+            "trade_kind": "Открытые торги посредством публичного предложения" if public_offer
+            else "Открытый аукцион с открытой формой представления предложений о цене",
+            "trade_section": "Банкротство",
+            "platform": self.platform,
+            "etp_url": url,
+            "applications_start": applications_start,
+            "applications_end": bidding_schedule.final_deadline(applications_end, packed) or applications_end,
+            "bidding_periods": packed,
+            "periods": periods,
+            "bidding_start": bidding_start,
+            "description": description or title,
+            "efrsb_number": efrsb if efrsb.isdigit() else None,
+            "trade_number": prod.get("procedure"),
+            "lot_number": unid,
+            "applications_count": None,
+        }
+
+
 _MILEAGE_RE = re.compile(r"пробег[а-я]*[:\s-]*([\d\s]{3,10})\s*км", re.I)
 
 
@@ -747,7 +958,7 @@ def _mileage(text):
     return int(digits) if digits else None
 
 
-COLLECTORS = [TorgGroup(), Mets(), Cdt()]
+COLLECTORS = [TorgGroup(), Mets(), Cdt(), LotOnline()]
 
 
 # --- фото со страницы лота на площадке ---
