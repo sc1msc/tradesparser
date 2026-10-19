@@ -68,12 +68,17 @@ def cache_fields(result, checked_at):
     }
 
 
-def _flush_cache(cache):
+def _flush_cache(cache, final=True):
+    """Запись справочника на лист. Сбой Google (19.10.2026 таймаут записи оборвал первый прогон на 175-м
+    VIN) не роняет шаг: строки остаются в памяти (vin_cache._dirty) и пишутся следующей попыткой.
+    Уведомление - только если не записалось и в конце."""
     try:
         cache.flush()
     except Exception as e:
-        automation.alert(f"TRONK ДТП: справочник по VIN (vin_cache) не записался ({e}). Купленное в этом "
-                         f"прогоне в следующий раз оплатится снова.")
+        print(f"  справочник vin_cache не записался ({e})" + ("" if final else " - повторю позже"))
+        if final:
+            automation.alert(f"TRONK ДТП: справочник по VIN (vin_cache) не записался ({e}). Купленное в этом "
+                             f"прогоне в следующий раз оплатится снова.")
 
 
 def run():
@@ -142,7 +147,11 @@ def run():
                 found += 1
             else:
                 clean += 1
-            cache.update(vin, cache_fields(result, datetime.datetime.now().isoformat(timespec="seconds")))
+            # без autoflush: запись на лист - здесь, с перехватом ошибки (_flush_cache)
+            cache.update(vin, cache_fields(result, datetime.datetime.now().isoformat(timespec="seconds")),
+                         autoflush=False)
+            if i % vin_cache.FLUSH_EVERY == 0:
+                _flush_cache(cache, final=False)
             print(f"  [{i}/{len(to_process)}] {vin}: {status}"
                   + (f", ДТП: {len(result['accidents'])}" if status == "ok" else ""))
             time.sleep(config.DELAY_BETWEEN_DTP_REQUESTS)
