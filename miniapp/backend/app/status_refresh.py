@@ -69,6 +69,12 @@ DELAY_SECONDS = 2.0             # пауза между запросами (ка
 FETCH_TIMEOUT = 30
 ALERT_REPEAT_HOURS = 12
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
+# Площадки, которые банят за частоту, - не чаще раза в N секунд для КАЖДОГО запроса сервера (проверка статусов,
+# сбор лотов, фото). НИС 19.10.2026 прочитала 40 страниц за 3 минуты (пауза 2 с), а через час отвечала
+# 403 с нашим IP, потом перестала отвечать совсем.
+HOST_MIN_INTERVAL = {"nistp.ru": 15.0}
+_last_request = {}
+_interval_lock = threading.Lock()
 
 _state_lock = threading.Lock()
 
@@ -152,6 +158,18 @@ def check_paused(url):
     return h
 
 
+def _wait_interval(host):
+    """Пауза до следующего разрешённого запроса к площадке из HOST_MIN_INTERVAL."""
+    gap = HOST_MIN_INTERVAL.get(host)
+    if not gap:
+        return
+    with _interval_lock:
+        wait = _last_request.get(host, 0) + gap - time.monotonic()
+        _last_request[host] = time.monotonic() + max(0.0, wait)
+    if wait > 0:
+        time.sleep(wait)
+
+
 def fetch(url):
     """Страница как текст. HTTP-ошибка (403 - площадка не пускает) - urllib.error.HTTPError;
     площадка на паузе после отказов (note_response) - HostPaused, запроса нет.
@@ -159,6 +177,7 @@ def fetch(url):
     сертификатов образа: для них повтор без проверки сертификата - страницу мы только читаем,
     ничего не отправляем."""
     h = check_paused(url)
+    _wait_interval(h)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Language": "ru-RU,ru;q=0.9"})
     try:
         try:
