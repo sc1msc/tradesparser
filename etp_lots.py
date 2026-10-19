@@ -40,7 +40,7 @@ lot_id - номер торгов * 100 + номер лота.
 водяных знаков агрегатора), periods (график для кэша мини-аппа), efrsb_number,
 trade_number, lot_number, applications_count (число поданных заявок).
 
-Площадки (ТоргГрупп, МЭТС) - классы с host, platform, list_lots(get) и read_lot(get, url);
+Площадки (ТоргГрупп, МЭТС, с 19.10.2026 ЦДТ) - классы с host, platform, list_lots(get) и read_lot(get, url);
 cars_only - список уже отфильтрован категорией «легковой» самой площадки. Новая
 площадка: класс + запись в COLLECTORS и в PLATFORM_CODES (код не менять, на нём
 держатся номера лотов). get(url) -> текст страницы (на сервере - status_refresh.
@@ -60,7 +60,7 @@ import lot_metrics
 ETP_ID_BASE = 9_000_000_000
 ETP_ID_PLATFORM_STEP = 100_000_000
 # Код площадки в номере лота. Только дописывать: смена кода сменит номера лотов.
-PLATFORM_CODES = {"bankrot.torggroup.org": 1, "m-ets.ru": 2}
+PLATFORM_CODES = {"bankrot.torggroup.org": 1, "m-ets.ru": 2, "torgi.cdtrf.ru": 3}
 
 # Регионы сбора (как SEARCH_PARAMS агрегатора в config.py) - названия как у агрегатора.
 REGIONS = {77: "г. Москва", 50: "Московская область"}
@@ -564,6 +564,168 @@ class Mets:
         }
 
 
+# --- Центр дистанционных торгов (torgi.cdtrf.ru) ---
+
+def _region(code):
+    """Код региона из API (число или строка) -> название, как у агрегатора."""
+    try:
+        return REGIONS.get(int(code))
+    except (TypeError, ValueError):
+        return None
+
+
+class Cdt:
+    """Сайт - Nuxt, данные - из его открытого API (webapi.torgi.cdtrf.ru, тот же, что у браузера):
+    список - Trade/trades (категория 1 «Легковой транспорт», регионы через запятую - повтор параметра
+    берёт только первый, «торги объявлены» и «приём заявок»; 19.10.2026 - 356 лотов, у нас из них было
+    197), торги - Trade/public/<номер> (описание с VIN, график снижения цены, сроки, номер ЕФРСБ,
+    организатор, управляющий, должник). Лот на странице - /trades/<номер торгов> (такую ссылку даёт и
+    агрегатор - повторы узнаются по адресу); в торгах ЦДТ один лот, номер торгов - номер для lot_id.
+    Фото в ответе торгов нет - их даёт список (запоминаем при обходе), иначе - со страницы торгов
+    (page_photos). Защиты от ботов нет, пускает и зарубежные адреса (проверено 19.10.2026)."""
+
+    host = "torgi.cdtrf.ru"
+    platform = "Центр дистанционных торгов"
+    base = "https://torgi.cdtrf.ru"
+    api = "https://webapi.torgi.cdtrf.ru"
+    cars_only = True    # список отфильтрован категорией «Легковой транспорт» самой площадки
+    page_size = 50
+    max_pages = 30      # защита от бесконечного цикла (19.10.2026 - 8 страниц)
+    region_ids = {77: 77, 50: 50}  # наш код региона -> код ЦДТ (совпадают)
+
+    def __init__(self):
+        self._images = {}  # номер торгов -> фото из списка (в ответе торгов фото нет)
+
+    def lot_id_from_url(self, url):
+        m = re.search(r"torgi\.cdtrf\.ru/trades/(\d+)", url or "")
+        return lot_id_for(self.host, m.group(1)) if m else None
+
+    def list_url(self, page, regions=REGIONS):
+        ids = ",".join(str(self.region_ids[r]) for r in regions if r in self.region_ids)
+        return (f"{self.api}/Trade/trades?Declare=true&RecieveReq=true&PageSize={self.page_size}&PageNum={page}"
+                f"&Categories=1&RegionIds={ids}")
+
+    def photo_urls(self, trade_id, lot_id, images):
+        """Фото лота -> [{full, thumb}] (адреса - как у page_photos: те же фото и со страницы)."""
+        out = []
+        for img in sorted(images or [], key=lambda i: (not i.get("isMain"), i.get("position") or 0)):
+            if not img.get("id"):
+                continue
+            q = f"ImageId={img['id']}&LotId={lot_id}&TradeId={trade_id}&_v={img.get('version') or ''}"
+            out.append({"full": f"{self.api}/LotImage/public?LotImageSize=Large&{q}",
+                        "thumb": f"{self.api}/LotImage/public?LotImageSize=Medium&{q}"})
+        return out
+
+    def list_lots(self, get, regions=REGIONS, sleep=None):
+        """-> [stub]: url, key, lot_number, trade_number, title, price_start, applications_start,
+        applications_end, list_status, region."""
+        out = {}
+        for page in range(1, self.max_pages + 1):
+            data = json.loads(get(self.list_url(page, regions)) or "{}")
+            items = data.get("items") or []
+            for it in items:
+                trade = it.get("tradeId")
+                if not trade:
+                    continue
+                url = f"{self.base}/trades/{trade}"
+                self._images[str(trade)] = self.photo_urls(trade, it.get("tradeLotId"), it.get("images"))
+                out.setdefault(listing_key(url), {
+                    "url": url, "key": listing_key(url), "trade_number": str(trade),
+                    "lot_number": str(it.get("tradeLotId") or ""), "title": it.get("name") or "",
+                    "price_start": money(str(it.get("actualPrice") or "")),
+                    "applications_start": (it.get("requestTimeBegin") or "").replace("T", " ")[:19] or None,
+                    "applications_end": (it.get("requestTimeEnd") or "").replace("T", " ")[:19] or None,
+                    "list_status": it.get("tradeStatusDescription") or "", "region": _region(it.get("regionId")),
+                })
+            if sleep:
+                sleep()
+            total = data.get("totalCount") or 0
+            if not items or page * self.page_size >= total:
+                break
+        return list(out.values())
+
+    def read_lot(self, get, url, with_trade=True, now=None):
+        """Торги (API) -> поля строки листа и данные для мини-аппа. Нет названия или статуса - parse_error."""
+        m = re.search(r"/trades/(\d+)", url or "")
+        if not m:
+            return {"url": url, "lot_id": None, "title": None, "parse_error": "в адресе нет номера торгов"}
+        trade_id = m.group(1)
+        d = json.loads(get(f"{self.api}/Trade/public/{trade_id}") or "{}")
+        lot = d.get("lot") or {}
+        raw_status = d.get("tradeStatusDescription") or ""
+        status, state = aggregator_status(raw_status)
+        description = text_of(lot.get("lotInfo") or "") or text_of(lot.get("description") or "")
+        name = text_of(lot.get("name") or d.get("name") or "")
+        # название торгов часто общее («Торги по продаже имущества ООО …») - тогда название - начало описания
+        title = name if is_vehicle(name) or not description else description[:250]
+        if not title or not status:
+            return {"url": url, "lot_id": None, "title": title,
+                    "parse_error": f"в ответе площадки нет названия или статуса ({raw_status or 'пусто'})"}
+        periods = []
+        if d.get("tradeType") == "PubProposal":
+            for p in lot.get("lotScheduleItems") or []:
+                end, price = ru_datetime(p.get("endTime")), money(str(p.get("price") or ""))
+                if end and price:
+                    periods.append({"begin": ru_datetime(p.get("startTime")), "end": end, "bid_end": end,
+                                    "price": price})
+            periods.sort(key=lambda p: p["bid_end"])
+        packed = bidding_schedule.pack_periods(periods)
+        price_start = money(str(lot.get("priceBegin") or ""))
+        now_text = (now or datetime.datetime.now()).strftime(DATE_FORMAT)
+        current = next((p["price"] for p in periods if p["bid_end"] > now_text), None)
+        applications_end = ru_datetime(d.get("requestTimeEnd"))
+        if d.get("tradeType") == "PubProposal":
+            trade_kind = ("Открытые" if d.get("tradeForm") == "Open" else "Закрытые") \
+                + " торги посредством публичного предложения"
+        else:
+            trade_kind = "Открытый аукцион с " + ("открытой" if d.get("priceType") == "Open" else "закрытой") \
+                + " формой представления предложений о цене"
+        photos = self._images.get(trade_id)
+        if photos is None:  # лота не было в списке этого обхода (перечитка по адресу) - со страницы торгов
+            photos = page_photos(url, get(url)) or []
+        fio = lambda *parts: " ".join(x for x in parts if x) or None  # noqa: E731
+        return {
+            "url": url,
+            "lot_id": self.lot_id_from_url(url),
+            "title": title,
+            "status": status,
+            "etp_state": state,
+            "etp_status": raw_status,
+            "vin": lot_metrics.find_vin(description) or lot_metrics.find_vin(title),
+            "vins_all": lot_metrics.lot_vins((title + " " + description).upper()),
+            "plate": lot_metrics.find_plate(description) or lot_metrics.find_plate(title),
+            "mileage_km": _mileage(description) or _mileage(title),
+            "photo_url": photos[0]["full"] if photos else None,
+            "photos": photos,
+            "region": _region(lot.get("regionID")),
+            "price_start": price_start,
+            "price_current": current or price_start,
+            "currency": "RUB",
+            "trade_kind": trade_kind,
+            "trade_section": "Банкротство" if d.get("tradeKind") == "Bankruptcy" else "Коммерческие торги",
+            "platform": self.platform,
+            "etp_url": url,
+            "applications_start": ru_datetime(d.get("requestTimeBegin")),
+            "applications_end": bidding_schedule.final_deadline(applications_end, packed) or applications_end,
+            "bidding_periods": packed,
+            "periods": periods,
+            "bidding_start": ru_datetime(d.get("auctionTimeBegin")),
+            "description": description or title,
+            "efrsb_number": str(d.get("idEFRSB") or "") or None,
+            "trade_number": trade_id,
+            "lot_number": str(lot.get("tradeLotId") or "") or None,
+            "applications_count": None,  # публично ЦДТ число заявок не показывает
+            "organizer_name": d.get("orgName") or fio(d.get("orgLastName"), d.get("orgFirstName"), d.get("orgMiddleName")),
+            "organizer_phone": phone_digits(d.get("orgPhone")),
+            "organizer_email": d.get("orgEmail"),
+            "manager_name": fio(d.get("arbManLastName"), d.get("arbManFirstName"), d.get("arbManMiddleName")),
+            "manager_sro": d.get("arbManOrg"),
+            "debtor_name": fio(d.get("debtLastName"), d.get("debtFirstName"), d.get("debtMiddleName"))
+            or d.get("debtShortName") or d.get("debtFullName"),
+            "debtor_inn": d.get("debtNatINN") or d.get("debtJurINN") or d.get("debtINN"),
+        }
+
+
 _MILEAGE_RE = re.compile(r"пробег[а-я]*[:\s-]*([\d\s]{3,10})\s*км", re.I)
 
 
@@ -573,7 +735,7 @@ def _mileage(text):
     return int(digits) if digits else None
 
 
-COLLECTORS = [TorgGroup(), Mets()]
+COLLECTORS = [TorgGroup(), Mets(), Cdt()]
 
 
 # --- фото со страницы лота на площадке ---
