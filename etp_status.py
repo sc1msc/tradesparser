@@ -58,6 +58,7 @@ OUTCOME_TEXT = {"done": "Торги завершены", "failed": "Торги �
 # раньше "прием заявок", "не состоял" раньше "заверш".
 PHRASES = (
     ("не состоял", "closed", "failed"), ("несостоявш", "closed", "failed"),
+    ("процедура по лоту проведена", "closed", "done"),  # Lot-online (РАД): торги прошли (19.10.2026)
     ("отмен", "closed", "cancelled"), ("аннулир", "closed", "cancelled"),
     ("приостановл", "closed", "suspended"),
     ("прием заявок окончен", "pending", None), ("прием заявок завершен", "pending", None),
@@ -81,7 +82,7 @@ LABEL_HOSTS = {
 LABEL_URL_RE = re.compile(
     r"/TradeLot/View/|/public/(auctions|public-offers)/lots/view/|trade_view\.php|/(otpp|oaof|oapp)/\d+/lots/", re.I)
 # Статус - фраза рядом с VIN лота (своей подписи нет): РАД, Фабрикант.
-NEAR_VIN_HOSTS = {"sales.lot-online.ru", "www.fabrikant.ru", "fabrikant.ru"}
+NEAR_VIN_HOSTS = {"www.fabrikant.ru", "fabrikant.ru"}
 
 LABEL_RE = re.compile(r"Статус(?:\s+торгов)?(?:\s+по\s+лоту)?(?:\s+лота)?\s*:?\s*(.{1,50})", re.I)
 # Где кончается значение статуса: дальше на странице идёт следующая подпись.
@@ -89,6 +90,11 @@ NEXT_LABEL_RE = re.compile(r"\s(?:Дата|Начало|Окончание|Ка�
                            r"Периоды|Предмет|Аукцион|Регион|Начальная|Текущая|Купить|Документы|Сведения)")
 CDT_RE = re.compile(r'"tradeStatusDescription"\s*:\s*"([^"]{1,80})"')
 METS_RE = re.compile(r'class="[^"]*lot-status-name[^"]*"[^>]*>\s*([^<]{1,80})<')
+# Lot-online (РАД): статус лота - в блоке formMain:opStatus (<span class="status-N">Идет прием заявок</span>).
+# До 19.10.2026 его искали рядом с VIN (near_vin), но после длинного описания фраза уходила дальше 400
+# символов, а «Процедура по лоту проведена» (торги прошли) словарь не знал - 7 из 14 лотов не распознавались.
+LOTONLINE_RE = re.compile(r'id="formMain:opStatus".*?<span class="status-\d+">(?:\s*<span></span>)?\s*([^<]{1,80}?)\s*</span>',
+                          re.S)
 
 
 def host(url):
@@ -150,6 +156,8 @@ def engine(url):
         return "cdt"
     if h == "m-ets.ru":
         return "mets"
+    if h == "sales.lot-online.ru":
+        return "lotonline"
     if h in NEAR_VIN_HOSTS:
         return "near_vin"
     if h in LABEL_HOSTS or LABEL_URL_RE.search(url or ""):
@@ -210,6 +218,9 @@ def parse(url, html, hint=None):
         text = page_text(html)
     elif kind == "mets":
         found = [(m.start(), m.group(1), classify(m.group(1))) for m in METS_RE.finditer(html)]
+        text = page_text(html)
+    elif kind == "lotonline":
+        found = [(m.start(), m.group(1), classify(m.group(1))) for m in LOTONLINE_RE.finditer(html)]
         text = page_text(html)
     else:
         text = page_text(html)
