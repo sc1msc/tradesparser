@@ -661,6 +661,8 @@ def summary(lot, state, now, favorites):
         # пробег мультилота - одной из машин, для лота целиком ничего не значит
         "mileage_km": lot.get("mileage_km") if lot["kind"] == lot_metrics.LOT_CAR else None,
         "mileage_estimated": bool(lot.get("mileage_estimated")),
+        # число владельцев - из рыночной оценки по VIN (фильтр «Владельцы», 19.10.2026)
+        "owners": lot.get("autoru_owners") if lot["kind"] == lot_metrics.LOT_CAR else None,
         # пробег из отчёта (TRONK) - пересчитанное на сегодня показание: в ленте «~», на экране лота
         # «по записи из отчёта от …»; старые выгрузки без источника - как раньше
         "mileage_source": lot.get("mileage_source") or ("estimate" if lot.get("mileage_estimated") else None),
@@ -841,6 +843,7 @@ def parse_filters(params):
         "kinds": set(_split(params.get("kinds"))),
         "trade": set(_split(params.get("trade"))),
         "gap_min": _num(params.get("gap_min")),
+        "owners_to": _num(params.get("owners_to")),  # владельцев не больше
         "hide_damaged": params.get("hide_damaged") == "1",
         "fuel": set(_split(params.get("fuel"))),
         "gearbox": set(_split(params.get("gearbox"))),
@@ -1005,6 +1008,9 @@ def _matches(item, lot, f, skip_damage=False):
         return False
     if f["gap_min"] is not None and (item["gap"] is None or item["gap"] < f["gap_min"]):
         return False
+    # число владельцев известно не у всех (только с рыночной оценкой): при фильтре лот без него не показываем
+    if f["owners_to"] is not None and (item["owners"] is None or item["owners"] > f["owners_to"]):
+        return False
     # характеристики известны не у всех лотов: при выбранном фильтре лот без них не показываем
     if f["fuel"] and item["engine_type"] not in f["fuel"]:
         return False
@@ -1067,11 +1073,12 @@ def facets(favorites):
     regions = {}
     years, prices, mileages = [], [], []
     spec_counts = {"engine_type": {}, "transmission": {}, "drive": {}}
-    volumes, powers, cars, with_specs = [], [], 0, 0
+    volumes, powers, cars, with_specs, with_owners = [], [], 0, 0, 0
     for it, lot in open_items(favorites):
         if lot["kind"] == lot_metrics.LOT_CAR:
             cars += 1
             with_specs += bool(it["engine_type"] or it["transmission"] or it["drive"] or it["power"])
+            with_owners += it["owners"] is not None
         for key, counts in spec_counts.items():
             if it[key]:
                 counts[it[key]] = counts.get(it[key], 0) + 1
@@ -1120,7 +1127,7 @@ def facets(favorites):
         "drive": _ordered(spec_counts["drive"], DRIVES),
         "volume": [min(volumes), max(volumes)] if volumes else None,
         "power": [min(powers), max(powers)] if powers else None,
-        "specs_known": with_specs, "cars": cars,
+        "specs_known": with_specs, "cars": cars, "owners_known": with_owners,
     }
 
 

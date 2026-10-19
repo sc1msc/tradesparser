@@ -40,7 +40,7 @@ from . import billing, db, lots
 
 MAX_PER_USER = 10
 FILTER_KEYS = ("q", "brands", "models", "year_from", "year_to", "price_from", "price_to", "mileage_to",
-               "regions", "kinds", "trade", "gap_min", "hide_damaged", "fuel", "gearbox", "drive",
+               "regions", "kinds", "trade", "gap_min", "owners_to", "hide_damaged", "fuel", "gearbox", "drive",
                "vol_from", "vol_to", "power_from", "power_to")
 MAX_NAME = 60
 DEFAULT_PRICE_FROM = 300000  # «Цена от 300 тыс.» - начальный фильтр ленты (emptyFilters в app.js)
@@ -211,6 +211,9 @@ def describe(params):
         parts.append(f"пробег до {_money(p['mileage_to'])} км")
     if p.get("gap_min"):
         parts.append(f"от {int(float(p['gap_min']))}% ниже рынка")
+    if p.get("owners_to"):
+        n = int(float(p["owners_to"]))
+        parts.append("1 владелец" if n == 1 else f"до {n} владельцев")
     for key in ("fuel", "gearbox", "drive"):
         if p.get(key):
             parts.append(", ".join(split(p[key])))
