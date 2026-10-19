@@ -457,3 +457,8 @@ html.pv-open, html.pv-open body { overflow: hidden; }
 .tabicon { position: relative; display: inline-flex; }
 .tabs .badge { top: -4px; right: -10px; }
 html.web .scard, html.web .setblock, html.web .lockcard { box-shadow: inset 0 0 0 1px var(--sep); }
+/* фильтры: марки и модели без лотов сейчас (кнопки «Показать все марки» / «Все модели») */
+.brandrow .cnt.zero, .chip.zero .cnt { opacity: .5; }
+.chip.zero { opacity: .75; }
+.chip.more-models { background: none; color: var(--link); }
+.linkbtn.allbrands { display: block; margin: 8px 4px 0; }

@@ -1095,6 +1095,16 @@ def facets(favorites):
             prices.append(it["price"])
         if it["mileage_km"]:
             mileages.append(it["mileage_km"])
+    # Марки и модели, которых сейчас нет на торгах, но которые встречались раньше (база хранит все
+    # выгруженные лоты) - с числом 0: по ним можно сохранить поиск «на будущее» (решение владельца
+    # 19.10.2026, кнопки «Показать все марки» / «Все модели» в app.js). Каталог пополняется сам.
+    for lot in load():
+        if lot["kind"] != lot_metrics.LOT_CAR or not lot["brand_key"]:
+            continue
+        b = brands.setdefault(lot["brand_key"], {"key": lot["brand_key"], "label": lot["brand_label"],
+                                                 "count": 0, "models": {}})
+        if lot["model_key"]:
+            b["models"].setdefault(lot["model_key"], {"key": lot["model_key"], "label": lot["model_label"], "count": 0})
     brand_list = sorted(brands.values(), key=lambda b: b["label"])
     for b in brand_list:
         b["models"] = sorted(b["models"].values(), key=lambda m: m["label"])

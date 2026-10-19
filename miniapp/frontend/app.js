@@ -490,8 +490,11 @@ async function loadFeed(reset) {
     feed.total.textContent = `${nf.format(data.total)} ${plural(data.total, "лот", "лота", "лотов")}` +
       (data.hidden_damaged ? ` · битых скрыто: ${data.hidden_damaged}` : "");
     if (!state.items.length) {
+      const filtered = activeFilterCount(state.filters) || state.q;
       feed.list.replaceChildren(h("div", { class: "empty" }, h("b", {}, "Ничего не нашлось"),
-        activeFilterCount(state.filters) || state.q ? "Попробуйте ослабить фильтры или изменить запрос." : "Лотов пока нет."));
+        !filtered ? "Лотов пока нет."
+          : state.searchesOn ? "Сохраните поиск кнопкой «Сохранить поиск» вверху — пришлём, когда такие лоты появятся. Или ослабьте фильтры."
+          : "Попробуйте ослабить фильтры или изменить запрос."));
     }
   } catch (e) {
     if (id !== state.reqId) return;
@@ -1336,8 +1339,9 @@ function renderFilters(initial) {
       try {
         const { total } = await api(`/lots?${queryString(draft, state.q, null)}&limit=0`);
         if (id !== countReq) return;
-        showBtn.textContent = total ? `Показать ${nf.format(total)} ${plural(total, "лот", "лота", "лотов")}` : "Ничего не найдено";
-        showBtn.disabled = !total;
+        showBtn.textContent = total ? `Показать ${nf.format(total)} ${plural(total, "лот", "лота", "лотов")}`
+          : state.searchesOn ? "Лотов пока нет — применить" : "Ничего не найдено";
+        showBtn.disabled = !total && !state.searchesOn;  // без лотов - чтобы сохранить поиск на будущее
       } catch { showBtn.textContent = "Показать"; showBtn.disabled = false; }
     }, 250);
   }
@@ -1367,24 +1371,37 @@ function renderFilters(initial) {
     else { delete draft.models[bkey]; draft.brands = draft.brands.filter((b) => b !== bkey); }
     drawBrands(); refreshCount();
   }
+  // Марки и модели без лотов сейчас (были раньше, сервер отдаёт их с count 0) - по кнопке «Показать все»:
+  // по ним можно сохранить поиск на будущее (19.10.2026). Поиск по маркам ищет и среди них.
+  let allBrands = false;
+  const allModels = new Set();
   function drawBrands() {
     const q = brandSearch.value.trim().toUpperCase();
-    const list = brandOrder.filter((b) => !q || b.label.toUpperCase().includes(q) || b.models.some((m) => m.label.toUpperCase().includes(q)));
+    const visible = (b) => q || allBrands || b.count > 0 || draft.brands.includes(b.key);
+    const list = brandOrder.filter((b) => visible(b) && (!q || b.label.toUpperCase().includes(q) || b.models.some((m) => m.label.toUpperCase().includes(q))));
+    const hiddenBrands = q ? 0 : brandOrder.filter((b) => !visible(b)).length;
+    const toggleAll = (hiddenBrands || allBrands) && !q ? h("button", { class: "linkbtn allbrands", onclick: () => { allBrands = !allBrands; drawBrands(); } },
+      allBrands ? "Только марки с лотами" : `Показать все марки (+${hiddenBrands} без лотов сейчас)`) : null;
     brandList.replaceChildren(...list.map((b) => {
       const sel = draft.brands.includes(b.key);
       const models = draft.models[b.key] || [];
       const open = expanded.has(b.key) && b.models.length > 1;
+      const showModel = (m) => allModels.has(b.key) || m.count > 0 || models.includes(m.key);
+      const hiddenModels = b.models.filter((m) => !showModel(m)).length;
       return h("div", { class: "brand" },
         h("div", { class: "brandrow" },
           h("button", { class: "check" + (sel && !models.length ? " on" : "") + (models.length ? " part" : ""), onclick: () => toggleBrand(b.key), "aria-label": b.label },
             sel && !models.length ? "✓" : ""),
           h("button", { class: "lbl", style: { textAlign: "left" }, onclick: () => toggleBrand(b.key) }, b.label),
-          h("span", { class: "cnt" }, b.count),
+          h("span", { class: "cnt" + (b.count ? "" : " zero") }, b.count),
           b.models.length > 1 ? h("button", { class: "exp", onclick: () => { expanded.has(b.key) ? expanded.delete(b.key) : expanded.add(b.key); drawBrands(); } }, open ? "▴" : "▾") : null),
-        open ? h("div", { class: "models chips" }, b.models.map((m) =>
-          h("button", { class: "chip" + (models.includes(m.key) ? " on" : ""), onclick: () => toggleModel(b.key, m.key) },
-            m.label, h("span", { class: "cnt" }, m.count)))) : null);
-    }));
+        open ? h("div", { class: "models chips" }, b.models.filter(showModel).map((m) =>
+          h("button", { class: "chip" + (models.includes(m.key) ? " on" : "") + (m.count ? "" : " zero"), onclick: () => toggleModel(b.key, m.key) },
+            m.label, h("span", { class: "cnt" }, m.count))),
+          hiddenModels || allModels.has(b.key) ? h("button", { class: "chip more-models", onclick: () => {
+            allModels.has(b.key) ? allModels.delete(b.key) : allModels.add(b.key); drawBrands(); } },
+            allModels.has(b.key) ? "Только с лотами" : `Все модели (+${hiddenModels})`) : null) : null);
+    }), toggleAll);
     brandSummary();
   }
   brandSearch.addEventListener("input", drawBrands);
