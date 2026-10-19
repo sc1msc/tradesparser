@@ -121,10 +121,11 @@ const regionShort = (r) => (r || "").replace(/^г\.\s*/, "").replace("Моско
 const mileageApprox = (it) => it.mileage_estimated || it.mileage_source === "report";
 const kmText = (it) => it.mileage_km == null ? null : (mileageApprox(it) ? "~" : "") + nf.format(it.mileage_km) + " км";
 
-function gapBadge(gap) {
+// damaged - у лота возможны повреждения: скидка к рынку не «выгода», плашка жёлтая (решение владельца 19.10.2026)
+function gapBadge(gap, damaged) {
   if (gap == null) return null;
   const r = Math.round(gap);
-  if (gap >= 0.5) return h("span", { class: "gap good" }, `−${r}% к рынку`);
+  if (gap >= 0.5) return h("span", { class: damaged ? "gap warn" : "gap good" }, `−${r}% к рынку`);
   if (gap > -0.5) return h("span", { class: "gap neutral" }, "≈ рынок");
   return h("span", { class: "gap neutral" }, `+${-r}% к рынку`);
 }
@@ -321,7 +322,7 @@ function card(it) {
     h("div", { class: "info" },
       h("div", { class: "name" }, it.name, it.year ? h("span", { class: "yr" }, `, ${it.year}`) : null),
       // у аукциона в ленте - начальная цена (итоговая определится на торгах): подписываем
-      h("div", { class: "priceline" }, h("span", { class: "price" }, it.trade === "auction" ? h("span", { class: "pfx" }, "старт ") : null, rub(it.price)), gapBadge(it.gap),
+      h("div", { class: "priceline" }, h("span", { class: "price" }, it.trade === "auction" ? h("span", { class: "pfx" }, "старт ") : null, rub(it.price)), gapBadge(it.gap, it.damaged),
         it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
       specLine ? h("div", { class: "specs" }, specLine) : null,
       meta ? h("div", { class: "meta" }, meta) : null,
@@ -1209,7 +1210,7 @@ async function renderLot(id) {
       h("h2", {}, lot.name, lot.year ? `, ${lot.year}` : ""),
       h("div", { class: "sub" }, [mileage, regionShort(lot.region)].filter(Boolean).join(" · ")),
       lot.trade === "auction" ? h("div", { class: "pricecap" }, "Начальная цена") : null,
-      h("div", { class: "bigprice" }, rub(lot.price), gapBadge(lot.gap)),
+      h("div", { class: "bigprice" }, rub(lot.price), gapBadge(lot.gap, lot.total_damage || (lot.damage || []).length > 0)),
       lot.next_price && lot.is_open ? h("div", { class: "nextstep" },
         `С ${dShort(lot.next_price_from)} цена снизится до ${rub(lot.next_price)}`) : null);
   const bottomBar = h("div", { class: "bottombar" },
@@ -1290,7 +1291,7 @@ function damageBox(lot) {
   if (photo.length || lot.total_damage && !words.length) parts.push(`по фото: ${photo.length ? photo.join(", ") : "тотальные повреждения"}`);
   if (words.length) parts.push(`в описании: ${words.join(", ")}`);
   const head = lot.total_damage ? "⚠ Похоже на тотальные повреждения, машина скорее на запчасти" : "⚠ Возможны повреждения";
-  return h("div", { class: "block warnbox" }, `${head} (${parts.join("; ")}). Процент к рынку для такого лота не показатель.`);
+  return h("div", { class: "block warnbox" }, `${head} (${parts.join("; ")}).`);
 }
 
 // ---------- фильтры ----------
