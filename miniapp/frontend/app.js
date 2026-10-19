@@ -852,7 +852,7 @@ function selectTab(key) {
 function renderTabs() {
   const tab = (key, label, ic, n) => h("button", { class: state.tab === key ? "on" : "", onclick: () => selectTab(key) },
     h("span", { class: "tabicon" }, icon(ic), n ? h("span", { class: "badge" }, n) : null), label);
-  tabsEl.replaceChildren(tab("feed", "Лоты", "list"), state.searchesOn ? tab("searches", "Поиски", "bell", newCount()) : null,
+  tabsEl.replaceChildren(tab("feed", "Лоты", "list"), ...(state.searchesOn ? [tab("searches", "Поиски", "bell", newCount())] : []),
     tab("favs", "Избранное", "heart"));
   if (webNav) webNav.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.tab === state.tab));
 }
@@ -1405,7 +1405,7 @@ function renderFilters(initial) {
           hiddenModels || allModels.has(b.key) ? h("button", { class: "chip more-models", onclick: () => {
             allModels.has(b.key) ? allModels.delete(b.key) : allModels.add(b.key); drawBrands(); } },
             allModels.has(b.key) ? "Только с лотами" : `Все модели (+${hiddenModels})`) : null) : null);
-    }), toggleAll);
+    }), ...(toggleAll ? [toggleAll] : []));
     brandSummary();
   }
   brandSearch.addEventListener("input", drawBrands);
