@@ -240,3 +240,56 @@ def lot_kind(text):
     if len(lot_vins(upper)) >= 2:
         return LOT_MULTILOT
     return LOT_CAR
+
+
+# ---------- характеристики из текста лота (20.10.2026) ----------
+# У машин без рыночной оценки (нет VIN, оценка не нашла модель) характеристик от оценки нет. Часть
+# организаторов пишет их в лоте: «2.0 л, 150 л.с., АКПП», выписка из ПТС «Мощность двигателя, л.с.
+# (кВт): 150 (110)», «Рабочий объем двигателя, куб. см: 1598». Берём только однозначное: если в
+# тексте два разных объёма или и «АКПП», и «механика» - поле пустое (лучше пусто, чем чужое). Газ и
+# электро не ищем: «ГАЗель», «электростеклоподъёмники».
+_DISP_L_RE = re.compile(r"(?<![\d.,])([0-6][.,]\d{1,2})\s*(?:Л\b|Л\.|ЛИТР|L\b)")
+_DISP_CC_RE = re.compile(r"(?<!\d)(\d{3,4})(?:[.,]\d)?\s*(?:СМ\s*3|СМ³|КУБ\.?\s*СМ|СМ\.?\s*КУБ|CM3|CC\b)")
+_DISP_CC_AFTER_RE = re.compile(r"(?:КУБ\.?\s*СМ|СМ\.?\s*КУБ|СМ3|СМ³)\.?\s*[:\-]?\s*(\d{3,4})(?:[.,]\d)?(?!\d)")
+_POWER_RE = re.compile(r"(?<![\d.,])(\d{2,3})(?:[.,]\d+)?\s*(?:Л\.?\s*С\b|Л\.?\s*С\.|ЛС\b|Л/С|HP\b)")
+_POWER_AFTER_RE = re.compile(r"(?<!/)(?<!/\s)Л\.?\s*С\.?\s*(?:\(\s*КВТ\s*\))?\s*[:\-]\s*(\d{2,3})(?:[.,]\d+)?(?!\d)")
+# «кВт/л.с.: 104(141)» - сначала киловатты, в скобках лошадиные силы
+_POWER_KW_FIRST_RE = re.compile(r"КВТ\s*/\s*Л\.?\s*С\.?\s*[:\-]?\s*\d{2,3}(?:[.,]\d+)?\s*[(/]\s*(\d{2,3})(?:[.,]\d+)?")
+# «Тип коробки передач: механическая», «Тип привода: ПЕРЕДНИЙ» - формат выписки из ПТС
+_KPP = r"(?:КПП|КОРОБК\w*(?:\s+ПЕРЕДАЧ)?)\W{0,5}"
+_TEXT_TRANSMISSION = [("автомат", r"АКПП|АВТОМАТИЧЕСК\w*\s+(?:КОРОБК|КПП|ТРАНСМИСС)|АТ|" + _KPP + r"АВТОМАТ"),
+                      ("механика", r"МКПП|МЕХАНИЧЕСК\w*\s+(?:КОРОБК|КПП|ТРАНСМИСС)|" + _KPP + r"МЕХАН"),
+                      ("вариатор", r"ВАРИАТОР|CVT"),
+                      ("робот", r"РОБОТ\w*\s+(?:КОРОБК|КПП)|DSG|" + _KPP + r"РОБОТ")]
+_TEXT_DRIVE = [("полный", r"ПОЛН\w*\s+ПРИВОД|4WD|AWD|4[XХ]4|ПРИВОД\w*\W{0,5}ПОЛН"),
+               ("передний", r"ПЕРЕДН\w*\s+ПРИВОД|ПРИВОД\w*\W{0,5}ПЕРЕДН"),
+               ("задний", r"ЗАДН\w*\s+ПРИВОД|ПРИВОД\w*\W{0,5}ЗАДН")]
+_TEXT_FUEL = [("дизель", r"ДИЗЕЛ"), ("бензин", r"БЕНЗИН"), ("гибрид", r"ГИБРИД")]
+
+
+def _one(values):
+    values = {v for v in values if v is not None}
+    return values.pop() if len(values) == 1 else None
+
+
+def specs_from_text(text):
+    """{engine_type, displacement (см³), power (л.с.), drive, transmission} из текста лота; чего нет
+    или что противоречиво - None. Значения - как у рыночной оценки (autoru_valuation.parse_specs)."""
+    t = (text or "").upper()
+    disp = [round(float(m.replace(",", ".")) * 1000) for m in _DISP_L_RE.findall(t)]
+    disp += [int(m) for m in _DISP_CC_RE.findall(t) + _DISP_CC_AFTER_RE.findall(t)]
+    # объём из литров округляем как в объявлениях (1.6 л = 1598 см³): сравниваем по десятым литра
+    disp = [d for d in disp if 600 <= d <= 7000]
+    disp_l = _one(round(d / 100) for d in disp)
+    power = _one(int(m) for m in _POWER_RE.findall(t) + _POWER_AFTER_RE.findall(t) + _POWER_KW_FIRST_RE.findall(t)
+                 if 40 <= int(m) <= 700)
+
+    def pick(rules):
+        return _one(name for name, rx in rules if re.search(rx, t))
+    return {
+        "engine_type": pick(_TEXT_FUEL),
+        "displacement": next(d for d in disp if round(d / 100) == disp_l) if disp_l else None,
+        "power": power,
+        "drive": pick(_TEXT_DRIVE),
+        "transmission": pick(_TEXT_TRANSMISSION),
+    }

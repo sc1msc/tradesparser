@@ -22,7 +22,8 @@ sheets_writer.py, его локальная схема колонок разош
 модификации "1.6 AT (110 л.с.)") приходят вместе с оценкой - см.
 autoru_valuation.parse_specs; пишутся в лист и в vin_cache вместе с ценой.
 
-ДОЗАПОЛНЕНИЕ характеристик у уже оценённых лотов (вручную, не в пайплайне):
+ДОЗАПОЛНЕНИЕ характеристик у уже оценённых лотов: с 20.10.2026 - в конце каждого
+прогона, config.AUTORU_SPECS_PER_RUN машин, без ожидания Enter; вручную - сколько угодно:
     python evaluate_autoru_browser.py --specs [N]
 Лоты со статусом ok/ambiguous без характеристик, одна оценка на VIN (машина на
 нескольких площадках - один запрос), не больше N машин за запуск (по умолчанию
@@ -161,6 +162,21 @@ def _batch_write(worksheet, row_num, col, updates):
 def run(specs_only=False, limit=None):
     if specs_only:
         return run_specs(limit)
+    stopped = _run_estimates()
+    # Дозаполнение характеристик у старых оценок (до 13.10.2026 характеристики не сохранялись, а цена
+    # из справочника по VIN переходит в новые лоты без них - так у Touareg 7233557 не было объёма и
+    # мощности). Бесплатно, AUTORU_SPECS_PER_RUN машин за прогон, после новых оценок; Авто.ру
+    # остановил оценку (капча, ошибки подряд) - не трогаем. Сбой здесь шаг не роняет.
+    if stopped or not getattr(config, "AUTORU_SPECS_PER_RUN", 0):
+        return
+    try:
+        run_specs(config.AUTORU_SPECS_PER_RUN, interactive=False)
+    except Exception as e:
+        automation.alert(f"Авто.ру: дозаполнение характеристик не прошло ({str(e)[:150]}), повторится завтра.")
+
+
+def _run_estimates():
+    """Новые оценки. -> True, если Авто.ру остановил шаг (капча, ошибки подряд) или его отменили."""
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     client = gspread.authorize(creds)
     spreadsheet = client.open_by_key(config.SPREADSHEET_ID)
@@ -217,11 +233,12 @@ def run(specs_only=False, limit=None):
 
     if not automation.confirm("\nЗапустить браузер и начать оценку? (yes / нет): "):
         print("Отменено.")
-        return
+        return True
 
     processed = 0
     ok_count = 0
     errors_in_row = 0
+    stopped = False
     # Готовые оценки - ещё и в справочник по VIN: переживут выпадение лота
     # из среза и пригодятся, если машину выставят снова (vin_cache.py).
     cache = vin_cache.VinCache(spreadsheet)
@@ -335,6 +352,7 @@ def run(specs_only=False, limit=None):
                         automation.alert(f"Авто.ру просит капчу, её не решили за {config.AUTORU_CAPTCHA_WAIT_MIN} мин. "
                                          f"Оценено {ok_count} лотов, остальные {len(to_process) - processed} - "
                                          f"в следующий прогон.")
+                        stopped = True
                         break
                     continue
                 updates["autoru_status"] = f"error: {e}"[:200]
@@ -352,6 +370,7 @@ def run(specs_only=False, limit=None):
             if errors_in_row >= config.AUTORU_MAX_ERRORS_IN_ROW:
                 automation.alert(f"Авто.ру: {errors_in_row} ошибок подряд (последняя: {last_error}). Шаг "
                                  f"остановлен, оценено {ok_count}, остальные - в следующий прогон.")
+                stopped = True
                 break
             time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
 
@@ -359,6 +378,7 @@ def run(specs_only=False, limit=None):
     cache.flush()
 
     print(f"\nГотово. Обработано: {processed}, успешно: {ok_count}.")
+    return stopped
 
 
 def _wait_captcha(page):
@@ -393,8 +413,9 @@ def _new_context(p):
 SPECS_MAX_EMPTY_IN_ROW = 8  # столько пустых оценок подряд - Авто.ру перестал отвечать, стоп
 
 
-def run_specs(limit=None):
-    """Дозаполнение характеристик у уже оценённых лотов (см. докстринг модуля)."""
+def run_specs(limit=None, interactive=True):
+    """Дозаполнение характеристик у уже оценённых лотов (см. докстринг модуля). interactive=False - из
+    утреннего шага: без ожидания Enter (без VPN кнопки согласия на Авто.ру нет)."""
     limit = limit or config.AUTORU_MAX_PER_RUN
     creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     spreadsheet = gspread.authorize(creds).open_by_key(config.SPREADSHEET_ID)
@@ -434,7 +455,8 @@ def run_specs(limit=None):
     with sync_playwright() as p:
         browser, page = _new_context(p)
         page.goto(autoru_valuation.LANDING_URL, wait_until="domcontentloaded")
-        input("Нажмите кнопку согласия в окне Авто.ру, затем Enter здесь: ")
+        if interactive:
+            input("Нажмите кнопку согласия в окне Авто.ру, затем Enter здесь: ")
         for key in todo:
             rows = groups[key]
             row = rows[0][1]

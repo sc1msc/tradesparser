@@ -491,6 +491,9 @@ def photo_sources():
     return out
 
 
+SPEC_FIELDS = ("engine_type", "displacement", "power", "drive", "transmission")
+
+
 def _prepare(lot, models_index=None):
     """Статичные (не зависящие от времени) производные поля - один раз на
     загрузку кэша. models_index - словарь моделей Авто.ру (build_catalog)."""
@@ -528,6 +531,14 @@ def _prepare(lot, models_index=None):
     # тип лота (lot_metrics.lot_kind): мультилот - без процента к рынку и
     # с меткой; права требования/доли в ленту не попадают вовсе
     lot["kind"] = lot.get("lot_kind") or lot_metrics.LOT_CAR
+    # Характеристик от рыночной оценки нет (нет VIN, оценка не нашла модель) - берём однозначное из
+    # текста лота: «2.0 л, 150 л.с., АКПП», выписка из ПТС (lot_metrics.specs_from_text, 20.10.2026).
+    # Только в пустые поля: оценку текст не перекрывает.
+    if lot["kind"] == lot_metrics.LOT_CAR and not any(lot.get(k) for k in SPEC_FIELDS):
+        found = lot_metrics.specs_from_text(f"{lot.get('title') or ''} {lot.get('description') or ''}")
+        for k, v in found.items():
+            if v is not None:
+                lot[k] = v
     if lot["kind"] == lot_metrics.LOT_MULTILOT:
         # Марка/модель у мультилота - от одной из машин (Авто.ру по первому
         # VIN: лот из 17 Solaris выходил "Hyundai Santa FE"). Показываем
