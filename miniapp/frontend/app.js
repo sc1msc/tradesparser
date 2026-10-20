@@ -183,12 +183,14 @@ async function api(path, opts = {}) {
 // volume - [от, до] в литрах, power - [от, до] в л.с.; null в паре - без границы
 const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [300e3, null], mileageTo: null, gapMin: null, ownersTo: null, dtpTo: null, regions: [], trade: [], kinds: [],
   fuel: [], gearbox: [], drive: [], volume: null, power: null, hideDamaged: true });
-const SORTS = [["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
+// «Сначала новые» - по умолчанию с 20.10.2026 (решение владельца): внутри дня - выгоднее сверху.
+// Выбранная пользователем сортировка хранится на устройстве и не меняется.
+const SORTS = [["new", "Новые"], ["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
 
 const state = {
   tab: "feed",
   filters: { ...emptyFilters(), ...store.get("filters", {}) },
-  sort: store.get("sort", "gap"),
+  sort: store.get("sort", "new"),
   q: "",
   items: [],
   total: 0,
@@ -306,7 +308,8 @@ function thumbBox(it) {
 function card(it) {
   if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
   const thumb = thumbBox(it);
-  if (state.newIds.has(it.id)) thumb.append(h("span", { class: "newb" }, "новый"));  // из уведомления по поиску
+  // «новый»: лот открытого поиска, пришедший после прошлого открытия, или появившийся в ленте за сутки
+  if (state.newIds.has(it.id) || it.is_new) thumb.append(h("span", { class: "newb" }, "новый"));
   const meta = [kmText(it), regionShort(it.region), it.dtp_count ? `ДТП: ${it.dtp_count}` : null].filter(Boolean).join(" · ");
   const specLine = specsShort(it);
   const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";

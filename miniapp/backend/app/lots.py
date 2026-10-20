@@ -151,7 +151,7 @@ CYR_LOOKALIKES = str.maketrans("АВЕКМНОРСТУХаеокрсух", "ABEK
 TRADE_AUCTION = "auction"
 TRADE_PUBLIC_OFFER = "public_offer"
 
-SORTS = ("gap", "price_asc", "price_desc", "deadline")
+SORTS = ("new", "gap", "price_asc", "price_desc", "deadline")
 # Характеристики модификации с Авто.ру (autoru_valuation.ENGINE_TYPES/TRANSMISSIONS/DRIVES) -
 # порядок вариантов в фильтрах. Неизвестные значения идут в конец.
 FUELS = ("бензин", "дизель", "гибрид", "электро", "газ")
@@ -663,6 +663,11 @@ def _first_photo(lot):
     return (photos[0].get("thumb") or photos[0].get("full")) if photos else None
 
 
+def _is_new(first_seen, now):
+    dt = _parse_iso(first_seen)
+    return bool(dt) and now - dt < datetime.timedelta(hours=NEW_LOT_HOURS)
+
+
 def summary(lot, state, now, favorites):
     gap = gap_for(lot, state["price"])
     return {
@@ -674,6 +679,9 @@ def summary(lot, state, now, favorites):
         "mileage_estimated": bool(lot.get("mileage_estimated")),
         # число владельцев - из рыночной оценки по VIN (фильтр «Владельцы», 19.10.2026)
         "owners": lot.get("autoru_owners") if lot["kind"] == lot_metrics.LOT_CAR else None,
+        # когда лот впервые появился в ленте; «новый» - за последние NEW_LOT_HOURS часов
+        "first_seen": lot.get("first_seen_at"),
+        "is_new": _is_new(lot.get("first_seen_at"), now),
         # число ДТП по VIN (TRONK): None - нет данных, 0 - «ДТП не найдены» (метка в ленте)
         "dtp_count": _dtp(lot)["count"] if _dtp(lot) else None,
         # пробег из отчёта (TRONK) - пересчитанное на сегодня показание: в ленте «~», на экране лота
@@ -1071,6 +1079,11 @@ def _matches(item, lot, f, skip_damage=False):
 
 def _sort_key(sort):
     far = "9999"
+    if sort == "new":
+        # Сначала новые (сортировка по умолчанию в мини-аппе с 20.10.2026, решение владельца): лоты
+        # приходят пачкой раз в сутки, поэтому по дню появления, а внутри дня - самые выгодные сверху
+        return lambda it: (-_day_number(it["first_seen"]), it["gap"] is None, -(it["gap"] or 0),
+                           it["deadline"] or far)
     if sort == "price_asc":
         return lambda it: (it["price"] is None, it["price"] or 0)
     if sort == "price_desc":
@@ -1079,6 +1092,19 @@ def _sort_key(sort):
         return lambda it: (it["deadline"] or far, -(it["gap"] if it["gap"] is not None else -1e9))
     # по умолчанию - самые выгодные сверху, лоты без оценки Авто.ру - в конец
     return lambda it: (it["gap"] is None, -(it["gap"] or 0), it["deadline"] or far)
+
+
+def _day_number(iso):
+    """'2026-10-20T07:31:02+03:00' -> номер дня (для сортировки «Сначала новые»); нет даты - 0."""
+    try:
+        return datetime.date.fromisoformat(str(iso)[:10]).toordinal()
+    except ValueError:
+        return 0
+
+
+# «Новый» лот (метка на фото и сортировка «Сначала новые»): появился в ленте не раньше стольких часов
+# назад - выгрузка раз в сутки, 30 часов покрывают и прогон, задержавшийся на несколько часов.
+NEW_LOT_HOURS = 30
 
 
 def open_items(favorites, now=None):
