@@ -873,6 +873,7 @@ def parse_filters(params):
         "trade": set(_split(params.get("trade"))),
         "gap_min": _num(params.get("gap_min")),
         "owners_to": _num(params.get("owners_to")),  # владельцев не больше
+        "dtp_to": _num(params.get("dtp_to")),  # ДТП не больше (0 - «Без ДТП»)
         "hide_damaged": params.get("hide_damaged") == "1",
         "fuel": set(_split(params.get("fuel"))),
         "gearbox": set(_split(params.get("gearbox"))),
@@ -1040,6 +1041,9 @@ def _matches(item, lot, f, skip_damage=False):
     # число владельцев известно не у всех (только с рыночной оценкой): при фильтре лот без него не показываем
     if f["owners_to"] is not None and (item["owners"] is None or item["owners"] > f["owners_to"]):
         return False
+    # ДТП (TRONK по VIN): без данных при фильтре не показываем - «нет данных» не значит «без ДТП»
+    if f["dtp_to"] is not None and (item["dtp_count"] is None or item["dtp_count"] > f["dtp_to"]):
+        return False
     # характеристики известны не у всех лотов: при выбранном фильтре лот без них не показываем
     if f["fuel"] and item["engine_type"] not in f["fuel"]:
         return False
@@ -1102,12 +1106,13 @@ def facets(favorites):
     regions = {}
     years, prices, mileages = [], [], []
     spec_counts = {"engine_type": {}, "transmission": {}, "drive": {}}
-    volumes, powers, cars, with_specs, with_owners = [], [], 0, 0, 0
+    volumes, powers, cars, with_specs, with_owners, with_dtp = [], [], 0, 0, 0, 0
     for it, lot in open_items(favorites):
         if lot["kind"] == lot_metrics.LOT_CAR:
             cars += 1
             with_specs += bool(it["engine_type"] or it["transmission"] or it["drive"] or it["power"])
             with_owners += it["owners"] is not None
+            with_dtp += it["dtp_count"] is not None
         for key, counts in spec_counts.items():
             if it[key]:
                 counts[it[key]] = counts.get(it[key], 0) + 1
@@ -1156,7 +1161,7 @@ def facets(favorites):
         "drive": _ordered(spec_counts["drive"], DRIVES),
         "volume": [min(volumes), max(volumes)] if volumes else None,
         "power": [min(powers), max(powers)] if powers else None,
-        "specs_known": with_specs, "cars": cars, "owners_known": with_owners,
+        "specs_known": with_specs, "cars": cars, "owners_known": with_owners, "dtp_known": with_dtp,
     }
 
 

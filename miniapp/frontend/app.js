@@ -181,7 +181,7 @@ async function api(path, opts = {}) {
 // price: [300000, null] - по умолчанию "от 300 тыс.": ниже - в основном хлам и мусорные лоты (12.10.2026)
 // fuel/gearbox/drive - характеристики с Авто.ру (значения как в lots.FUELS/GEARBOXES/DRIVES),
 // volume - [от, до] в литрах, power - [от, до] в л.с.; null в паре - без границы
-const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [300e3, null], mileageTo: null, gapMin: null, ownersTo: null, regions: [], trade: [], kinds: [],
+const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [300e3, null], mileageTo: null, gapMin: null, ownersTo: null, dtpTo: null, regions: [], trade: [], kinds: [],
   fuel: [], gearbox: [], drive: [], volume: null, power: null, hideDamaged: true });
 const SORTS = [["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
 
@@ -218,6 +218,7 @@ function queryString(filters, q, sort) {
   if (filters.mileageTo != null) p.set("mileage_to", filters.mileageTo);
   if (filters.gapMin != null) p.set("gap_min", filters.gapMin);
   if (filters.ownersTo != null) p.set("owners_to", filters.ownersTo);
+  if (filters.dtpTo != null) p.set("dtp_to", filters.dtpTo);
   if (filters.regions.length) p.set("regions", filters.regions.join(","));
   if (filters.trade.length) p.set("trade", filters.trade.join(","));
   if ((filters.kinds || []).length) p.set("kinds", filters.kinds.join(","));
@@ -229,7 +230,7 @@ function queryString(filters, q, sort) {
 }
 
 function activeFilterCount(f) {
-  return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.ownersTo != null, f.regions.length, f.trade.length, (f.kinds || []).length,
+  return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.ownersTo != null, f.dtpTo != null, f.regions.length, f.trade.length, (f.kinds || []).length,
     (f.fuel || []).length, (f.gearbox || []).length, (f.drive || []).length, f.volume, f.power]
     .filter(Boolean).length;
 }
@@ -450,6 +451,7 @@ function activeChips(f) {
   if (f.gapMin != null) out.push([f.gapMin < 1 ? "Ниже рынка" : `Ниже рынка ${GAP_OPTIONS.find(([v]) => v === f.gapMin)?.[1] || ""}`.trim(),
     (x) => { x.gapMin = null; }]);
   if (f.ownersTo != null) out.push([f.ownersTo === 1 ? "1 владелец" : `Владельцев до ${f.ownersTo}`, (x) => { x.ownersTo = null; }]);
+  if (f.dtpTo != null) out.push([f.dtpTo === 0 ? "Без ДТП" : `ДТП до ${f.dtpTo}`, (x) => { x.dtpTo = null; }]);
   for (const r of f.regions) out.push([regionShort(r) === "МО" ? "Московская обл." : regionShort(r),
     (x) => { x.regions = x.regions.filter((v) => v !== r); }]);
   for (const [v, label] of TRADES) if (f.trade.includes(v)) out.push([label, (x) => { x.trade = x.trade.filter((t) => t !== v); }]);
@@ -568,7 +570,7 @@ function filtersFromParams(p) {
     if (i > 0) (models[item.slice(0, i)] = models[item.slice(0, i)] || []).push(item.slice(i + 1));
   }
   return { ...emptyFilters(), brands: list("brands"), models, year: pair("year_from", "year_to"),
-    price: pair("price_from", "price_to"), mileageTo: num("mileage_to"), gapMin: num("gap_min"), ownersTo: num("owners_to"),
+    price: pair("price_from", "price_to"), mileageTo: num("mileage_to"), gapMin: num("gap_min"), ownersTo: num("owners_to"), dtpTo: num("dtp_to"),
     regions: list("regions"), trade: list("trade"), kinds: list("kinds"), fuel: list("fuel"),
     gearbox: list("gearbox"), drive: list("drive"), volume: pair("vol_from", "vol_to"),
     power: pair("power_from", "power_to"), hideDamaged: p.hide_damaged === "1" };
@@ -1340,6 +1342,8 @@ const POWER_STEPS = [0, 70, 90, 100, 110, 120, 150, 180, 200, 250, 300, 400, nul
 const GAP_OPTIONS = [[null, "Любой"], [0.5, "Ниже рынка"], [10, "от 10%"], [20, "от 20%"], [30, "от 30%"]];
 // число владельцев - из рыночной оценки по VIN (19.10.2026); лоты без него при фильтре не показываются
 const OWNERS_OPTIONS = [[null, "Любое"], [1, "1"], [2, "до 2"], [3, "до 3"]];
+// ДТП по VIN (TRONK, 20.10.2026); машины без данных при фильтре не показываются
+const DTP_OPTIONS = [[null, "Любое"], [0, "Без ДТП"], [1, "до 1"], [2, "до 2"]];
 const TRADES = [["auction", "Аукцион"], ["public_offer", "Публичное предложение"]];
 const KINDS = [["car", "Одна машина"], ["multilot", "Мультилоты"]];
 
@@ -1494,6 +1498,10 @@ function renderFilters(initial) {
   const toggleIn = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : arr.concat(v));
   const gapChips = chipGroup(GAP_OPTIONS, (v) => draft.gapMin === v, (v) => { draft.gapMin = v; });
   const ownersChips = chipGroup(OWNERS_OPTIONS, (v) => (draft.ownersTo ?? null) === v, (v) => { draft.ownersTo = v; });
+  const dtpChips = chipGroup(DTP_OPTIONS, (v) => (draft.dtpTo ?? null) === v, (v) => { draft.dtpTo = v; });
+  const dtpNote = facets.cars && facets.dtp_known != null && facets.dtp_known < facets.cars
+    ? h("div", { class: "sub" }, `Известно у ${nf.format(facets.dtp_known)} из ${nf.format(facets.cars)} машин. `
+      + "Если выбрать фильтр, лоты без этих данных не покажутся.") : null;
   const ownersNote = facets.cars && facets.owners_known != null && facets.owners_known < facets.cars
     ? h("div", { class: "sub" }, `Известно у ${nf.format(facets.owners_known)} из ${nf.format(facets.cars)} машин. `
       + "Если выбрать фильтр, лоты без этих данных не покажутся.") : null;
@@ -1550,6 +1558,7 @@ function renderFilters(initial) {
     h("div", { class: "fsec" }, h("h3", {}, "Привод"), specChips("drive")),
     h("div", { class: "fsec" }, h("h3", {}, "Ниже рынка"), gapChips),
     h("div", { class: "fsec" }, h("h3", {}, "Владельцы"), ownersNote, ownersChips),
+    h("div", { class: "fsec" }, h("h3", {}, "ДТП"), dtpNote, dtpChips),
     h("div", { class: "fsec" }, h("h3", {}, "Регион"), regionChips),
     h("div", { class: "fsec" }, h("h3", {}, "Форма торгов"), tradeChips),
     h("div", { class: "fsec" }, h("h3", {}, "Тип лота"), kindChips),
