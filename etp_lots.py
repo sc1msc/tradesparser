@@ -981,8 +981,14 @@ PROXY_PHOTO_HOSTS = {"m-ets.ru"}
 REPLACE_PHOTO_HOSTS = {"bankrot.torggroup.org", "au-pro.ru", "torgi.cdtrf.ru", "m-ets.ru"}
 
 
+# Фото из документов торгов ЦДТ, сохранённые на нашем сервере (miniapp/backend/app/docphotos.py)
+DOC_PHOTO_PREFIX = "/docimg/"
+
+
 def photo_host(url):
-    """Площадка фото по адресу (webapi.torgi.cdtrf.ru -> torgi.cdtrf.ru)."""
+    """Площадка фото по адресу (webapi.torgi.cdtrf.ru -> torgi.cdtrf.ru; /docimg/... - ЦДТ)."""
+    if (url or "").startswith(DOC_PHOTO_PREFIX):
+        return "torgi.cdtrf.ru"
     return etp_status.host(url).replace("webapi.", "")
 
 _CDT_IMAGE_RE = re.compile(r"https://webapi\.torgi\.cdtrf\.ru/LotImage/public\?LotImageSize=Large&(?:amp;)?"
@@ -1022,6 +1028,8 @@ def page_photos(url, html):
 def photo_kind(url):
     """Чьё фото по адресу: original (без водяных знаков) / platform (знак площадки) / aggregator / other."""
     host = etp_status.host(url)
+    if (url or "").startswith(DOC_PHOTO_PREFIX):
+        return "original"  # фото из документов торгов - без водяных знаков
     if not host and (url or "").startswith("/img?"):
         return "platform"  # фото площадки через наш сервер (сейчас только МЭТС)
     if host == etp_status.AGGREGATOR_HOST:

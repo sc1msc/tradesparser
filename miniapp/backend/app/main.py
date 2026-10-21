@@ -70,7 +70,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import (auth, backup, billing, db, etp_collect, imgproxy, lots, notify, searches, site, status_refresh,
+from . import (auth, backup, billing, db, docphotos, etp_collect, imgproxy, lots, notify, searches, site, status_refresh,
                watchdog)
 
 FRONTEND_DIR = os.environ.get("HONESTLOT_FRONTEND_DIR") or os.path.join(
@@ -463,6 +463,15 @@ def img(u: str = ""):
         raise HTTPException(status_code=502, detail=f"фото не загрузилось: {type(e).__name__}")
     return FileResponse(path, media_type=imgproxy.media_type(u),
                         headers={"Cache-Control": f"public, max-age={imgproxy.BROWSER_CACHE_SECONDS}"})
+
+
+@app.get("/docimg/{name}")
+def docimg(name: str):
+    """Фото машины, вынутое из документов торгов ЦДТ (docphotos.py) и сохранённое у нас."""
+    path = docphotos.path(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="нет такого фото")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=2592000"})
 
 
 @app.get("/api/stats/photos")

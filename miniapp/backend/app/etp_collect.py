@@ -44,12 +44,13 @@ miniapp/run_local.py). Один проход вручную, на сервере
 import datetime
 import json
 import os
+import re
 import threading
 import time
 
 import etp_lots
 
-from . import db, imgproxy, lots, status_refresh
+from . import db, docphotos, imgproxy, lots, status_refresh
 
 MSK = status_refresh.MSK
 RUN_HOURS = (6, 14, 20)   # проходы по Москве; проверка статусов - в 5, 11, 16, 21
@@ -192,14 +193,37 @@ def photo_candidates(now):
     """Лоты ленты от агрегатора со ссылкой на площадку, где фото берём сами, ещё не проверенные
     (или проверенные давно), - сначала никогда не проверенные."""
     out = []
-    for r in db.conn().execute("SELECT lot_id, etp_url, etp_photos_at FROM lots WHERE in_source = 1 "
+    for r in db.conn().execute("SELECT lot_id, etp_url, etp_photos_at, photos FROM lots WHERE in_source = 1 "
                                "AND etp_url IS NOT NULL AND etp_url != ''"):
-        if etp_lots.is_etp_lot_id(r["lot_id"]) or etp_lots.etp_status.host(r["etp_url"]) not in etp_lots.REPLACE_PHOTO_HOSTS:
+        host = etp_lots.etp_status.host(r["etp_url"])
+        if host not in etp_lots.REPLACE_PHOTO_HOSTS:
+            continue
+        # лоты, собранные с площадок, - свои фото у них уже есть; кроме ЦДТ без фото (документы, docphotos)
+        if etp_lots.is_etp_lot_id(r["lot_id"]) and not (host == CDT_HOST and (r["photos"] or "[]") == "[]"):
             continue
         if r["etp_photos_at"] and not _stale(r["etp_photos_at"], now, PHOTO_RECHECK_DAYS):
             continue
         out.append((r["etp_photos_at"] or "", r["lot_id"], r["etp_url"]))
     return [(lot_id, url) for _, lot_id, url in sorted(out)]
+
+
+CDT_HOST = "torgi.cdtrf.ru"
+_CDT_TRADE_RE = re.compile(r"/trades/(\d+)")
+
+
+def _cdt_doc_photos(url):
+    """ЦДТ: на странице торгов фото нет - из документов торгов («Фото ТС», docphotos.py); None - не вышло."""
+    m = _CDT_TRADE_RE.search(url or "")
+    if not m:
+        return None
+    try:
+        return docphotos.cdt_photos(m.group(1)) or None
+    except status_refresh.HostPaused:
+        raise
+    except Exception as e:
+        print(f"[фото с площадок] ЦДТ {m.group(1)}: документы не разобрались ({type(e).__name__}: {str(e)[:100]})",
+              flush=True)
+        return None
 
 
 def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO_MAX_PER_PASS):
@@ -210,6 +234,8 @@ def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO
     for lot_id, url in todo:
         try:
             photos = etp_lots.page_photos(url, get(url))
+            if not photos and etp_lots.etp_status.host(url) == CDT_HOST:
+                photos = _cdt_doc_photos(url)
         except status_refresh.HostPaused:  # площадка закрыла доступ - её лоты в следующий раз
             st["fail"] += 1
             continue

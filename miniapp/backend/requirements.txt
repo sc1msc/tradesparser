@@ -1,2 +1,5 @@
 fastapi==0.115.*
 uvicorn[standard]==0.32.*
+# фото из документов ЦДТ (app/docphotos.py): картинки из PDF и превью
+pypdf==5.1.*
+pillow==11.*

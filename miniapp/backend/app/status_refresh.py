@@ -299,7 +299,9 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
                 page = get(etp_url)
                 res = etp_status.parse(etp_url, page, {"vin": lot.get("vin"), "plate": lot.get("plate")})
                 photos = etp_lots.page_photos(etp_url, page) if h in etp_lots.REPLACE_PHOTO_HOSTS else None
-                if photos is not None:  # фото площадки вместо фото агрегатора
+                # фото площадки вместо фото агрегатора; ЦДТ без фото на странице - не трогаем: там могут быть
+                # фото из документов торгов (docphotos, их кладёт etp_collect.photo_pass)
+                if photos is not None and (photos or h != "torgi.cdtrf.ru"):
                     live.update({"etp_photos": json.dumps(photos, ensure_ascii=False), "etp_photos_at": stamp})
             except urllib.error.HTTPError as e:
                 res = etp_status.UNKNOWN
