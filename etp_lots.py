@@ -857,6 +857,8 @@ class LotOnline:
             prod = self._products[unid]
             url = self.sales_url(unid)
             out.append({"url": url, "key": listing_key(url), "lot_number": unid, "trade_number": prod.get("procedure"),
+                        # фото карточки каталога - и лотам агрегатора этой площадки (etp_collect.collect, 21.10.2026)
+                        "photos": prod.get("photos") or [],
                         "title": prod.get("title") or "", "price_start": prod.get("price_start"),
                         "region": prod.get("region"), "list_status": ""})
         return out
@@ -971,14 +973,16 @@ COLLECTORS = [TorgGroup(), Mets(), Cdt(), LotOnline()]
 # Остальные крупные площадки (НИС, ELECTRO-TORGI, Фабрикант, РАД, Центр реализации, Профит) фото в
 # странице не отдают - у их лотов остаются фото агрегатора.
 PHOTO_KIND = {"bankrot.torggroup.org": "clean", "au-pro.ru": "clean", "m-ets.ru": "platform",
-              "torgi.cdtrf.ru": "platform"}
+              "torgi.cdtrf.ru": "platform", "catalog.lot-online.ru": "platform"}
 # Площадки, которые не пускают зарубежные адреса (МЭТС отвечает 403): у пользователя с VPN их фото не
 # откроются, поэтому мини-апп показывает их через свой сервер (GET /img, miniapp/backend/app/imgproxy.py).
 PROXY_PHOTO_HOSTS = {"m-ets.ru"}
 # Чьими фото заменяем фото агрегатора у лотов от агрегатора. Фото агрегатора при этом остаются запасным
 # набором: не открылось фото площадки (площадка закрыла доступ, как МЭТС 16.10.2026, или у пользователя
 # VPN) - мини-апп показывает фото агрегатора (lots._photo_sets, app.js).
-REPLACE_PHOTO_HOSTS = {"bankrot.torggroup.org", "au-pro.ru", "torgi.cdtrf.ru", "m-ets.ru"}
+REPLACE_PHOTO_HOSTS = {"bankrot.torggroup.org", "au-pro.ru", "torgi.cdtrf.ru", "m-ets.ru",
+                       # Lot-online (РАД): фото из карточки каталога, их кладёт etp_collect.collect - не проход фото
+                       "catalog.lot-online.ru"}
 
 
 # Фото из документов торгов ЦДТ, сохранённые на нашем сервере (miniapp/backend/app/docphotos.py)

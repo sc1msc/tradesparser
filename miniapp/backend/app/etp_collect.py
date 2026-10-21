@@ -105,6 +105,15 @@ def _complete(lot):
     return bool(lot.get("title") and lot.get("price_start") and lot.get("applications_end"))
 
 
+def _feed_lots_by_key():
+    """Ключ адреса на ЭТП (etp_lots.listing_key) -> номера лотов витрины с этим адресом."""
+    out = {}
+    for r in db.conn().execute("SELECT lot_id, etp_url FROM lots WHERE in_source = 1 AND etp_url IS NOT NULL "
+                               "AND etp_url != ''"):
+        out.setdefault(etp_lots.listing_key(r["etp_url"]), []).append(r["lot_id"])
+    return out
+
+
 def collect(collector, now, get, sleep):
     """Один проход по площадке -> сводка (dict)."""
     st = {"listed": 0, "new": 0, "reread": 0, "kept": 0, "in_feed": 0, "fail": 0, "bad": 0, "not_car": 0,
@@ -117,10 +126,20 @@ def collect(collector, now, get, sleep):
     st["listed"] = len(stubs)
     known = db.etp_known(collector.host)
     in_feed = {etp_lots.listing_key(u) for u in db.lot_etp_urls()}
+    feed_lots = None
     for stub in stubs:
         read_at = known.get(stub["key"])
         if not read_at and stub["key"] in in_feed:
             st["in_feed"] += 1
+            # Лот уже пришёл от агрегатора (с его водяным знаком или без фото): фото площадки, которые список
+            # уже дал (Lot-online - карточка каталога), - ему, как фото со страницы (lots._photo_sets).
+            if stub.get("photos"):
+                if feed_lots is None:
+                    feed_lots = _feed_lots_by_key()
+                for lot_id in feed_lots.get(stub["key"], []):
+                    db.save_live(lot_id, {"etp_photos": json.dumps(stub["photos"], ensure_ascii=False),
+                                          "etp_photos_at": _stamp()})
+                    st["feed_photos"] = st.get("feed_photos", 0) + 1
             continue
         if read_at and not _stale(read_at, now):
             db.etp_touch(stub["key"], stub["list_status"], _stamp())
