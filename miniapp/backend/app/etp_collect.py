@@ -215,7 +215,7 @@ def photo_candidates(now):
     for r in db.conn().execute("SELECT lot_id, etp_url, etp_photos_at, photos FROM lots WHERE in_source = 1 "
                                "AND etp_url IS NOT NULL AND etp_url != ''"):
         host = etp_lots.etp_status.host(r["etp_url"])
-        if host not in etp_lots.REPLACE_PHOTO_HOSTS:
+        if host not in etp_lots.REPLACE_PHOTO_HOSTS and host not in etp_lots.DOC_PHOTO_HOSTS:
             continue
         # лоты, собранные с площадок, - свои фото у них уже есть; кроме ЦДТ без фото (документы, docphotos)
         if etp_lots.is_etp_lot_id(r["lot_id"]) and not (host == CDT_HOST and (r["photos"] or "[]") == "[]"):
@@ -245,6 +245,25 @@ def _cdt_doc_photos(url):
         return None
 
 
+def _doc_photos(url, html):
+    """Фото, которые сервер сохраняет у себя (docphotos): ЦДТ - документы торгов, НИС - уменьшенные оригиналы со
+    страницы, Центр реализации - PDF «ФОТО» в документах лота. None - не вышло или не наша площадка."""
+    host = etp_lots.etp_status.host(url)
+    try:
+        if host == CDT_HOST:
+            return _cdt_doc_photos(url)
+        if host == "nistp.ru":
+            urls = etp_lots.nis_image_urls(url, html)
+            return docphotos.remote_photos(urls) or None if urls else None
+        if host == "bankrupt.centerr.ru":
+            return docphotos.attachment_photos(etp_lots.centerr_attachments(html)) or None
+    except status_refresh.HostPaused:
+        raise
+    except Exception as e:
+        print(f"[фото с площадок] {host}: фото не сохранились ({type(e).__name__}: {str(e)[:100]})", flush=True)
+    return None
+
+
 def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO_MAX_PER_PASS):
     """Фото со страниц площадок для лотов ленты -> etp_photos. -> сводка."""
     now = now or datetime.datetime.now(MSK)
@@ -252,9 +271,10 @@ def photo_pass(now=None, get=status_refresh.fetch, sleep=time.sleep, limit=PHOTO
     st = {"pages": len(todo), "with_photos": 0, "photos": 0, "empty": 0, "skipped": 0, "fail": 0}
     for lot_id, url in todo:
         try:
-            photos = etp_lots.page_photos(url, get(url))
-            if not photos and etp_lots.etp_status.host(url) == CDT_HOST:
-                photos = _cdt_doc_photos(url)
+            html = get(url)
+            photos = etp_lots.page_photos(url, html)
+            if not photos:
+                photos = _doc_photos(url, html)
         except status_refresh.HostPaused:  # площадка закрыла доступ - её лоты в следующий раз
             st["fail"] += 1
             continue

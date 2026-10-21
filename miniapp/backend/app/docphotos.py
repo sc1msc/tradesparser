@@ -37,7 +37,9 @@ SCAN_DOC_RE = re.compile(r"птс|стс|паспорт|свидетельств
 IMAGE_FILE_RE = re.compile(r"\.(jpe?g|png|webp|heic)$", re.I)
 MAX_FILE_BYTES = 40 * 1024 * 1024
 MAX_PHOTOS = 20       # на лот
+MAX_REMOTE_PHOTOS = 10  # НИС: каждое фото - отдельный запрос не чаще раза в 15 с (status_refresh.HOST_MIN_INTERVAL)
 MIN_SIDE = 300        # меньше по короткой стороне - печать, логотип, иконка
+FULL_SIDE = 1600      # больше - уменьшаем (оригиналы НИС с телефона 4000x3000 по 3-5 МБ)
 THUMB_SIDE = 480
 NAME_RE = re.compile(r"^[0-9a-f]{40}(?:_t)?\.jpg$")
 
@@ -49,6 +51,7 @@ def photo_dir():
 def _get(url, as_json=False):
     """Запрос к API ЦДТ: пауза площадки после отказов (status_refresh.check_paused) и учёт 403/429."""
     h = status_refresh.check_paused(url)
+    status_refresh._wait_interval(h)  # НИС банит за частые запросы - общий с проверкой статусов интервал
     req = urllib.request.Request(url, headers={"User-Agent": status_refresh.USER_AGENT})
     try:
         with urllib.request.urlopen(req, timeout=status_refresh.HOST_TIMEOUT.get(h, 90)) as resp:
@@ -121,9 +124,34 @@ def save(jpeg):
     if not os.path.exists(os.path.join(photo_dir(), full)):
         with open(os.path.join(photo_dir(), thumb), "wb") as f:
             f.write(_to_jpeg(Image.open(io.BytesIO(jpeg)), THUMB_SIDE))
+        img = Image.open(io.BytesIO(jpeg))
         with open(os.path.join(photo_dir(), full), "wb") as f:
-            f.write(jpeg)
+            f.write(_to_jpeg(img, FULL_SIDE) if max(img.size) > FULL_SIDE else jpeg)
     return {"full": f"/docimg/{full}", "thumb": f"/docimg/{thumb}"}
+
+
+def remote_photos(urls, get=_get, limit=MAX_REMOTE_PHOTOS):
+    """Фото по адресам (НИС) -> скачать, уменьшить, сохранить -> [{full, thumb}]."""
+    out = []
+    for url in (urls or [])[:limit]:
+        for jpeg in images_from_file(get(url)):
+            out.append(save(jpeg))
+    return out
+
+
+def attachment_photos(files, get=_get):
+    """Документы лота [(адрес, название, комментарий)] -> фото из тех, что похожи на фото машины (Центр
+    реализации: «ФОТО TOYOTA.pdf», комментарий «ФОТО»); сканы и бумаги - нет."""
+    out = []
+    for url, name, note in files:
+        if SCAN_DOC_RE.search(name) or not (PHOTO_DOC_RE.search(name) or PHOTO_DOC_RE.search(note)
+                                            or IMAGE_FILE_RE.search(name)):
+            continue
+        for jpeg in images_from_file(get(url)):
+            out.append(save(jpeg))
+            if len(out) >= MAX_PHOTOS:
+                return out
+    return out
 
 
 def cdt_photos(trade_id, get=_get):

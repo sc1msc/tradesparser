@@ -981,6 +981,7 @@ PROXY_PHOTO_HOSTS = {"m-ets.ru"}
 # набором: не открылось фото площадки (площадка закрыла доступ, как МЭТС 16.10.2026, или у пользователя
 # VPN) - мини-апп показывает фото агрегатора (lots._photo_sets, app.js).
 REPLACE_PHOTO_HOSTS = {"bankrot.torggroup.org", "au-pro.ru", "torgi.cdtrf.ru", "m-ets.ru",
+                       "docimg",  # фото, сохранённые на нашем сервере (docphotos: ЦДТ, НИС, Центр реализации)
                        # Lot-online (РАД): фото из карточки каталога, их кладёт etp_collect.collect - не проход фото
                        "catalog.lot-online.ru"}
 
@@ -992,11 +993,54 @@ DOC_PHOTO_PREFIX = "/docimg/"
 def photo_host(url):
     """Площадка фото по адресу (webapi.torgi.cdtrf.ru -> torgi.cdtrf.ru; /docimg/... - ЦДТ)."""
     if (url or "").startswith(DOC_PHOTO_PREFIX):
-        return "torgi.cdtrf.ru"
+        return "docimg"
     return etp_status.host(url).replace("webapi.", "")
 
 _CDT_IMAGE_RE = re.compile(r"https://webapi\.torgi\.cdtrf\.ru/LotImage/public\?LotImageSize=Large&(?:amp;)?"
                            r"ImageId=([0-9a-f-]{36})&(?:amp;)?LotId=(\d+)&(?:amp;)?TradeId=(\d+)&(?:amp;)?_v=([0-9a-f-]{36})")
+
+
+# Площадки, где фото лота сервер скачивает и хранит у себя (miniapp/backend/app/docphotos.py), с 22.10.2026:
+# НИС - фото в странице торгов, но оригиналы с телефона 4000x3000 по несколько МБ (уменьшаем); Центр
+# реализации - фото PDF-документом в «Документах» лота. Обходит их etp_collect.photo_pass.
+DOC_PHOTO_HOSTS = {"nistp.ru", "bankrupt.centerr.ru"}
+_NIS_IMAGE_RE = re.compile(r"<a[^>]*href='(https://nistp\.ru/files/images/[^']+)'[^>]*data-lightbox='images_(\d+)'")
+_NIS_LOT_RE = re.compile(r"trade_nid=(\d+)(?:#lot(\d+))?")
+
+
+def nis_image_urls(url, html):
+    """НИС: адреса фото лота со страницы торгов -> [url]; None - на странице несколько лотов и чей - не понять.
+    Блок фото - data-lightbox='images_<номер лота>'; номер лота = номер торгов + N из якоря #lotN (491415#lot1 ->
+    images_491416)."""
+    blocks = {}
+    for img, lot in _NIS_IMAGE_RE.findall(html or ""):
+        blocks.setdefault(lot, []).append(img)
+    if len(blocks) <= 1:
+        return next(iter(blocks.values()), [])
+    m = _NIS_LOT_RE.search(url or "")
+    if m:
+        lot = str(int(m.group(1)) + int(m.group(2) or 1))
+        if lot in blocks:
+            return blocks[lot]
+    return None
+
+
+_CENTERR_ROW_RE = re.compile(r'<tr class="gridRow attachment-grid-row">(.*?)</tr>', re.S)
+_CENTERR_FILE_RE = re.compile(r"href='(/public/attachments/file/\d+/[^']+)'[^>]*>([^<]+)</a>")
+
+
+def centerr_attachments(html):
+    """Центр реализации: документы лота -> [(адрес файла, название, комментарий + тип)]."""
+    out = []
+    for row in _CENTERR_ROW_RE.findall(html or ""):
+        m = _CENTERR_FILE_RE.search(row)
+        if not m:
+            continue
+        cells = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", c)).strip()
+                 for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
+        out.append(("https://bankrupt.centerr.ru" + html_lib.unescape(m.group(1)), html_lib.unescape(m.group(2)).strip(),
+                    " ".join(cells[-2:])))
+    return out
 
 
 def page_photos(url, html):
