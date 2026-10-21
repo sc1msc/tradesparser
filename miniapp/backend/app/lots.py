@@ -552,6 +552,10 @@ def _prepare(lot, models_index=None):
     if lot["kind"] == lot_metrics.LOT_CAR:
         found = lot_metrics.specs_from_text(f"{lot.get('title') or ''} {lot.get('description') or ''}")
         for k, v in found.items():
+            # коробки в ПТС нет, её организатор пишет по памяти (Explorer 2013 «КПП механическая» - их
+            # выпускали только с автоматом): при расхождении коробка - по оценке (владелец, 21.10.2026)
+            if k == "transmission" and lot.get(k):
+                continue
             if v is not None and not _same_spec(k, v, lot.get(k)):
                 lot[k] = v
     if lot["kind"] == lot_metrics.LOT_MULTILOT:
