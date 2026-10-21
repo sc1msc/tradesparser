@@ -70,6 +70,8 @@ AUTORU_SPEC_FIELDS = [
     "autoru_drive", "autoru_transmission", "autoru_modification",
 ]
 AUTORU_FIELDS = AUTORU_FIELDS + AUTORU_SPEC_FIELDS
+# С этого дня оценка сохраняется вместе с характеристиками; более ранняя без них - устаревшая (autoru()).
+SPECS_SINCE = datetime.datetime(2026, 10, 13)
 # ДТП TRONK (fill_dtp.py, с 19.10.2026): статус ok / no_data / error: ..., число ДТП, список ДТП
 # компактным JSON (tronk_dtp.parse), дата данных TRONK, когда спрашивали.
 DTP_FIELDS = ["dtp_status", "dtp_count", "dtp_accidents", "dtp_as_of", "dtp_checked_at"]
@@ -159,6 +161,15 @@ class VinCache:
         if checked is None or (now or datetime.datetime.now()) - checked > datetime.timedelta(days=ttl_days):
             return None
         return {f: rec.get(f, "") for f in AUTORU_FIELDS}
+
+    @staticmethod
+    def lacks_specs(estimate):
+        """Оценка до SPECS_SINCE без характеристик (их тогда не сохраняли). Новый лот такую не наследует,
+        а оценивается заново в шаге 5 - получит характеристики и свежую цену (build_lots_current_month;
+        21.10.2026: Jetta 9100020963 пришла с ценой от 27.09 и без объёма, мощности и коробки)."""
+        checked = _parse_dt(estimate.get("autoru_checked_at"))
+        return (checked is not None and checked < SPECS_SINCE
+                and not any(str(estimate.get(f) or "").strip() for f in AUTORU_SPEC_FIELDS))
 
     def dtp(self, vin, ttl_days, now=None):
         """Строка справочника, если ДТП по VIN уже запрошены и ответ моложе ttl_days, иначе None."""

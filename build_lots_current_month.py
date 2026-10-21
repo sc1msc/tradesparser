@@ -226,6 +226,8 @@ def run():
             # в справочнике - самая свежая оценка этой машины (absorb выше)
             fresh = cache.autoru(vin, config.AUTORU_ESTIMATE_TTL_DAYS, now_dt)
             own_status = (extras.get("autoru_status") or "").strip()
+            if fresh is not None and own_status not in vin_cache.AUTORU_FINAL and vin_cache.VinCache.lacks_specs(fresh):
+                fresh = None  # новый лот: старую оценку без характеристик не наследует, шаг 5 оценит заново
             if fresh is not None:
                 if own_status not in vin_cache.AUTORU_FINAL:
                     from_cache += 1
