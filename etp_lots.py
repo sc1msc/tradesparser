@@ -973,7 +973,7 @@ COLLECTORS = [TorgGroup(), Mets(), Cdt(), LotOnline()]
 # Остальные крупные площадки (НИС, ELECTRO-TORGI, Фабрикант, РАД, Центр реализации, Профит) фото в
 # странице не отдают - у их лотов остаются фото агрегатора.
 PHOTO_KIND = {"bankrot.torggroup.org": "clean", "au-pro.ru": "clean", "m-ets.ru": "platform",
-              "torgi.cdtrf.ru": "platform", "catalog.lot-online.ru": "platform"}
+              "torgi.cdtrf.ru": "platform", "catalog.lot-online.ru": "clean"}
 # Площадки, которые не пускают зарубежные адреса (МЭТС отвечает 403): у пользователя с VPN их фото не
 # откроются, поэтому мини-апп показывает их через свой сервер (GET /img, miniapp/backend/app/imgproxy.py).
 PROXY_PHOTO_HOSTS = {"m-ets.ru"}
