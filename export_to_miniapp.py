@@ -224,10 +224,24 @@ def _needs_refresh(entry, lot_id=None):
     return datetime.datetime.now() - fetched > datetime.timedelta(days=config.MINIAPP_DETAILS_REFRESH_DAYS)
 
 
+# Обрыв соединения с Google посреди прогона (21.10.2026 так не прочитался vin_cache, и выгрузка ушла
+# без ДТП) - повторяем чтение с паузой.
+SHEET_READ_ATTEMPTS = 3
+SHEET_READ_PAUSE_SEC = 30
+
+
 def read_sheet(name=SOURCE_SHEET):
-    creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    ws = gspread.authorize(creds).open_by_key(config.SPREADSHEET_ID).worksheet(name)
-    values = ws.get_all_values()
+    for attempt in range(1, SHEET_READ_ATTEMPTS + 1):
+        try:
+            creds = Credentials.from_service_account_file(config.SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+            ws = gspread.authorize(creds).open_by_key(config.SPREADSHEET_ID).worksheet(name)
+            values = ws.get_all_values()
+            break
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt == SHEET_READ_ATTEMPTS:
+                raise
+            print(f"  Google: лист {name} не прочитался ({str(e)[:100]}), повтор через {SHEET_READ_PAUSE_SEC} с")
+            time.sleep(SHEET_READ_PAUSE_SEC)
     if not values:
         return []
     header = values[0]
@@ -253,12 +267,14 @@ def _mileage_source(row, mileage, estimated):
 
 def read_dtp():
     """ДТП по VIN из справочника vin_cache (их покупает fill_dtp.py, шаг 7): {VIN: строка справочника}.
-    Справочник недоступен - выгружаем без ДТП (не роняем выгрузку)."""
+    Справочник недоступен - None: выгрузка уходит без поля dtp, и сервер оставляет лотам прежние ДТП
+    (db.import_lots), а не стирает их, как 21.10.2026."""
     try:
         rows = read_sheet("vin_cache")
     except Exception as e:
-        automation.alert(f"Выгрузка в мини-апп: справочник vin_cache не прочитался ({e}) - ДТП не выгружены.")
-        return {}
+        automation.alert(f"Выгрузка в мини-апп: справочник vin_cache не прочитался ({e}) - ДТП новых машин "
+                         f"не выгружены, у остальных на сервере остались прежние.")
+        return None
     return {(r.get("vin") or "").strip().upper(): r for r in rows if (r.get("dtp_status") or "").strip() == "ok"}
 
 
@@ -316,7 +332,7 @@ def build_lot(row, details, damage=None, dtp=None):
             d.get("applications_end") or row.get("applications_end"), json.dumps(periods))
     else:
         applications_end = row.get("applications_end") or d.get("applications_end")
-    return {
+    lot = {
         "lot_id": lot_id,
         "url": row.get("url"),
         "title": row.get("title"),
@@ -380,10 +396,13 @@ def build_lot(row, details, damage=None, dtp=None):
         # мини-апп прячет такие лоты галочкой "Скрыть битые"
         "photo_verdict": (damage or {}).get("verdict"),
         "photo_signs": (damage or {}).get("signs") or [],
-        # ДТП по VIN (fill_dtp.py -> vin_cache): None - не проверяли или данных нет; count 0 - «ДТП не найдены»
-        "dtp": dtp_payload((dtp or {}).get((row.get("vin") or "").strip().upper()),
-                           row.get("autoru_mark") or row.get("brand")),
     }
+    # ДТП по VIN (fill_dtp.py -> vin_cache): None - не проверяли или данных нет; count 0 - «ДТП не найдены».
+    # Справочник не прочитался (dtp is None) - поля нет вовсе: сервер оставит прежнее значение.
+    if dtp is not None:
+        lot["dtp"] = dtp_payload(dtp.get((row.get("vin") or "").strip().upper()),
+                                 row.get("autoru_mark") or row.get("brand"))
+    return lot
 
 
 def refresh_watchlist(api_url, token, session, cache):
@@ -530,7 +549,7 @@ def run(dry_run=False, force=False):
     dtp = read_dtp()
     payload = {"lots": [build_lot(r, cache.get(lot_id_of(r)), damage.get(lot_id_of(r)), dtp)
                         for r in rows if id(r) not in ghost_ids]}
-    print(f"  с данными о ДТП: {sum(1 for lot in payload['lots'] if lot['dtp'] is not None)}")
+    print(f"  с данными о ДТП: {sum(1 for lot in payload['lots'] if lot.get('dtp') is not None)}")
 
     if dry_run:
         with open(PREVIEW_FILE, "w", encoding="utf-8") as f:

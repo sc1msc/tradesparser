@@ -169,10 +169,17 @@ def run(specs_only=False, limit=None):
     # остановил оценку (капча, ошибки подряд) - не трогаем. Сбой здесь шаг не роняет.
     if stopped or not getattr(config, "AUTORU_SPECS_PER_RUN", 0):
         return
-    try:
-        run_specs(config.AUTORU_SPECS_PER_RUN, interactive=False)
-    except Exception as e:
-        automation.alert(f"Авто.ру: дозаполнение характеристик не прошло ({str(e)[:150]}), повторится завтра.")
+    # обрыв связи с Google (21.10.2026: ConnectionResetError при чтении листа) - одна повторная попытка
+    for attempt in (1, 2):
+        try:
+            run_specs(config.AUTORU_SPECS_PER_RUN, interactive=False)
+            return
+        except Exception as e:
+            if attempt == 1:
+                print(f"Дозаполнение характеристик: {str(e)[:150]} - повтор через 60 с")
+                time.sleep(60)
+            else:
+                automation.alert(f"Авто.ру: дозаполнение характеристик не прошло ({str(e)[:150]}), повторится завтра.")
 
 
 def _run_estimates():

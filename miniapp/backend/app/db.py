@@ -159,6 +159,9 @@ LOT_FIELDS = [
     "mileage_source", "mileage_record_date", "dtp",
 ]
 JSON_FIELDS = {"periods", "photos", "photo_signs", "dtp"}
+# Поля, которые выгрузка может не прислать вовсе (источник на ПК недоступен) - тогда прежнее значение
+# остаётся (import_lots).
+OPTIONAL_IMPORT_FIELDS = {"dtp"}
 FLAG_FIELDS = {"mileage_estimated", "is_public_offer", "estimate_uncertain"}
 
 # Колонки, добавленные после первого запуска на сервере: CREATE TABLE IF NOT
@@ -256,7 +259,10 @@ def import_lots(lots, now_iso):
     если импорт упадёт на середине, витрина останется прежней."""
     placeholders = ", ".join(["?"] * (len(LOT_FIELDS) + 3))
     columns = ", ".join(["lot_id"] + LOT_FIELDS + ["first_seen_at", "updated_at"])
-    updates = ", ".join(f"{f} = excluded.{f}" for f in LOT_FIELDS)
+    # Поле, которого нет ни в одном лоте выгрузки (OPTIONAL_IMPORT_FIELDS), у известных лотов не
+    # трогаем: ПК не смог его прочитать (21.10.2026 vin_cache не прочитался - ДТП стёрлись у всех).
+    absent = {f for f in OPTIONAL_IMPORT_FIELDS if not any(f in lot for lot in lots)}
+    updates = ", ".join(f"{f} = excluded.{f}" for f in LOT_FIELDS if f not in absent)
     sql = (
         f"INSERT INTO lots ({columns}, in_source) VALUES ({placeholders}, 1) "
         f"ON CONFLICT(lot_id) DO UPDATE SET {updates}, "
