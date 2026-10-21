@@ -492,6 +492,21 @@ def photo_sources():
 
 
 SPEC_FIELDS = ("engine_type", "displacement", "power", "drive", "transmission")
+# «АКПП»/«автомат» в лоте пишут и про вариатор с роботом - это не расхождение, точнее остаётся оценка
+AUTOMATIC_KINDS = {"автомат", "вариатор", "робот"}
+
+
+def _same_spec(field, text_value, estimate_value):
+    """Значение из текста лота не противоречит оценке (тогда оставляем оценку)."""
+    if estimate_value in (None, ""):
+        return False
+    if field == "power":
+        return abs(int(text_value) - int(estimate_value)) <= 3
+    if field == "displacement":
+        return round(int(text_value) / 100) == round(int(estimate_value) / 100)
+    if field == "transmission" and text_value == "автомат":
+        return estimate_value in AUTOMATIC_KINDS
+    return text_value == estimate_value
 
 
 def _prepare(lot, models_index=None):
@@ -531,13 +546,13 @@ def _prepare(lot, models_index=None):
     # тип лота (lot_metrics.lot_kind): мультилот - без процента к рынку и
     # с меткой; права требования/доли в ленту не попадают вовсе
     lot["kind"] = lot.get("lot_kind") or lot_metrics.LOT_CAR
-    # Характеристик от рыночной оценки нет (нет VIN, оценка не нашла модель) - берём однозначное из
-    # текста лота: «2.0 л, 150 л.с., АКПП», выписка из ПТС (lot_metrics.specs_from_text, 20.10.2026).
-    # Только в пустые поля: оценку текст не перекрывает.
-    if lot["kind"] == lot_metrics.LOT_CAR and not any(lot.get(k) for k in SPEC_FIELDS):
+    # Характеристики из текста лота: «2.0 л, 150 л.с., АКПП», выписка из ПТС (lot_metrics.specs_from_text,
+    # 20.10.2026) - заполняют пустые поля, а при расхождении с рыночной оценкой верна карточка лота
+    # (решение владельца 21.10.2026: оценка угадывает модификацию, организатор пишет по документам).
+    if lot["kind"] == lot_metrics.LOT_CAR:
         found = lot_metrics.specs_from_text(f"{lot.get('title') or ''} {lot.get('description') or ''}")
         for k, v in found.items():
-            if v is not None:
+            if v is not None and not _same_spec(k, v, lot.get(k)):
                 lot[k] = v
     if lot["kind"] == lot_metrics.LOT_MULTILOT:
         # Марка/модель у мультилота - от одной из машин (Авто.ру по первому

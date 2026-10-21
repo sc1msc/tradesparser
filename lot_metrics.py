@@ -249,6 +249,7 @@ def lot_kind(text):
 # тексте два разных объёма или и «АКПП», и «механика» - поле пустое (лучше пусто, чем чужое). Газ и
 # электро не ищем: «ГАЗель», «электростеклоподъёмники».
 _DISP_L_RE = re.compile(r"(?<![\d.,])([0-6][.,]\d{1,2})\s*(?:Л\b|Л\.|ЛИТР|L\b)")
+_NOT_DISP_RE = re.compile(r"РАСХОД|МАСЛ|ТОПЛИВ|БЕНЗИН\w*\s+В\s+БАКЕ|БАК|ЖИДКОСТ|АНТИФРИЗ|ОХЛАЖДА")
 _DISP_CC_RE = re.compile(r"(?<!\d)(\d{3,4})(?:[.,]\d)?\s*(?:СМ\s*3|СМ³|КУБ\.?\s*СМ|СМ\.?\s*КУБ|CM3|CC\b)")
 _DISP_CC_AFTER_RE = re.compile(r"(?:КУБ\.?\s*СМ|СМ\.?\s*КУБ|СМ3|СМ³)\.?\s*[:\-]?\s*(\d{3,4})(?:[.,]\d)?(?!\d)")
 _POWER_RE = re.compile(r"(?<![\d.,])(\d{2,3})(?:[.,]\d+)?\s*(?:Л\.?\s*С\b|Л\.?\s*С\.|ЛС\b|Л/С|HP\b)")
@@ -276,7 +277,10 @@ def specs_from_text(text):
     """{engine_type, displacement (см³), power (л.с.), drive, transmission} из текста лота; чего нет
     или что противоречиво - None. Значения - как у рыночной оценки (autoru_valuation.parse_specs)."""
     t = (text or "").upper()
-    disp = [round(float(m.replace(",", ".")) * 1000) for m in _DISP_L_RE.findall(t)]
+    # литры - не объём двигателя, если рядом расход, масло, топливо, бак («расход масла 1,5 л. на 5 тыс км»)
+    disp = [round(float(m.group(1).replace(",", ".")) * 1000) for m in _DISP_L_RE.finditer(t)
+            if not _NOT_DISP_RE.search(t[max(0, m.start() - 30):m.start()])
+            and not re.match(r"\.?\s*(НА|В)\s", t[m.end():m.end() + 5])]
     disp += [int(m) for m in _DISP_CC_RE.findall(t) + _DISP_CC_AFTER_RE.findall(t)]
     # объём из литров округляем как в объявлениях (1.6 л = 1598 см³): сравниваем по десятым литра
     disp = [d for d in disp if 600 <= d <= 7000]
