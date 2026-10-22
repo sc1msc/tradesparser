@@ -73,8 +73,9 @@ ALERT_REPEAT_HOURS = 12
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"
 # Площадки, которые банят за частоту, - не чаще раза в N секунд для КАЖДОГО запроса сервера (проверка статусов,
 # сбор лотов, фото). НИС 19.10.2026 прочитала 40 страниц за 3 минуты (пауза 2 с), а через час отвечала
-# 403 с нашим IP, потом перестала отвечать совсем.
-HOST_MIN_INTERVAL = {"nistp.ru": 15.0}
+# 403 с нашим IP, потом перестала отвечать совсем. ELECTRO-TORGI и Альфалот 21-22.10.2026 отвечали 429 («слишком
+# много запросов») на проверку статусов подряд и уходили на паузу.
+HOST_MIN_INTERVAL = {"nistp.ru": 15.0, "bankrotstvo.electro-torgi.ru": 10.0, "bankrupt.alfalot.ru": 10.0}
 _last_request = {}
 _interval_lock = threading.Lock()
 
@@ -156,7 +157,7 @@ def check_paused(url):
     h = etp_status.host(url)
     until = paused_until(h)
     if until:
-        raise HostPaused(f"{h} закрыла доступ серверу (403), пауза до {time.strftime('%d.%m %H:%M', time.localtime(until))}")
+        raise HostPaused(f"{h} закрыла доступ серверу (403/429), пауза до {time.strftime('%d.%m %H:%M', time.localtime(until))}")
     return h
 
 
@@ -376,10 +377,18 @@ def _report(stats, now, send=None):
         for h, st in stats["etp"].items():
             total = st["ok"] + st["unknown"]
             if total >= 5 and st["unknown"] * 2 >= total:
-                why = f"площадка отвечает ошибкой ({st['error']})" if st["error"] else "поменялась вёрстка страницы"
-                _alert(state, f"etp:{h}", f"HonestLot, проверка статусов на ЭТП: на {h} статус не распознан у "
-                       f"{st['unknown']} из {total} лотов - {why}. Для этих лотов пока статус агрегатора; "
-                       f"нужна правка etp_status.py.", now, repeat_hours=24, send=send)
+                denied = st["error"].startswith(("HostPaused", "HTTP 403", "HTTP 429"))
+                if denied:
+                    # площадка не пускает сервер (часто - за частоту запросов): разбор не виноват, правка кода
+                    # не нужна (22.10.2026 так звучала тревога про ELECTRO-TORGI - «нужна правка etp_status.py»)
+                    text = (f"HonestLot, проверка статусов на ЭТП: {h} не пускает сервер ({st['error']}). У "
+                            f"{st['unknown']} из {total} лотов пока статус агрегатора; после паузы сервер проверит "
+                            f"снова. Если повторяется - реже ходить на площадку (status_refresh.HOST_MIN_INTERVAL).")
+                else:
+                    why = f"площадка отвечает ошибкой ({st['error']})" if st["error"] else "поменялась вёрстка страницы"
+                    text = (f"HonestLot, проверка статусов на ЭТП: на {h} статус не распознан у {st['unknown']} из "
+                            f"{total} лотов - {why}. Для этих лотов пока статус агрегатора; нужна правка etp_status.py.")
+                _alert(state, f"etp:{h}", text, now, repeat_hours=24, send=send)
         # суточный отчёт о площадках без разбора: новая площадка или лотов стало заметно больше
         if now.hour >= REPORT_HOUR and state.get("report_date") != now.date().isoformat() and stats["unsupported"]:
             reported = state.get("unsupported", {})
