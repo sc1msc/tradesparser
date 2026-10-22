@@ -16,6 +16,8 @@
   --wm-lot: #0E9C6B;  /* «lot» в надписи - фирменная мята */
   --neutral-soft: rgba(125, 130, 139, .14);
   --warn: #c77800;
+  /* опасное действие («Удалить поиск»): цвет темы Telegram; в браузере - запасной. Сердечко .fav.on - не он */
+  --danger: var(--tg-theme-destructive-text-color, #e5484d);
   --radius: 14px;
 }
 @media (prefers-color-scheme: dark) {
@@ -186,7 +188,7 @@ input { font: inherit; color: inherit; }
 .dtp .sub { margin-top: 4px; }
 .dtp-list { margin-top: 10px; }
 .dtp-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0;
-  border-top: 1px solid var(--line, rgba(127, 127, 127, .2)); }
+  border-top: 1px solid var(--sep); }
 .dtp-text { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .dtp-text span { color: var(--hint); }
 .dtp-scheme { flex: none; width: 104px; height: 76px; padding: 4px; border: 0; border-radius: 8px; background: #fff; cursor: zoom-in; }
@@ -242,10 +244,12 @@ input { font: inherit; color: inherit; }
 .stub h2 { margin: 16px 0 8px; }
 .stub p { color: var(--hint); }
 
+/* тост - инвертированный к теме (22.10.2026): в светлой тёмный, в тёмной светлый; раньше всегда тёмный и в
+   тёмной теме сливался с фоном */
 .toast {
   position: fixed; left: 50%; bottom: calc(88px + env(safe-area-inset-bottom)); transform: translateX(-50%);
-  background: rgba(20, 22, 26, .92); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 50;
-  max-width: calc(100% - 32px);
+  background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 50;
+  max-width: calc(100% - 32px); box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
 }
 
 /* избранное: перевыставленные, закрытые, архив; поддержка */
@@ -269,6 +273,8 @@ input { font: inherit; color: inherit; }
 .btn.share svg { width: 22px; height: 22px; }
 .toast.with-action { display: flex; align-items: center; gap: 14px; padding-right: 8px; width: max-content; white-space: nowrap; }
 .toast-act { color: #7fd4a3; font-weight: 600; white-space: nowrap; padding: 2px 6px; }
+/* в тёмной теме тост светлый - кнопка действия тёмно-зелёная (контраст не ниже 4,5:1) */
+:root.dark .toast-act { color: #0f7538; }
 
 /* аукцион: в цене - начальная цена, итоговая определится на торгах */
 .price .pfx { font-weight: 500; font-size: 12px; color: var(--hint); }
@@ -467,7 +473,7 @@ html.pv-open, html.pv-open body { overflow: hidden; }
 .menulist { display: flex; flex-direction: column; background: var(--bg2); border-radius: 12px; }
 .menulist button { padding: 13px 14px; border-bottom: 1px solid var(--sep); text-align: left; font-size: 15px; }
 .menulist button:last-child { border-bottom: 0; }
-.menulist .danger { color: #e5484d; }
+.menulist .danger { color: var(--danger); }
 .menunote { padding: 13px 14px; border-bottom: 1px solid var(--sep); color: var(--hint); font-size: 14px; }
 .lockcard { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 24px 12px 0; padding: 24px 18px; background: var(--bg); border-radius: 18px; text-align: center; }
 .lockcard h3 { margin: 0; font-size: 18px; }

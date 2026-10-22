@@ -33,6 +33,26 @@ const OUTCOME_TEXT = {
 const OUTCOME_SHORT = { open: "идёт приём заявок", awaiting: "ждём итогов", done: "завершены", failed: "не состоялись", cancelled: "отменены", suspended: "приостановлены", removed: "удалён с сайта" };
 
 if (tg) { tg.ready(); tg.expand(); }
+// Метод Telegram есть в этой версии клиента? Только внутри Telegram: в браузере telegram-web-app.js тоже
+// загружен (версия 6.0), и вызовы новых методов пишут в консоль «… is not supported in version 6.0».
+const tgv = (v) => IN_TG && !!tg.isVersionAtLeast && tg.isVersionAtLeast(v);
+
+// Шапка Telegram («Закрыть», «⋯»), фон окна и системная панель Android - в цвета приложения (22.10.2026).
+// По умолчанию Telegram красит шапку и фон в bg_color, а лента и липкая верхняя часть у нас - secondary_bg_color
+// (--bg2): между шапкой и лентой была видна граница; панель Android брала bottom_bar_bg_color темы, а наши
+// вкладки - bg_color (--bg). Ключевые слова, а не hex: при смене темы Telegram перекрашивает сам, повторять на
+// themeChanged не нужно. dark - на время просмотра фото на весь экран (openViewer): шапка и панель чёрные
+// (произвольный цвет шапки - с Bot API 6.9, панели - с 7.10). Все значения - здесь.
+function tgChrome(dark) {
+  try {
+    if (tgv("6.1")) {
+      if (!dark) { tg.setHeaderColor("secondary_bg_color"); tg.setBackgroundColor("secondary_bg_color"); }
+      else if (tgv("6.9")) tg.setHeaderColor("#000000");
+    }
+    if (tgv("7.10")) tg.setBottomBarColor(dark ? "#000000" : "bg_color");
+  } catch { /* клиент не принял цвет - остаются цвета Telegram */ }
+}
+tgChrome(false);
 document.documentElement.classList.toggle("tg", IN_TG);
 document.documentElement.classList.toggle("web", WEB);
 
@@ -146,7 +166,14 @@ function toast(text, action, ms) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.remove(), ms || (action ? 4500 : 2200));
 }
-const haptic = (kind) => { try { tg && tg.HapticFeedback.impactOccurred(kind || "light"); } catch { /* вне Telegram */ } };
+// Вибрация (HapticFeedback, Bot API 6.1+; вне Telegram - ничего):
+//   haptic       - «толчок»: избранное, «Поделиться», окна (сохранение поиска, Pro), просмотр фото;
+//   hapticSelect - лёгкий щелчок выбора: чипы, галочки, переключатели, ползунки (на каждый шаг), смена вкладки;
+//   hapticNotify - итог действия: "success" (поиск сохранён/удалён, почта принята), "error" - запрос не прошёл
+//                  (там же, где тост «Не получилось…»). На прокрутку, открытие лота, «Показать ещё» - без вибрации.
+const haptic = (kind) => { try { if (tgv("6.1")) tg.HapticFeedback.impactOccurred(kind || "light"); } catch { /* старый клиент */ } };
+const hapticSelect = () => { try { if (tgv("6.1")) tg.HapticFeedback.selectionChanged(); } catch { /* старый клиент */ } };
+const hapticNotify = (type) => { try { if (tgv("6.1")) tg.HapticFeedback.notificationOccurred(type); } catch { /* старый клиент */ } };
 function openLink(url) { if (IN_TG) tg.openLink(url); else window.open(url, "_blank", "noopener"); }
 // Аналитика: ошибки не показываем пользователю - это не его забота.
 function track(type, lotId, place) {
@@ -253,6 +280,7 @@ async function toggleFav(id, item) {
   } catch (e) {
     on ? state.favIds.delete(id) : state.favIds.add(id);
     syncHearts(id);
+    hapticNotify("error");
     toast("Не получилось, попробуйте ещё раз");
   }
 }
@@ -433,7 +461,7 @@ function renderSorts() {
   feed.sorts.replaceChildren(...SORTS.map(([key, label]) =>
     h("button", {
       class: "chip" + (state.sort === key ? " on" : ""),
-      onclick: () => { state.sort = key; store.set("sort", key); renderSorts(); loadFeed(true); },
+      onclick: () => { if (state.sort !== key) hapticSelect(); state.sort = key; store.set("sort", key); renderSorts(); loadFeed(true); },
     }, label)));
 }
 
@@ -517,7 +545,7 @@ async function loadFeed(reset) {
     if (id !== state.reqId) return;
     if (e instanceof AuthError) return showStub();
     if (reset) feed.list.replaceChildren(h("div", { class: "empty" }, h("b", {}, "Не удалось загрузить"), "Проверьте интернет и попробуйте ещё раз."));
-    else toast("Не удалось загрузить");
+    else { hapticNotify("error"); toast("Не удалось загрузить"); }
   } finally {
     if (id === state.reqId) {
       feed.more.disabled = false;
@@ -622,7 +650,7 @@ function openSheet(title, ...body) {
 
 function switchEl(on, onchange, label) {
   const input = h("input", { type: "checkbox", checked: !!on, "aria-label": label,
-    onchange: (e) => onchange(e.target.checked, e.target) });
+    onchange: (e) => { hapticSelect(); onchange(e.target.checked, e.target); } });
   return h("label", { class: "sw", onclick: (e) => e.stopPropagation() }, input, h("span"));
 }
 
@@ -661,7 +689,7 @@ async function openSaveSheet(params) {
   const full = (state.searches || []).length >= (state.searchLimit || 10);
   const name = h("input", { class: "textin", type: "text", maxlength: "60", placeholder: "Название" });
   const info = h("div", { class: "sub" }, "Считаем лоты…");
-  const notifyBox = h("input", { type: "checkbox", checked: true });
+  const notifyBox = h("input", { type: "checkbox", checked: true, onchange: hapticSelect });
   const err = h("div", { class: "sheet-err hidden" });
   const save = full ? null : h("button", { class: "btn" }, active ? "Сохранить как новый" : "Сохранить");
   const update = active ? h("button", { class: "btn" + (save ? " secondary wide" : "") },
@@ -682,6 +710,7 @@ async function openSaveSheet(params) {
     [save, update].forEach((b) => b && (b.disabled = true));
     try {
       const data = await request();
+      hapticNotify("success");
       state.searches = data.items;
       state.notifySettings = data.settings;
       state.activeSearch = null;
@@ -697,6 +726,7 @@ async function openSaveSheet(params) {
       else toast("Поиск сохранён", { label: IN_TG ? "Уведомления ›" : "Указать почту ›", onclick: () => selectTab("searches") });
     } catch (e) {
       if (e instanceof AuthError) { close(); return showStub(); }
+      hapticNotify("error");
       err.textContent = e.detail || "Не получилось сохранить, попробуйте ещё раз";
       err.classList.remove("hidden");
       [save, update].forEach((b) => b && (b.disabled = false));
@@ -739,7 +769,7 @@ function searchCard(s) {
         const data = await api(`/searches/${s.id}`, { method: "PATCH", body: JSON.stringify({ notify: on }) });
         state.searches = data.items;
         if (on && IN_TG) await ensureTelegram();
-      } catch { input.checked = !on; toast("Не получилось, попробуйте ещё раз"); }
+      } catch { input.checked = !on; hapticNotify("error"); toast("Не получилось, попробуйте ещё раз"); }
     }, "Присылать новые лоты"),
     h("button", { class: "sdots", "aria-label": "Действия с поиском", onclick: (e) => { e.stopPropagation(); searchMenu(s); } }, "···"));
 }
@@ -758,8 +788,9 @@ function searchMenu(s) {
           const data = await api(`/searches/${s.id}`, { method: "DELETE" });
           state.searches = data.items;
           if (state.activeSearch === s.id) state.activeSearch = null;
+          hapticNotify("success");
           close(); renderSearches(); renderActive();
-        } catch { toast("Не получилось удалить"); }
+        } catch { hapticNotify("error"); toast("Не получилось удалить"); }
       }, "danger"),
       act("Отмена", draw)), "danger"));
   draw();
@@ -775,7 +806,7 @@ function renameSheet(s) {
       const data = await api(`/searches/${s.id}`, { method: "PATCH", body: JSON.stringify({ name: input.value.trim() }) });
       state.searches = data.items;
       close(); renderSearches();
-    } catch { toast("Не получилось сохранить"); }
+    } catch { hapticNotify("error"); toast("Не получилось сохранить"); }
   });
   input.focus();
 }
@@ -793,16 +824,17 @@ function emailRow(st) {
       try {
         const r = await api("/notify/email", { method: "POST", body: JSON.stringify({ email: input.value.trim() }) });
         state.notifySettings = r;
+        hapticNotify("success");
         toast(r.status === "verified" ? "Почта подключена" : "Отправили письмо — откройте ссылку в нём", null, 3500);
         renderSearches();
-      } catch (e) { send.disabled = false; toast(e.detail || "Не получилось, проверьте адрес"); }
+      } catch (e) { send.disabled = false; hapticNotify("error"); toast(e.detail || "Не получилось, проверьте адрес"); }
     });
     return h("div", { class: "emailform" }, input, send);
   };
   if (st.email_verified) {
     const other = h("button", { class: "linkbtn" }, "Другой адрес");
     const row = setRow("Почта", `${st.email} · одно письмо в день`,
-      switchEl(st.email_on, (on) => setNotify({ email_on: on }).catch(() => toast("Не получилось"))), other);
+      switchEl(st.email_on, (on) => setNotify({ email_on: on }).catch(() => { hapticNotify("error"); toast("Не получилось"); })), other);
     other.addEventListener("click", () => { other.replaceWith(form("")); });
     return row;
   }
@@ -828,7 +860,8 @@ function notifyBlock() {
   }
   rows.push(emailRow(st));
   rows.push(setRow("Изменения в избранном", "Цена снизилась, машину выставили снова",
-    switchEl(st.fav_events !== false, (on) => setNotify({ fav_events: on }).catch(() => toast("Не получилось")), "Изменения в избранном")));
+    switchEl(st.fav_events !== false, (on) => setNotify({ fav_events: on }).catch(() => { hapticNotify("error"); toast("Не получилось"); }),
+      "Изменения в избранном")));
   return [h("div", { class: "fav-title" }, "Уведомления"), h("div", { class: "setblock" }, rows)];
 }
 
@@ -862,6 +895,7 @@ function selectTab(key) {
   if (key === "favs" && locked("favs")) return;
   if (state.stack.length) { state.stack = []; state.scrolls = []; renderTop(); }  // из экрана лота - сразу в раздел
   if (state.tab === key) { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  hapticSelect();
   state.tab = key; renderTabs(); showTab();
 }
 function renderTabs() {
@@ -1132,11 +1166,13 @@ function openViewer(photos, start, onClose) {
     document.removeEventListener("mousemove", onMouseMove);
     document.removeEventListener("mouseup", onMouseUp);
     if (swipes) tg.enableVerticalSwipes();
+    tgChrome(false);
     viewerClose = null;
     if (onClose) onClose(at);
   }
   viewerClose = close;
   if (swipes) tg.disableVerticalSwipes();
+  tgChrome(true);  // шапка и панель Telegram - чёрные, как фон просмотра (схемы ДТП - тоже здесь)
   document.documentElement.classList.add("pv-open");
   document.addEventListener("keydown", onKey);
   document.addEventListener("mousemove", onMouseMove);
@@ -1404,8 +1440,11 @@ function dualSlider(steps, [iFrom, iTo], onInput, single) {
     fill.style.left = `${(x / max) * 100}%`;
     fill.style.width = `${((y - x) / max) * 100}%`;
   };
-  a.addEventListener("input", () => { if (+a.value > +b.value) a.value = b.value; paint(); onInput(+a.value, +b.value); });
-  b.addEventListener("input", () => { if (+b.value < +a.value) b.value = a.value; paint(); onInput(+a.value, +b.value); });
+  // щелчок вибрации - на каждый шаг; input приходит и без смены шага (и при упоре в другой ползунок)
+  let last = `${iFrom}:${iTo}`;
+  const tick = () => { const now = `${a.value}:${b.value}`; if (now !== last) { last = now; hapticSelect(); } };
+  a.addEventListener("input", () => { if (+a.value > +b.value) a.value = b.value; paint(); tick(); onInput(+a.value, +b.value); });
+  b.addEventListener("input", () => { if (+b.value < +a.value) b.value = a.value; paint(); tick(); onInput(+a.value, +b.value); });
   paint();
   return h("div", { class: "dual" }, h("div", { class: "track" }), fill, single ? null : a, b);
 }
@@ -1451,11 +1490,13 @@ function renderFilters(initial) {
     brandVal.textContent = n ? `выбрано: ${n}` : "любая";
   }
   function toggleBrand(key) {
+    hapticSelect();
     if (draft.brands.includes(key)) { draft.brands = draft.brands.filter((b) => b !== key); delete draft.models[key]; }
     else { draft.brands.push(key); expanded.add(key); }
     drawBrands(); refreshCount();
   }
   function toggleModel(bkey, mkey) {
+    hapticSelect();
     const ms = new Set(draft.models[bkey] || []);
     ms.has(mkey) ? ms.delete(mkey) : ms.add(mkey);
     if (ms.size) { draft.models[bkey] = [...ms]; if (!draft.brands.includes(bkey)) draft.brands.push(bkey); }
@@ -1536,7 +1577,7 @@ function renderFilters(initial) {
   function chipGroup(options, isOn, onToggle) {
     const box = h("div", { class: "chips" });
     const draw = () => box.replaceChildren(...options.map(([v, label, cnt]) =>
-      h("button", { class: "chip" + (isOn(v) ? " on" : ""), onclick: () => { onToggle(v); draw(); refreshCount(); } },
+      h("button", { class: "chip" + (isOn(v) ? " on" : ""), onclick: () => { hapticSelect(); onToggle(v); draw(); refreshCount(); } },
         label, cnt != null ? h("span", { class: "cnt" }, cnt) : null)));
     draw();
     return box;
@@ -1580,7 +1621,7 @@ function renderFilters(initial) {
       + "Если выбрать фильтр ниже, лоты без них не покажутся.") : null;
   const damageToggle = h("label", { class: "togglerow" },
     h("input", { type: "checkbox", checked: draft.hideDamaged !== false,
-      onchange: (e) => { draft.hideDamaged = e.target.checked; refreshCount(); } }),
+      onchange: (e) => { hapticSelect(); draft.hideDamaged = e.target.checked; refreshCount(); } }),
     h("span", {}, h("b", {}, "Скрыть битые"),
       h("span", { class: "sub" }, "Сгоревшие, разобранные, на запчасти — по описанию и фото лота")));
 
