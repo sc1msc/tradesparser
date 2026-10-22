@@ -321,7 +321,16 @@ function card(it) {
         it.listings > 1 ? h("span", { class: "tag" }, `+${it.listings - 1} площ.`) : null)
     : h("div", { class: "deadline" }, closedText);
   const relisted = it.relisted ? h("div", { class: "relisted" }, "Перевыставлен" + priceChange(it.price, it.prev_price)) : null;
-  return h("div", { class: "card" + (it.is_open ? "" : " closed"), role: "button", onclick: () => push({ kind: "lot", id: it.id }) },
+  // Карточка - блок со «растянутой» ссылкой на лот (22.10.2026): с клавиатуры (Tab, Enter), Ctrl/Cmd/средней
+  // кнопкой - в новой вкладке (адрес /?lot=ID); обычный клик открывает лот внутри приложения. ♡ - поверх ссылки.
+  const link = h("a", { class: "card-link", href: lotHref(it.id), "aria-label": `${it.name}${it.year ? ", " + it.year : ""}, ${rub(it.price)}`,
+    onclick: (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;  // новая вкладка - сам браузер
+      e.preventDefault();
+      push({ kind: "lot", id: it.id });
+    } });
+  return h("div", { class: "card" + (it.is_open ? "" : " closed") },
+    link,
     thumb,
     h("div", { class: "info" },
       h("div", { class: "name" }, it.name, it.year ? h("span", { class: "yr" }, `, ${it.year}`) : null),
@@ -871,17 +880,51 @@ function showTab() {
   window.scrollTo(0, 0);
 }
 
+// Адреса экранов в веб-версии (22.10.2026): открытый лот - /?lot=ID в истории браузера, фильтры - запись истории
+// без смены адреса. «Назад»/«Вперёд» браузера закрывают и открывают экраны, лот открывается в новой вкладке и
+// переживает обновление страницы (start() читает ?lot=). В Telegram - как раньше: «Назад» - кнопка Telegram.
+const URL_NAV = WEB;
+if (URL_NAV && "scrollRestoration" in history) history.scrollRestoration = "manual";  // прокрутку ленты ведём сами
+// локально веб-версия включается параметром ?web - сохраняем его в адресах (на сайте его нет)
+const WEB_FLAG = LOCAL && WEB ? "web&" : "";
+const lotHref = (id) => `/?${WEB_FLAG}lot=${id}`;
+
 function push(screen) {
   state.scrolls.push(window.scrollY);
   state.stack.push(screen);
+  if (URL_NAV) {
+    history.pushState({ hl: state.stack.length, kind: screen.kind, lot: screen.kind === "lot" ? screen.id : null }, "",
+      screen.kind === "lot" ? lotHref(screen.id) : location.pathname + location.search);
+  }
   renderTop();
   window.scrollTo(0, 0);
 }
 function pop() {
+  // экран открыт записью истории - закрываем через историю, чтобы «Вперёд» и адрес остались верными (popstate)
+  if (URL_NAV && state.stack.length && history.state && history.state.hl === state.stack.length) {
+    history.back();
+    return;
+  }
+  popLocal();
+}
+function popLocal() {
   state.stack.pop();
   renderTop();
   const y = state.scrolls.pop() || 0;
   requestAnimationFrame(() => window.scrollTo(0, y));
+}
+if (URL_NAV) {
+  window.addEventListener("popstate", (e) => {
+    const depth = (e.state && e.state.hl) || 0;
+    if (viewerClose) viewerClose();  // открытый просмотр фото закрываем вместе с экраном
+    while (state.stack.length > depth) popLocal();
+    if (state.stack.length < depth && e.state && e.state.kind === "lot") {  // «Вперёд» на лот
+      state.scrolls.push(window.scrollY);
+      state.stack.push({ kind: "lot", id: e.state.lot });
+      renderTop();
+      window.scrollTo(0, 0);
+    }
+  });
 }
 function renderTop() {
   const top = state.stack[state.stack.length - 1];
@@ -1733,6 +1776,9 @@ async function start() {
   track("open");
   // открыли по ссылке "Поделиться" (или из уведомления) - сразу экран лота, "Назад" ведёт в ленту
   const sharedId = startLotId() || (/^\d+$/.test(qp.get("lot") || "") ? qp.get("lot") : null);
+  // в браузере: основная запись истории - лента «/» без параметров (иначе обновление снова откроет лот), лот
+  // поверх неё - своей записью с адресом /?lot=ID (push), «Назад» браузера ведёт в ленту
+  if (!IN_TG) history.replaceState(URL_NAV ? { hl: 0 } : null, "", location.pathname + (WEB_FLAG ? "?web" : "") + location.hash);
   if (sharedId) push({ kind: "lot", id: sharedId });
   else if (qp.get("tab") === "favs") selectTab("favs");
   else if (qp.get("tab") === "searches" && state.searchesOn) selectTab("searches");
@@ -1743,8 +1789,6 @@ async function start() {
       if (s) openSearch(s); else if (searchParam) loadFeed(true);
     }).catch(() => { if (searchParam) loadFeed(true); });
   }
-  // в браузере убираем параметры из адреса: иначе обновление страницы снова откроет этот лот
-  if (!IN_TG && ["startapp", "lot", "search", "tab", "src"].some((k) => qp.has(k))) history.replaceState(null, "", location.pathname + location.hash);
   try {
     const [facets, favs] = await Promise.all([api("/facets"), api("/favorites")]);
     state.facets = facets;

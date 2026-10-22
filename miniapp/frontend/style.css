@@ -88,6 +88,10 @@ input { font: inherit; color: inherit; }
   background: var(--bg); border-radius: var(--radius); text-align: left; width: 100%;
 }
 .card.closed { opacity: .55; }
+/* растянутая ссылка карточки (app.js card): вся карточка кликабельна, ♡ - поверх неё */
+.card-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.card-link:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.card .fav { z-index: 2; }
 .thumb {
   position: relative; flex: none; width: 116px; height: 88px; border-radius: 10px; overflow: hidden;
   background: var(--bg2) center/cover no-repeat;
