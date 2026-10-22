@@ -1715,6 +1715,8 @@ async function start() {
   state.searchesOn = !!me.searches;
   // пришёл по подарочной ссылке автора курса - сервер уже включил Pro, скажем об этом один раз
   if (me.gift) setTimeout(() => toast("Ваша подписка Pro активна", null, 5000), 600);
+  // новый пользователь - пробный Pro (с 22.10.2026); при подарке по ссылке хватает сообщения о подарке
+  else if (me.trial) setTimeout(() => toast(`Вам открыт Pro на ${me.trial.days} ${plural(me.trial.days, "день", "дня", "дней")} — до ${me.trial.until}`, null, 6000), 600);
   if (proLocked) state.filters = emptyFilters();
   if (WEB) document.getElementById("app").append(webHeader(me.pro));
   document.getElementById("app").append(root, overlay);

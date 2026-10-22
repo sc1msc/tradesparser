@@ -372,10 +372,12 @@ def touch_user(telegram_id, username, first_name, now_iso, start_param=None, ref
     """start_param - метка из ссылки ?startapp=... (None при входе через
     кнопку меню), уже разобранная auth.split_start_param. source - первый
     известный источник, не перезаписывается. ref_code - код из ссылки
-    "Поделиться": referred_by пишется только при создании пользователя."""
+    "Поделиться": referred_by пишется только при создании пользователя.
+    -> True, если пользователь новый (пробный Pro - billing.claim_trial)."""
     with _lock:
         c = conn()
         with c:
+            new = c.execute("SELECT 1 FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone() is None
             referred_by = None
             if ref_code:
                 row = c.execute("SELECT telegram_id FROM users WHERE ref_code = ?", (ref_code,)).fetchone()
@@ -390,6 +392,7 @@ def touch_user(telegram_id, username, first_name, now_iso, start_param=None, ref
                 "last_source = COALESCE(excluded.last_source, users.last_source)",
                 (telegram_id, username, first_name, now_iso, now_iso, start_param, start_param, referred_by),
             )
+    return new
 
 
 def user_ref_code(telegram_id):

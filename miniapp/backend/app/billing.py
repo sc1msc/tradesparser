@@ -141,6 +141,13 @@ CREATE TABLE IF NOT EXISTS promo_grants (
     shown       INTEGER NOT NULL DEFAULT 0,    -- сообщение «вам подарен Pro» уже показано
     created_at  TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS trial_grants (
+    telegram_id INTEGER PRIMARY KEY,           -- пробный Pro новому пользователю - один раз на человека
+    days        INTEGER NOT NULL,
+    until       TEXT,
+    shown       INTEGER NOT NULL DEFAULT 0,    -- сообщение «вам открыт Pro» уже показано
+    created_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pending_grants (
     username    TEXT PRIMARY KEY,              -- ник Telegram в нижнем регистре, без @
     months      INTEGER NOT NULL,              -- подарок (gift) тому, кто ещё не открывал HonestLot (0 - бессрочно):
@@ -651,7 +658,8 @@ def api_checkout(payload: CheckoutPayload, authorization: str = Header(default="
     if not payload.consent:
         raise HTTPException(status_code=400, detail="нужно согласие с офертой и обработкой персональных данных")
     if user:
-        db.touch_user(tid, user.get("username"), user.get("first_name"), _iso(now_msk()))
+        if db.touch_user(tid, user.get("username"), user.get("first_name"), _iso(now_msk())):
+            claim_trial(tid)
         claim_pending(tid, user.get("username"))
         claim_promo(tid, user.get("start_param"))
     try:
@@ -905,6 +913,54 @@ def promo_notice(tid):
                 return None
             c.execute("UPDATE promo_grants SET shown = 1 WHERE telegram_id = ?", (tid,))
     return {"months": row["months"], "until": _date_ru(_dt(row["until"]))}
+
+
+# Пробный Pro каждому новому пользователю (решение владельца 22.10.2026: «2 недели бесплатно, пока что»):
+# при первом входе - в мини-апп, на сайт или на страницу оплаты. Срок - HONESTLOT_TRIAL_DAYS в .env
+# (0 - выключено), меняется без выкатки кода. Источник прихода (users.source) пишется как раньше.
+def trial_days():
+    try:
+        return max(0, int(os.environ.get("HONESTLOT_TRIAL_DAYS", "14")))
+    except ValueError:
+        return 0
+
+
+def claim_trial(tid):
+    """Новый пользователь: Pro на trial_days() дней, один раз. Подарок по ссылке автора курса (claim_promo
+    после этого) добавится сверху. -> конец срока или None. Ошибки входу не мешают."""
+    days = trial_days()
+    if not enabled() or not days:
+        return None
+    try:
+        c = _conn()
+        with db._lock:
+            with c:
+                fresh = c.execute("INSERT OR IGNORE INTO trial_grants (telegram_id, days, created_at) VALUES (?, ?, ?)",
+                                  (tid, days, _iso(now_msk()))).rowcount == 1
+        if not fresh:
+            return None
+        _, end = grant(tid, 0, days=days)
+        with db._lock:
+            with c:
+                c.execute("UPDATE trial_grants SET until = ? WHERE telegram_id = ?", (_iso(end), tid))
+        print(f"[пробный Pro] telegram_id {tid} - Pro на {days} дн., до {_date_ru(end)}", flush=True)
+        return end
+    except Exception as e:
+        print(f"[пробный Pro] telegram_id {tid}: не выдан ({type(e).__name__}: {e})", flush=True)
+        return None
+
+
+def trial_notice(tid):
+    """Пробный Pro, о котором человеку ещё не сказали: {days, until} (один раз) или None."""
+    c = _conn()
+    with db._lock:
+        with c:
+            row = c.execute("SELECT days, until FROM trial_grants WHERE telegram_id = ? AND shown = 0 "
+                            "AND until IS NOT NULL", (tid,)).fetchone()
+            if not row:
+                return None
+            c.execute("UPDATE trial_grants SET shown = 1 WHERE telegram_id = ?", (tid,))
+    return {"days": row["days"], "until": _date_ru(_dt(row["until"]))}
 
 
 def claim_pending(tid, username):
