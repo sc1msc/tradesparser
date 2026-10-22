@@ -339,6 +339,10 @@ def build_catalog(raw_lots):
     for lot in raw_lots:
         if lot.get("model_source") != "autoru" or not lot.get("model"):
             continue
+        # учимся только на уверенных оценках (с ценой): без цены модель оценки - догадка, и словарь запоминал
+        # чужие пары («sprinter 2» = CL-класс у Sprinter 9100020808, 22.10.2026)
+        if not lot.get("autoru_price_low"):
+            continue
         key, _ = clean_brand(lot.get("brand"))
         if not key:
             continue
@@ -491,6 +495,30 @@ def photo_sources():
     return out
 
 
+# Слова названия, которые не модель («3 серии», «модель DUCATO г.в.»)
+_NOT_MODEL_WORDS = {"СЕРИИ", "СЕРИЯ", "КЛАСС", "КЛАССА", "МОДЕЛЬ", "МОДЕЛИ", "МАРКА", "МАРКИ", "ВЫПУСКА", "НОМЕР",
+                    "ЛЕГКОВОЙ", "АВТОМОБИЛЬ", "ФУРГОН", "СЕДАН", "УНИВЕРСАЛ", "ХЭТЧБЕК", "STATION", "WAGON"}
+
+
+def _guess_contradicts_title(estimate_model, title_model):
+    """Модель оценки (код Авто.ру, «CL_KLASSE») противоречит модели из названия лота («sprinter 2»)? Да, если в
+    названии есть слово-модель (только буквы, от 4) и ни оно, ни название целиком не совпадают с моделью оценки
+    по согласным (_consonants: «РИО» = RIO, «ТОРНЕО КОННЕКТ» = TOURNEO_CONNECT). Цифровые названия («234900»,
+    «3009Z7», «C180») не спорят с оценкой: по ним не понять, другая ли это машина."""
+    if not estimate_model or not title_model:
+        return False
+    words = [w for w in re.findall(r"[A-Za-zА-Яа-яЁё]+", title_model)
+             if len(w) >= 4 and w.upper() not in _NOT_MODEL_WORDS]
+    if not words:
+        return False
+    est = {_consonants(_skeleton(p)) for p in [estimate_model] + re.split(r"[_\s-]+", estimate_model) if p}
+    est.discard("")
+    whole = _consonants(_skeleton(title_model))
+    if whole in est or any(e and e in whole for e in est if len(e) >= 2):
+        return False
+    return not any(_consonants(_skeleton(w)) in est for w in words)
+
+
 SPEC_FIELDS = ("engine_type", "displacement", "power", "drive", "transmission")
 # «АКПП»/«автомат» в лоте пишут и про вариатор с роботом - это не расхождение, точнее остаётся оценка
 AUTOMATIC_KINDS = {"автомат", "вариатор", "робот"}
@@ -522,6 +550,12 @@ def _prepare(lot, models_index=None):
         found, rest = find_brand(lot.get("title"))
         if found == brand_key:
             raw_model = _model_tail(found, rest)
+    if (lot.get("model_source") == "autoru" and not lot.get("autoru_price_low")
+            and _guess_contradicts_title(raw_model, lot.get("title_model"))):
+        # Оценка без цены (не определила машину однозначно) - её модель лишь догадка, а в названии лота другая
+        # модель: верим названию (22.10.2026: Sprinter 9100020808, оценка «угадала» CL-класс по VIN WDB906)
+        lot["model_source"] = "title"
+        raw_model = lot["title_model"]
     if lot.get("model_source") == "autoru":
         raw_model = catalog.code_to_model(raw_model)  # CR_V -> CR-V, X_TRAIL -> X-TRAIL
     model = clean_model(raw_model, brand) if brand else ""
