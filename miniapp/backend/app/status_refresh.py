@@ -76,6 +76,10 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 # 403 с нашим IP, потом перестала отвечать совсем. ELECTRO-TORGI и Альфалот 21-22.10.2026 отвечали 429 («слишком
 # много запросов») на проверку статусов подряд и уходили на паузу.
 HOST_MIN_INTERVAL = {"nistp.ru": 15.0, "bankrotstvo.electro-torgi.ru": 10.0, "bankrupt.alfalot.ru": 10.0}
+# Площадки, которые не пускают адрес сервера вообще, - их страницы не читаем: ELECTRO-TORGI 23.10.2026 отвечала 429
+# на первый же запрос после многих часов тишины (и с паузой 10 с между запросами) - это блок адреса ВМ, а не
+# частота. Статус этих лотов - по агрегатору; тревог о них нет. Проверить, пускает ли снова: один curl с ВМ.
+SERVER_BLOCKED_HOSTS = {"bankrotstvo.electro-torgi.ru"}
 _last_request = {}
 _interval_lock = threading.Lock()
 
@@ -290,6 +294,8 @@ def run_pass(now=None, full=None, get=fetch, sleep=time.sleep, send=None):
             sleep(DELAY_SECONDS)
         if not etp_url:
             stats["off_etp"] += 1
+        elif etp_status.host(etp_url) in SERVER_BLOCKED_HOSTS:
+            stats["blocked"] = stats.get("blocked", 0) + 1  # площадка не пускает сервер - статус агрегатора
         elif not engine:
             h = etp_status.host(etp_url)
             stats["unsupported"][h] = stats["unsupported"].get(h, 0) + 1
