@@ -209,7 +209,7 @@ async function api(path, opts = {}) {
 // fuel/gearbox/drive - характеристики с Авто.ру (значения как в lots.FUELS/GEARBOXES/DRIVES),
 // volume - [от, до] в литрах, power - [от, до] в л.с.; null в паре - без границы
 const emptyFilters = () => ({ brands: [], models: {}, year: null, price: [300e3, null], mileageTo: null, gapMin: null, ownersTo: null, dtpTo: null, regions: [], trade: [], kinds: [],
-  fuel: [], gearbox: [], drive: [], volume: null, power: null, hideDamaged: true });
+  fuel: [], gearbox: [], drive: [], body: [], volume: null, power: null, hideDamaged: true });
 // «Сначала новые» - по умолчанию с 20.10.2026 (решение владельца): внутри дня - выгоднее сверху.
 // Выбранная пользователем сортировка хранится на устройстве и не меняется.
 const SORTS = [["new", "Новые"], ["gap", "Выгоднее"], ["deadline", "Скоро дедлайн"], ["price_asc", "Дешевле"], ["price_desc", "Дороже"]];
@@ -251,7 +251,7 @@ function queryString(filters, q, sort) {
   if (filters.regions.length) p.set("regions", filters.regions.join(","));
   if (filters.trade.length) p.set("trade", filters.trade.join(","));
   if ((filters.kinds || []).length) p.set("kinds", filters.kinds.join(","));
-  for (const k of ["fuel", "gearbox", "drive"]) if ((filters[k] || []).length) p.set(k, filters[k].join(","));
+  for (const k of ["fuel", "gearbox", "drive", "body"]) if ((filters[k] || []).length) p.set(k, filters[k].join(","));
   if (filters.volume) { if (filters.volume[0] != null) p.set("vol_from", filters.volume[0]); if (filters.volume[1] != null) p.set("vol_to", filters.volume[1]); }
   if (filters.power) { if (filters.power[0] != null) p.set("power_from", filters.power[0]); if (filters.power[1] != null) p.set("power_to", filters.power[1]); }
   if (filters.hideDamaged !== false) p.set("hide_damaged", "1");
@@ -260,7 +260,7 @@ function queryString(filters, q, sort) {
 
 function activeFilterCount(f) {
   return [f.brands.length, f.year, f.price, f.mileageTo != null, f.gapMin != null, f.ownersTo != null, f.dtpTo != null, f.regions.length, f.trade.length, (f.kinds || []).length,
-    (f.fuel || []).length, (f.gearbox || []).length, (f.drive || []).length, f.volume, f.power]
+    (f.fuel || []).length, (f.gearbox || []).length, (f.drive || []).length, (f.body || []).length, f.volume, f.power]
     .filter(Boolean).length;
 }
 
@@ -496,7 +496,7 @@ function activeChips(f) {
     (x) => { x.regions = x.regions.filter((v) => v !== r); }]);
   for (const [v, label] of TRADES) if (f.trade.includes(v)) out.push([label, (x) => { x.trade = x.trade.filter((t) => t !== v); }]);
   for (const [v, label] of KINDS) if ((f.kinds || []).includes(v)) out.push([label, (x) => { x.kinds = x.kinds.filter((k) => k !== v); }]);
-  for (const [key, label] of [["fuel", (v) => cap(v)], ["gearbox", (v) => cap(v)], ["drive", (v) => `${cap(v)} привод`]])
+  for (const [key, label] of [["body", (v) => cap(v)], ["fuel", (v) => cap(v)], ["gearbox", (v) => cap(v)], ["drive", (v) => `${cap(v)} привод`]])
     for (const v of f[key] || []) out.push([label(v), (x) => { x[key] = x[key].filter((y) => y !== v); }]);
   if (f.volume) out.push([`Объём ${rangeText(f.volume, litersText)} л`, (x) => { x.volume = null; }]);
   if (f.power) out.push([`Мощность ${rangeText(f.power, String)} л.с.`, (x) => { x.power = null; }]);
@@ -612,7 +612,7 @@ function filtersFromParams(p) {
   return { ...emptyFilters(), brands: list("brands"), models, year: pair("year_from", "year_to"),
     price: pair("price_from", "price_to"), mileageTo: num("mileage_to"), gapMin: num("gap_min"), ownersTo: num("owners_to"), dtpTo: num("dtp_to"),
     regions: list("regions"), trade: list("trade"), kinds: list("kinds"), fuel: list("fuel"),
-    gearbox: list("gearbox"), drive: list("drive"), volume: pair("vol_from", "vol_to"),
+    gearbox: list("gearbox"), drive: list("drive"), body: list("body"), volume: pair("vol_from", "vol_to"),
     power: pair("power_from", "power_to"), hideDamaged: p.hide_damaged === "1" };
 }
 
@@ -1348,6 +1348,7 @@ async function renderLot(id) {
     h("div", { class: "block" }, h("h3", {}, "Характеристики"), rows([
       ["Год", lot.year],
       ["Пробег", mileage],
+      ["Кузов", lot.body_name || (lot.body ? cap(lot.body) : null)],
       ["Двигатель", engineText(lot)],
       ["Коробка", lot.transmission],
       ["Привод", lot.drive],
@@ -1384,6 +1385,7 @@ const GEARBOX_SHORT = { "автомат": "АКПП", "механика": "МК�
 // Бензин - у большинства, в ленте его не пишем, чтобы строка помещалась; на экране лота он есть.
 function specsShort(it) {
   return [
+    it.body,  // группа кузова из оценки: «седан», «внедорожник» (с 24.10.2026)
     it.displacement ? `${litersText(Math.round(it.displacement / 100) / 10)} л` : null,
     it.power ? `${it.power} л.с.` : null,
     it.transmission ? GEARBOX_SHORT[it.transmission] || it.transmission : null,
@@ -1599,7 +1601,7 @@ function renderFilters(initial) {
   const kindChips = chipGroup(KINDS, (v) => draft.kinds.includes(v), (v) => { draft.kinds = toggleIn(draft.kinds, v); });
 
   // --- характеристики: топливо, коробка, привод (чипы), объём и мощность (слайдеры) ---
-  for (const k of ["fuel", "gearbox", "drive"]) draft[k] = draft[k] || [];
+  for (const k of ["fuel", "gearbox", "drive", "body"]) draft[k] = draft[k] || [];
   const specChips = (key) => (facets[key] || []).length ? chipGroup(facets[key].map((o) => [o.key, cap(o.key), o.count]),
     (v) => draft[key].includes(v), (v) => { draft[key] = toggleIn(draft[key], v); }) : h("div", { class: "sub" }, "Пока нет данных");
   function rangeSection(title, steps, key, fmt, unit) {
@@ -1639,6 +1641,7 @@ function renderFilters(initial) {
     backbar(),
     h("div", { class: "fsec" }, h("h3", {}, "Марка и модель", brandVal), brandSearch, brandList),
     yearSec.el, priceSec.el, mileageSec.el,
+    h("div", { class: "fsec" }, h("h3", {}, "Кузов"), specChips("body")),
     h("div", { class: "fsec" }, h("h3", {}, "Двигатель"), specsNote, specChips("fuel")),
     volumeSec.el, powerSec.el,
     h("div", { class: "fsec" }, h("h3", {}, "Коробка"), specChips("gearbox")),

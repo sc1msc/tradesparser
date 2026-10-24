@@ -156,7 +156,7 @@ LOT_FIELDS = [
     "autoru_price_low", "autoru_price_high", "autoru_owners", "estimate_uncertain",
     "lot_kind", "model_source", "title_brand", "title_model", "photo_verdict", "photo_signs",
     "engine_type", "displacement", "power", "drive", "transmission", "etp_url", "efrsb_url",
-    "mileage_source", "mileage_record_date", "dtp",
+    "mileage_source", "mileage_record_date", "dtp", "body_type", "body",
 ]
 JSON_FIELDS = {"periods", "photos", "photo_signs", "dtp"}
 # Поля, которые выгрузка может не прислать вовсе (источник на ПК недоступен) - тогда прежнее значение
@@ -182,6 +182,8 @@ MIGRATIONS = {
              ("efrsb_url", "TEXT"),  # объявление на ЕФРСБ (кнопка лота без ЭТП), приходит выгрузкой
              # откуда пробег (lot / report / estimate) и дата показания отчёта - для подписи в мини-аппе
              ("mileage_source", "TEXT"), ("mileage_record_date", "TEXT"),
+             # кузов из рыночной оценки (код и подпись), с 24.10.2026
+             ("body_type", "TEXT"), ("body", "TEXT"),
              # ДТП по VIN (TRONK, fill_dtp.py): JSON {count, as_of, accidents}; нет данных - пусто
              ("dtp", "TEXT")],
     "favorites": [("vin", "TEXT")],

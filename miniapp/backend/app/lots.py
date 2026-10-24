@@ -157,6 +157,21 @@ SORTS = ("new", "gap", "price_asc", "price_desc", "deadline")
 FUELS = ("бензин", "дизель", "гибрид", "электро", "газ")
 GEARBOXES = ("автомат", "робот", "вариатор", "механика")
 DRIVES = ("передний", "задний", "полный")
+# Кузов (с 24.10.2026, только из оценки): код Авто.ру -> группа для фильтра и карточки. Коды вида
+# ALLROAD_5_DOORS, HATCHBACK_3_DOORS, PICKUP_TWO - группа по началу кода; порядок - как в фильтре.
+BODY_GROUPS = [("HATCHBACK_LIFTBACK", "лифтбек"), ("LIFTBACK", "лифтбек"), ("SEDAN", "седан"), ("HATCHBACK", "хэтчбек"),
+               ("WAGON", "универсал"), ("ALLROAD", "внедорожник"), ("MINIVAN", "минивэн"), ("COMPACTVAN", "минивэн"),
+               ("MICROVAN", "минивэн"), ("COUPE", "купе"), ("FASTBACK", "купе"), ("CABRIO", "кабриолет"),
+               ("ROADSTER", "кабриолет"), ("SPEEDSTER", "кабриолет"), ("TARGA", "кабриолет"), ("PHAETON", "кабриолет"),
+               ("PICKUP", "пикап"), ("VAN", "фургон"), ("LIMOUSINE", "лимузин")]
+BODIES = ("седан", "хэтчбек", "лифтбек", "универсал", "внедорожник", "минивэн", "купе", "кабриолет", "пикап",
+          "фургон", "лимузин")
+
+
+def body_group(code):
+    """Код кузова Авто.ру -> группа («внедорожник»); неизвестный код - None."""
+    code = (code or "").upper()
+    return next((g for prefix, g in BODY_GROUPS if code == prefix or code.startswith(prefix + "_")), None)
 
 # Через сколько дней после дедлайна закрытая карточка избранного уходит в архив.
 FAVORITE_ARCHIVE_DAYS = 60
@@ -792,8 +807,10 @@ def specs(lot):
     """Двигатель, коробка, привод - по модификации, которую нашёл Авто.ру. У мультилота они
     одной из машин и для лота целиком ничего не значат."""
     car = lot["kind"] == lot_metrics.LOT_CAR
-    return {k: (lot.get(k) if car else None)
-            for k in ("engine_type", "displacement", "power", "drive", "transmission")}
+    out = {k: (lot.get(k) if car else None)
+           for k in ("engine_type", "displacement", "power", "drive", "transmission")}
+    out["body"] = body_group(lot.get("body_type")) if car else None  # группа кузова: карточка, фильтр
+    return out
 
 
 def liters(displacement):
@@ -843,6 +860,8 @@ def detail(lot, now, favorites):
         "next_price_from": _iso(nxt["from"]) if nxt else None,
         "damage": lot["damage"],
         "photo_damage": lot["photo_damage"],
+        # подпись кузова из оценки («Внедорожник 5 дв.») - строка «Кузов» на экране лота
+        "body_name": lot.get("body") if lot["kind"] == lot_metrics.LOT_CAR else None,
         "dtp": dtp_detail(lot),
     })
     out["listings_list"], out["history"] = car_context(lot, now)
@@ -950,6 +969,7 @@ def parse_filters(params):
         "fuel": set(_split(params.get("fuel"))),
         "gearbox": set(_split(params.get("gearbox"))),
         "drive": set(_split(params.get("drive"))),
+        "body": set(_split(params.get("body"))),
         "vol_from": _num(params.get("vol_from")),   # литры
         "vol_to": _num(params.get("vol_to")),
         "power_from": _num(params.get("power_from")),  # л.с.
@@ -1121,6 +1141,8 @@ def _matches(item, lot, f, skip_damage=False):
         return False
     if f["gearbox"] and item["transmission"] not in f["gearbox"]:
         return False
+    if f["body"] and item["body"] not in f["body"]:
+        return False
     if f["drive"] and item["drive"] not in f["drive"]:
         return False
     if not _between(liters(item["displacement"]), f["vol_from"], f["vol_to"]):
@@ -1195,7 +1217,7 @@ def facets(favorites):
     brands = {}
     regions = {}
     years, prices, mileages = [], [], []
-    spec_counts = {"engine_type": {}, "transmission": {}, "drive": {}}
+    spec_counts = {"engine_type": {}, "transmission": {}, "drive": {}, "body": {}}
     volumes, powers, cars, with_specs, with_owners, with_dtp = [], [], 0, 0, 0, 0
     for it, lot in open_items(favorites):
         if lot["kind"] == lot_metrics.LOT_CAR:
@@ -1249,6 +1271,7 @@ def facets(favorites):
         "fuel": _ordered(spec_counts["engine_type"], FUELS),
         "gearbox": _ordered(spec_counts["transmission"], GEARBOXES),
         "drive": _ordered(spec_counts["drive"], DRIVES),
+        "body": _ordered(spec_counts["body"], BODIES),
         "volume": [min(volumes), max(volumes)] if volumes else None,
         "power": [min(powers), max(powers)] if powers else None,
         "specs_known": with_specs, "cars": cars, "owners_known": with_owners, "dtp_known": with_dtp,

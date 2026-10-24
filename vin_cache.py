@@ -68,6 +68,8 @@ AUTORU_FIELDS = [
 AUTORU_SPEC_FIELDS = [
     "autoru_engine_type", "autoru_displacement", "autoru_power",
     "autoru_drive", "autoru_transmission", "autoru_modification",
+    # кузов (autoru_valuation.parse_body, с 24.10.2026): код Авто.ру и подпись «Внедорожник 5 дв.»
+    "autoru_body_type", "autoru_body",
 ]
 AUTORU_FIELDS = AUTORU_FIELDS + AUTORU_SPEC_FIELDS
 # С этого дня оценка сохраняется вместе с характеристиками; более ранняя без них - устаревшая (autoru()).

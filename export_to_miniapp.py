@@ -386,6 +386,9 @@ def build_lot(row, details, damage=None, dtp=None):
         "power": _to_int(row.get("autoru_power")),
         "drive": row.get("autoru_drive") or None,
         "transmission": row.get("autoru_transmission") or None,
+        # кузов - только из оценки (код Авто.ру и подпись), разбор из текста не делаем: типы дублировались бы
+        "body_type": row.get("autoru_body_type") or None,
+        "body": row.get("autoru_body") or None,
         "estimate_uncertain": lot_metrics.estimate_is_uncertain(
             row.get("autoru_uncertainty_percent"), row.get("autoru_status")),
         # тип лота из листа (по title + описанию из lots); если колонки ещё

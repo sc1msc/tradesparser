@@ -126,7 +126,10 @@ python run_pipeline.py --test-notify  # проверить, что уведом�
   название модификации. Берутся из второго ответа страницы, `getEvaluationBlocks` (каталог
   модификаций модели), по номеру модификации `tech_param_id` из ответа оценки. Колонки
   `autoru_engine_type`, `autoru_displacement`, `autoru_power`, `autoru_drive`,
-  `autoru_transmission`, `autoru_modification`.
+  `autoru_transmission`, `autoru_modification`. С 24.10.2026 там же — кузов: `autoru_body_type` (код Авто.ру,
+  `ALLROAD_5_DOORS`) и `autoru_body` («Внедорожник 5 дв.») из `catalogInfo.configuration`. Из текста лота кузов
+  не берём (решение владельца: типы в словаре дублировались бы). Дозаполнение ниже добирает и кузов у оценок,
+  где остальные характеристики уже есть.
 - Дозаполнение характеристик у уже оценённых лотов (оценки до 13.10.2026 сохранены без них, и
   цена из `vin_cache` переходит в новые лоты без характеристик): с 20.10.2026 — в конце шага, до
   30 машин (`AUTORU_SPECS_PER_RUN`), без ожидания Enter; если Авто.ру остановил оценку (капча,

@@ -40,7 +40,7 @@ from . import billing, db, lots
 
 MAX_PER_USER = 10
 FILTER_KEYS = ("q", "brands", "models", "year_from", "year_to", "price_from", "price_to", "mileage_to",
-               "regions", "kinds", "trade", "gap_min", "owners_to", "dtp_to", "hide_damaged", "fuel", "gearbox", "drive",
+               "regions", "kinds", "trade", "gap_min", "owners_to", "dtp_to", "hide_damaged", "fuel", "gearbox", "drive", "body",
                "vol_from", "vol_to", "power_from", "power_to")
 MAX_NAME = 60
 DEFAULT_PRICE_FROM = 300000  # «Цена от 300 тыс.» - начальный фильтр ленты (emptyFilters в app.js)
@@ -217,7 +217,7 @@ def describe(params):
     if p.get("owners_to"):
         n = int(float(p["owners_to"]))
         parts.append("1 владелец" if n == 1 else f"до {n} владельцев")
-    for key in ("fuel", "gearbox", "drive"):
+    for key in ("body", "fuel", "gearbox", "drive"):
         if p.get(key):
             parts.append(", ".join(split(p[key])))
     vol = _range(num(p.get("vol_from")), num(p.get("vol_to")), lambda v: f"{v:.1f}".replace(".", ","), "л")

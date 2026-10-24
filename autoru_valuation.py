@@ -159,11 +159,29 @@ def _code(table, value):
     return table.get(value, str(value).lower()) if value else None
 
 
+def parse_body(blocks):
+    """Тип кузова оценённой машины из ответа getEvaluationBlocks -> {body_type: "ALLROAD_5_DOORS",
+    body: "Внедорожник 5 дв."} или {}. catalogInfo.configuration - кузов этой машины (тот же, что
+    found_info.configuration_id оценки); проверено 24.10.2026 на VW Jetta: SEDAN, «Седан». Запасной путь -
+    единственный вариант уровня CONFIGURATION_LEVEL в breadcrumbsPublicApi."""
+    conf = ((blocks or {}).get("catalogInfo") or {}).get("configuration") or {}
+    if not conf.get("body_type"):
+        for crumb in (blocks or {}).get("breadcrumbsPublicApi") or []:
+            ents = crumb.get("entities") or []
+            if crumb.get("meta_level") == "CONFIGURATION_LEVEL" and len(ents) == 1:
+                conf = {"body_type": (ents[0].get("configuration") or {}).get("body_type"), "human_name": ents[0].get("name")}
+    if not conf.get("body_type"):
+        return {}
+    return {"body_type": conf["body_type"], "body": conf.get("human_name") or None}
+
+
 def parse_specs(blocks, tech_param_id):
     """Характеристики модификации tech_param_id из ответа getEvaluationBlocks ->
-    {engine_type, displacement, power, drive, transmission, modification} или {}."""
+    {engine_type, displacement, power, drive, transmission, modification, body_type, body} или {}.
+    Кузов (с 24.10.2026) - по конфигурации машины, даже если модификацию найти не удалось."""
+    body = parse_body(blocks)
     if not blocks or not tech_param_id:
-        return {}
+        return body
     for crumb in blocks.get("breadcrumbsPublicApi") or []:
         for ent in crumb.get("entities") or []:
             if str(ent.get("id")) != str(tech_param_id):
@@ -176,8 +194,9 @@ def parse_specs(blocks, tech_param_id):
                 "drive": _code(DRIVES, tp.get("gear_type")),
                 "transmission": _code(TRANSMISSIONS, tp.get("transmission")),
                 "modification": ent.get("name"),          # "1.6 AT (110 л.с.)"
+                **body,
             }
-    return {}
+    return body
 
 
 def evaluate_by_vin(page, vin, mileage_km):

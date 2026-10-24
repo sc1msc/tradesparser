@@ -17,6 +17,7 @@ sheets_writer.py, его локальная схема колонок разош
     autoru_status, autoru_checked_at,
     autoru_engine_type, autoru_displacement, autoru_power,       - характеристики
     autoru_drive, autoru_transmission, autoru_modification        модификации (с 13.10.2026)
+    autoru_body_type, autoru_body                                  - кузов (с 24.10.2026)
 
 ХАРАКТЕРИСТИКИ (топливо, объём см³, мощность л.с., привод, коробка, название
 модификации "1.6 AT (110 л.с.)") приходят вместе с оценкой - см.
@@ -105,6 +106,8 @@ def _spec_updates(result):
         "autoru_drive": result.get("drive"),
         "autoru_transmission": result.get("transmission"),
         "autoru_modification": result.get("modification"),
+        "autoru_body_type": result.get("body_type"),
+        "autoru_body": result.get("body"),
     }
 
 
@@ -437,7 +440,8 @@ def run_specs(limit=None, interactive=True):
         row = row + [""] * (len(header) - len(row))
         if row[col["autoru_status"]].strip() not in ("ok", "ambiguous"):
             continue
-        if row[col["autoru_power"]].strip() or row[col["autoru_modification"]].strip():
+        # характеристики есть - пропускаем; кузов (с 24.10.2026) дозаполняется и у оценок с характеристиками
+        if (row[col["autoru_power"]].strip() or row[col["autoru_modification"]].strip()) and row[col["autoru_body_type"]].strip():
             continue
         if "lot_kind" in col and row[col["lot_kind"]].strip() == lot_metrics.LOT_MULTILOT:
             continue
