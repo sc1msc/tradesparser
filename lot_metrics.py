@@ -176,10 +176,27 @@ def vin_text(text):
     return (text or "").upper().translate(VIN_CYR_LOOKALIKES)
 
 
+# В VIN не бывает букв I, O, Q (их не путают с 1 и 0), а организаторы набирают их вместо цифр: «JNIJDRJ50U0101379»
+# у Infiniti QX50 (лот 7205853, 27.10.2026) - на деле JN1JDRJ50U0101379. 17-знаковый номер, который становится VIN
+# после замены I->1, O/Q->0, - запасной VIN, только если обычного в тексте нет (на мультилоты не влияет: lot_vins
+# такие номера не считает, иначе грузовик с номером прицепа стал бы «мультилотом»). 6 лотов на 27.10.2026.
+_VIN_TYPO_RE = re.compile(r"(?<![A-Z0-9])[A-Z0-9]*[IOQ][A-Z0-9]*(?![A-Z0-9])")
+_VIN_TYPO_FIX = str.maketrans("IOQ", "100")
+
+
 def find_vin(text):
-    """Первый VIN в тексте лота (см. lot_vins) или None."""
+    """Первый VIN в тексте лота (см. lot_vins) или None. Нет обычного - номер с I/O/Q вместо 1/0."""
     vins = lot_vins(text)
-    return vins[0] if vins else None
+    if vins:
+        return vins[0]
+    upper = (text or "").upper()
+    latin = upper.translate(VIN_CYR_LOOKALIKES)
+    for m in _VIN_TYPO_RE.finditer(latin):
+        fixed = m.group(0).translate(_VIN_TYPO_FIX)
+        if (len(fixed) == 17 and _VIN_RE.fullmatch(fixed) and sum(c.isdigit() for c in fixed) >= 2
+                and not fixed.isdigit() and not _BODY_LABEL_RE.search(upper[max(0, m.start() - 40):m.start()])):
+            return fixed
+    return None
 
 
 def lot_vins(text):
