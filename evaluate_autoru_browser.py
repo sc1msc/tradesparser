@@ -324,6 +324,21 @@ def _run_estimates():
             try:
                 result = autoru_valuation.evaluate_by_vin(page, vin, mileage)
 
+                # Госномер оставляют себе и вешают на другую машину: Mitsuoka Bubu 1987 г. (лот 7216905) по номеру
+                # Х707ОЕ197 оценился как Hyundai Santa Fe 2013 г. (29.10.2026). Год оценки не тот, что у лота, -
+                # оценка чужой машины: не пишем ни цену, ни марку с моделью, а статус no_price (не переспрашиваем).
+                lot_year = int(m.group(0)) if (m := re.search(r"(19|20)\d\d", row[col["year"]])) else None
+                if len(vin) != 17 and lot_year and result.get("year") and abs(int(result["year"]) - lot_year) > 1:
+                    print(f"  -> по госномеру нашлась другая машина ({result['mark']} {result['model']}, "
+                          f"{result['year']} г., у лота {lot_year} г.) - оценку не пишу")
+                    updates["autoru_status"] = "no_price"
+                    updates["autoru_accuracy_note"] = f"госномер у другой машины: {result['mark']} {result['model']} {result['year']}"
+                    updates["autoru_checked_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+                    _batch_write(worksheet, row_num, col, updates)
+                    processed += 1
+                    time.sleep(config.DELAY_BETWEEN_AUTORU_REQUESTS + random.uniform(0, 2))
+                    continue
+
                 updates["autoru_price_low"] = result["price_low"]
                 updates["autoru_price_high"] = result["price_high"]
                 updates["autoru_tradein_low"] = result["tradein_low"]
