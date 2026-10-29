@@ -332,13 +332,27 @@ function thumbBox(it) {
   const tryUrl = (i) => {
     if (i >= urls.length) return noPhoto();
     const probe = new Image();
-    probe.onload = () => { el.style.backgroundImage = `url("${urls[i]}")`; };
-    probe.onerror = () => tryUrl(i + 1);
+    let done = false;
+    const fail = () => { if (done) return; done = true; clearTimeout(timer); tryUrl(i + 1); };
+    const timer = setTimeout(fail, PHOTO_WAIT_MS);
+    probe.onload = () => {
+      // опоздавшее фото (уже ушли к следующему) - показываем, только если ничего не открылось
+      if (done && (el.style.backgroundImage || !el.classList.contains("nophoto"))) return;
+      done = true; clearTimeout(timer);
+      el.classList.remove("nophoto");
+      el.querySelectorAll(".nophoto-t, svg").forEach((x) => x.remove());
+      el.style.backgroundImage = `url("${urls[i]}")`;
+    };
+    probe.onerror = fail;
     probe.src = urls[i];
   };
   tryUrl(0);
   return el;
 }
+
+// Площадка, которая не отвечает (ТоргГрупп 29.10.2026: запрос висит без ответа), не даёт ни load, ни error -
+// вместо фото был чёрный квадрат. Не загрузилось за PHOTO_WAIT_MS - считаем, что не открылось.
+const PHOTO_WAIT_MS = 8000;
 
 function card(it) {
   if (it.favorite) state.favIds.add(it.id); // избранное следует за машиной - сервер знает лучше
@@ -1010,6 +1024,13 @@ function gallerySet(photos, fallback, last) {
     if (!left) return fallback();
     counter.textContent = `1 / ${left}`;
   };
+  // первое фото не загрузилось за PHOTO_WAIT_MS (площадка молчит) - как ошибка: следующий набор или «нет фото»
+  setTimeout(() => {
+    const first = slides.querySelector("img");
+    if (first && first.isConnected && !(first.complete && first.naturalWidth)) {
+      if (!switched) { switched = true; fallback(); }
+    }
+  }, PHOTO_WAIT_MS);
   const slides = h("div", { class: "slides" },
     photos.map((p, i) => h("img", {
       src: p.full, alt: "", loading: i ? "lazy" : "eager", onerror: onError,
