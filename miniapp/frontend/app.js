@@ -1848,4 +1848,25 @@ async function start() {
     if (e instanceof AuthError) showStub();
   }
 }
+// Вернулся в мини-апп после оплаты на сайте (кнопка «Оформить Pro»): Pro узнаём при старте, и без этого
+// открытый мини-апп показывал бы замок, пока его не перезапустят. Пока замок стоит, при каждом возвращении
+// на экран (не чаще раза в 5 с) переспрашиваем /api/me; Pro появился - снимаем замок и говорим об этом.
+let proCheckedAt = 0;
+async function recheckPro() {
+  if (!proLocked || document.visibilityState === "hidden" || Date.now() - proCheckedAt < 5000) return;
+  proCheckedAt = Date.now();
+  let me;
+  try { me = await api("/me"); } catch { return; }
+  if (me.pro !== true || !proLocked) return;
+  mePromise = Promise.resolve(me);
+  if (WEB) { location.reload(); return; }  // на сайте шапка («Перейти на Pro» -> «Pro») строится при старте
+  proLocked = false;
+  hapticNotify("success");
+  toast("Pro активен — фильтры, избранное и поиски открыты", null, 5000);
+  if (state.searchesOn) loadSearches().then(renderActive).catch(() => {});
+  showTab();  // вкладка «Поиски» без Pro - карточка с замком: перерисовать
+}
+document.addEventListener("visibilitychange", recheckPro);
+if (IN_TG && tgv("8.0")) tg.onEvent("activated", recheckPro);
+
 if (WEB && !webToken()) showLogin(); else start();
