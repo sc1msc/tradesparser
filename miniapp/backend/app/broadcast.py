@@ -17,9 +17,9 @@ test без адресата шлёт на HONESTLOT_ADMIN_CHAT_ID (вы дол�
   lot: 7216904                 - лот-зацепка: первая кнопка открывает его экран в мини-аппе;
   button: Смотреть Rolls-Royce - подпись этой кнопки; вторая кнопка - «Открыть HonestLot» (лента);
   gift_days: 3                 - подарить Pro на N дней тем, у кого Pro нет и кто ещё не получал пробный;
-  photo: none | <адрес>        - фото над текстом; по умолчанию первое фото лота, если оно есть
-                                 (фото с нашего сервера - /img, /docimg - Telegram может не скачать:
-                                 блокировка в обе стороны; тогда сообщение уходит текстом).
+  photo: rolls.jpg | <адрес> | none - картинка над текстом: файл (путь от папки файла кампании или
+                                 /data/...; jpg, png или webp до 10 МБ), адрес в интернете или без картинки.
+                                 По умолчанию - первое фото лота, если оно есть.
 {подарок} в тексте - место строки о подарке (её получают только те, кому Pro подарен; у остальных
 строка убирается); без метки строка дописывается в конец. Имя кампании - имя файла: по нему помним,
 кому уже отправили, поэтому для новой рассылки - новый файл.
@@ -35,6 +35,10 @@ test без адресата шлёт на HONESTLOT_ADMIN_CHAT_ID (вы дол�
     сообщения: кнопка в нём сразу открывает Pro, а мини-апп при входе один раз покажет «Вам открыт Pro
     на N дней». Решение владельца 29.10.2026: старым бесплатным - 3 дня, иначе «добавили фильтры»
     упирается в окно Pro, где в Telegram только «Понятно».
+  - Картинку-файл сервер загружает в Telegram сам (multipart через релей, telegram.upload) один раз, к
+    первому адресату, дальше шлёт её file_id. Не загрузилась - стоп: картинку выбрал владелец, без неё
+    слать не будем (test покажет это заранее). Фото по адресу Telegram скачивает сам, и фото с нашего
+    сервера (/img, /docimg) он может не достать - блокировка в обе стороны; тогда уходит текст без фото.
   - Кнопки - web_app с ?lot=ID&src=broadcast: app.js откроет лот и запишет событие notify_open с
     источником broadcast - stats считает по нему, сколько людей открыли мини-апп из рассылки.
 """
@@ -50,6 +54,8 @@ from . import billing, db, lots, notify, telegram
 SEND_PAUSE_SECONDS = 0.1    # ~10 сообщений в секунду, лимит Telegram для рассылок - около 30
 CAPTION_LIMIT = 1024        # подпись к фото; длиннее - отправляем текстом без фото
 MAX_429_RETRIES = 3
+PHOTO_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+PHOTO_MAX_BYTES = 10 * 1024 * 1024  # предел Telegram для sendPhoto
 FEED_BUTTON = "Открыть HonestLot"
 GIFT_MARK = "{подарок}"
 MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября",
@@ -102,12 +108,22 @@ def load(path):
     unknown = set(opts) - {"lot", "button", "gift_days", "photo"}
     if unknown:
         raise ValueError(f"{path}: неизвестные настройки {', '.join(sorted(unknown))}")
+    photo = opts.get("photo") or None
+    if photo and photo.lower() != "none" and not re.match(r"https?://", photo):
+        photo = os.path.join(os.path.dirname(os.path.abspath(path)), photo)  # абсолютный путь join не трогает
+        ext = os.path.splitext(photo)[1].lower()
+        if not os.path.isfile(photo):
+            raise ValueError(f"{path}: нет файла картинки {photo}")
+        if ext not in PHOTO_TYPES:
+            raise ValueError(f"{path}: картинка {photo} - нужен jpg, png или webp")
+        if os.path.getsize(photo) > PHOTO_MAX_BYTES:
+            raise ValueError(f"{path}: картинка {photo} больше 10 МБ - Telegram не примет")
     return {
         "name": os.path.splitext(os.path.basename(path))[0],
         "lot_id": opts.get("lot") or None,
         "button": opts.get("button") or "Открыть лот",
         "gift_days": int(opts.get("gift_days") or 0),
-        "photo": opts.get("photo") or None,
+        "photo": photo,
         "text": body.strip(),
     }
 
@@ -144,8 +160,13 @@ def keyboard(camp):
     return {"inline_keyboard": rows}
 
 
-def photo_url(camp):
-    """Фото над текстом: photo из файла кампании, иначе первое фото лота. -> адрес или None."""
+def _is_file(photo):
+    return bool(photo) and not re.match(r"https?://", photo)
+
+
+def photo_source(camp):
+    """Картинка над текстом: photo из файла кампании (путь к файлу или адрес), иначе первое фото лота.
+    -> путь, адрес или None."""
     if camp["photo"]:
         return None if camp["photo"].lower() == "none" else camp["photo"]
     lot = lots.get(camp["lot_id"]) if camp["lot_id"] else None
@@ -207,25 +228,33 @@ def _blocked(e):
 
 
 class Sender:
-    """Отправка одного сообщения кампании с фото (file_id после первой загрузки) или текстом."""
+    """Отправка одного сообщения кампании с картинкой (file_id после первой загрузки) или текстом."""
 
-    def __init__(self, camp, call=telegram.call):
-        self.camp, self.call = camp, call
+    def __init__(self, camp, call=telegram.call, upload=telegram.upload):
+        self.camp, self.call, self.upload = camp, call, upload
         self.keyboard = keyboard(camp)
-        self.photo = photo_url(camp)
+        self.photo = photo_source(camp)
         self.photo_id = None
+
+    def _send_photo(self, chat_id, text):
+        params = dict(chat_id=chat_id, caption=text, parse_mode="HTML", reply_markup=self.keyboard)
+        if self.photo_id or not _is_file(self.photo):
+            return self.call("sendPhoto", photo=self.photo_id or self.photo, **params)
+        with open(self.photo, "rb") as f:
+            data = f.read()
+        ctype = PHOTO_TYPES[os.path.splitext(self.photo)[1].lower()]
+        return self.upload("sendPhoto", {"photo": (os.path.basename(self.photo), data, ctype)}, **params)
 
     def send(self, chat_id, text):
         if self.photo and _plain_len(text) <= CAPTION_LIMIT:
             try:
-                res = self.call("sendPhoto", chat_id=chat_id, photo=self.photo_id or self.photo, caption=text,
-                                parse_mode="HTML", reply_markup=self.keyboard)
+                res = self._send_photo(chat_id, text)
                 if not self.photo_id and res.get("photo"):
                     self.photo_id = res["photo"][-1]["file_id"]  # дальше - без повторной загрузки
                 return
             except telegram.TelegramError as e:
-                if not _photo_error(e):
-                    raise
+                if not _photo_error(e) or _is_file(self.photo):
+                    raise  # картинку-файл выбрал владелец: без неё не шлём
                 print(f"Фото не отправилось ({e}) - дальше без фото: {self.photo}", flush=True)
                 self.photo = None
         self.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML", disable_web_page_preview=True,
@@ -242,9 +271,9 @@ def _send_retrying(sender, tid, text):
             time.sleep((e.retry_after or 5) + 1)
 
 
-def send_all(camp, call=telegram.call, sleep=time.sleep):
+def send_all(camp, call=telegram.call, sleep=time.sleep, upload=telegram.upload):
     """Всем, кому ещё не отправляли. -> {статус: число}, причина остановки или None."""
-    sender = Sender(camp, call)
+    sender = Sender(camp, call, upload)
     stats, stopped = {}, None
     todo = recipients(camp)
     for i, (tid, gift_until) in enumerate(todo, 1):
@@ -263,8 +292,9 @@ def send_all(camp, call=telegram.call, sleep=time.sleep):
                 status = "blocked"
             elif e.error_code is None and "timed out" in detail.lower():
                 status = "unknown"  # возможно, ушло - второй раз не шлём
-            elif e.error_code is None or e.error_code == 429 or _message_error(e):
-                status, stopped = "stopped", detail  # нет связи, лимит или ошибка в тексте - повторный send продолжит
+            elif e.error_code is None or e.error_code == 429 or _message_error(e) or _photo_error(e):
+                # нет связи, лимит, ошибка в тексте или картинке - повторный send продолжит
+                status, stopped = "stopped", detail
             else:
                 status = "failed"
         _log(camp, tid, status, _iso(lots.now_msk()), gift_until, detail)
@@ -302,19 +332,36 @@ def _lot_summary(camp):
     return line
 
 
+def _photo_info(photo):
+    """Картинка для show: файл - с размером, разрешением и проверкой пределов Telegram для sendPhoto."""
+    if not _is_file(photo):
+        return photo
+    info = f"{photo} ({os.path.getsize(photo) // 1024} КБ"
+    try:
+        from PIL import Image  # есть в образе (docphotos.py)
+        with Image.open(photo) as im:
+            w, h = im.size
+        info += f", {w}x{h}"
+        if w + h > 10000 or max(w, h) > 20 * min(w, h):
+            info += " - Telegram не примет: сумма сторон до 10000, стороны не больше чем 1:20"
+    except Exception:
+        pass
+    return info + ")"
+
+
 def show(camp):
     print(f"Кампания «{camp['name']}»")
     print(f"Лот: {_lot_summary(camp)}")
     for row in keyboard(camp)["inline_keyboard"]:
         print(f"Кнопка «{row[0]['text']}» -> {row[0]['web_app']['url']}")
-    photo = photo_url(camp)
-    print(f"Фото: {photo or 'нет - сообщение текстом'}")
+    photo = photo_source(camp)
+    print(f"Картинка: {_photo_info(photo) if photo else 'нет - сообщение текстом'}")
     sample_until = lots.now_msk() + datetime.timedelta(days=camp["gift_days"]) if camp["gift_days"] else None
     for title, until in (("с подарком", sample_until), ("без подарка", None)) if sample_until else (("", None),):
         text = render(camp, until)
         print(f"\n----- текст{' ' + title if title else ''} ({_plain_len(text)} знаков) -----\n{text}")
         if photo and _plain_len(text) > CAPTION_LIMIT:
-            print(f"(длиннее {CAPTION_LIMIT} знаков - уйдёт текстом без фото)")
+            print(f"(длиннее {CAPTION_LIMIT} знаков - уйдёт текстом без картинки: подпись к фото не длиннее)")
     todo = recipients(camp)
     gifts = sum(1 for tid, until in todo if until or _gets_gift(camp, tid))
     total = conn().execute("SELECT COUNT(*) FROM users").fetchone()[0]

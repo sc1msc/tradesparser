@@ -3,6 +3,8 @@
 lot: 7216904
 button: 🚗 Смотреть Rolls-Royce
 gift_days: 3
+# картинка: положить файл рядом (miniapp/broadcasts/2026-10-29-rolls.jpg) и раскомментировать
+# photo: 2026-10-29-rolls.jpg
 ---
 🚁 <b>Rolls-Royce Ghost владельца хелипортов — на торгах по банкротству</b>
 
