@@ -1811,10 +1811,10 @@ async function start() {
   favsEl.classList.add("hidden");
   searchesEl.classList.add("hidden");
   renderTabs();
-  // открыли из уведомления (кнопка бота, ссылка в письме, notify.py): ?lot=, ?search=, ?tab=
+  // открыли из уведомления (кнопка бота, ссылка в письме, notify.py) или из рассылки (broadcast.py): ?lot=, ?search=, ?tab=
   const qp = new URLSearchParams(location.search);
   const src = qp.get("src");
-  if (src === "notify" || src === "email") track("notify_open", null, src);
+  if (src === "notify" || src === "email" || src === "broadcast") track("notify_open", null, src);
   const searchParam = state.searchesOn && !proLocked && /^\d+$/.test(qp.get("search") || "") ? Number(qp.get("search")) : null;
   if (!searchParam) loadFeed(true);
   track("open");

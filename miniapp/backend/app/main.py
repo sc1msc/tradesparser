@@ -231,8 +231,8 @@ def api_event(payload: EventPayload, authorization: str = Header(default="")):
         source = payload.place
     if payload.type in ("paywall", "paywall_go") and payload.place in ("filters", "favs", "searches"):
         source = payload.place  # что пытались открыть без Pro
-    if payload.type == "notify_open" and payload.place in ("notify", "email"):
-        source = payload.place  # открыли мини-апп из уведомления в Telegram / из письма
+    if payload.type == "notify_open" and payload.place in ("notify", "email", "broadcast"):
+        source = payload.place  # открыли мини-апп из уведомления в Telegram / из письма / из рассылки
     db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id, source=source)
     return {"ok": True}
 

@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY lot_metrics.py bidding_schedule.py etp_status.py etp_lots.py parse_lot.py nextjs_json.py /app/
 COPY miniapp/backend/app /app/app
 COPY miniapp/frontend /app/frontend
+# тексты рассылок (app/broadcast.py): python -m app.broadcast ... broadcasts/<файл>.txt
+COPY miniapp/broadcasts /app/broadcasts
 
 ENV HONESTLOT_DB=/data/honestlot.db \
     HONESTLOT_FRONTEND_DIR=/app/frontend \
