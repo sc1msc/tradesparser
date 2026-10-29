@@ -11,6 +11,7 @@ build_lot_selections.py. Мини-апп обязан показывать то�
 копируем. Модуль без зависимостей (ни gspread, ни config) - его целиком
 копирует к себе Docker-образ бэкенда (см. miniapp/backend/Dockerfile).
 """
+import html as html_lib
 import re
 
 # Признаки повреждений в тексте лота (title). Используются так:
@@ -240,6 +241,33 @@ def find_plate(text):
     """Первый госномер в тексте - кириллицей, без пробелов ("Р131КТ77"), или None."""
     m = _PLATE_RE.search((text or "").upper())
     return "".join(m.groups()).translate(PLATE_LAT_TO_CYR) if m else None
+
+
+# ---------- описание лота: HTML -> текст (29.10.2026) ----------
+# Агрегатор отдаёт описание (поле information карточки) лотов Центра дистанционных торгов как есть,
+# HTML-разметкой площадки: «<p>транспортное средство – автомобиль легковой Volkswagen Polo, VIN: ...</p>»
+# (лот 7220427), <br> между строками выписки из ПТС, <h3><strong>, &nbsp; - 281 лот в базе мини-аппа на
+# 29.10.2026. Мини-апп показывает описание текстом, и теги было видно. Разметку снимаем при разборе
+# карточки (parse_lot.py, export_to_miniapp.fetch_details): абзацы, заголовки и <br> - переносы строк
+# (блок «Описание» их показывает), пустые строки убираем, остальные теги - без следа (<strong> не
+# разделяет слова), сущности - символами. Текст без тегов не трогаем: у 272 описаний свои переносы
+# строк, а «&» и «<» в обычном тексте - просто знаки. Тег - только «<» + латинская буква («<100 л.с.»
+# не тег). Лоты с площадок (etp_lots.text_of) приходят уже без разметки.
+_HTML_TAG_RE = re.compile(r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^<>]*)?/?>")
+_HTML_BREAK_RE = re.compile(r"<br\s*/?>|</?(?:p|div|h[1-6]|li|ul|ol|table|tr|td|th|blockquote)(?:\s[^<>]*)?>",
+                            re.I)
+_HTML_SKIP_RE = re.compile(r"<(script|style)\b.*?</\1\s*>", re.S | re.I)
+
+
+def description_text(text):
+    """Описание лота с HTML-разметкой -> обычный текст: абзацы и <br> - переносы строк, без пустых
+    строк и лишних пробелов, &nbsp; - пробел. Текст без тегов (и None) возвращается как есть."""
+    if not text or not _HTML_TAG_RE.search(text):
+        return text
+    text = re.sub(r"\s+", " ", _HTML_SKIP_RE.sub(" ", text))  # переносы в самой разметке - пробелы, как в браузере
+    text = html_lib.unescape(_HTML_TAG_RE.sub("", _HTML_BREAK_RE.sub("\n", text)))
+    lines = (" ".join(line.split()) for line in text.split("\n"))  # split() режет и по &nbsp; (\xa0)
+    return "\n".join(line for line in lines if line)
 
 
 def lot_kind(text):

@@ -850,7 +850,9 @@ def detail(lot, now, favorites):
         "platform": lot.get("platform"),
         "status": lot.get("status"),
         "bidding_start": _iso(parse_dt(lot.get("bidding_start"))),
-        "description": lot.get("description"),
+        # ПК присылает описание без HTML с 29.10.2026; у лотов, ушедших из выгрузки раньше (их импорт уже не
+        # перезапишет), - ещё с разметкой ЦДТ (lot_metrics.description_text)
+        "description": lot_metrics.description_text(lot.get("description")),
         "photos": lot.get("photos") or [],
         "photo_sets": lot.get("photo_sets") or [],  # запасные наборы фото (lots._photo_sets)
         "periods": periods,

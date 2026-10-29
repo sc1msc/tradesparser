@@ -61,7 +61,8 @@ def parse_lot_html(html, url=None):
     # Длинные тексты бывают ссылкой "$80" на отдельный чанк - разворачиваем
     # (см. nextjs_json.resolve_text_ref).
     title = resolve_text_ref(payload, lot.get("title"))
-    description = resolve_text_ref(payload, lot.get("information"))  # тех. характеристики
+    # тех. характеристики; у лотов ЦДТ - HTML-разметкой площадки (lot_metrics.description_text)
+    description = lot_metrics.description_text(resolve_text_ref(payload, lot.get("information")))
     status = _get(lot, "status", "title")
     region = _get(lot, "region", "title")
     trade_kind = lot.get("trade_form")

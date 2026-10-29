@@ -170,8 +170,9 @@ def fetch_details(url, session):
         "is_public_offer": bool(periods) or "публичн" in trade_form.lower() or lot.get("trade_form_id") == 5,
         "status": _title(lot, "status"),
         "platform": _title(lot, "marketplace"),
-        # Длинное описание бывает ссылкой "$81" на отдельный чанк (nextjs_json.resolve_text_ref).
-        "description": resolve_text_ref(payload, lot.get("information")),
+        # Длинное описание бывает ссылкой "$81" на отдельный чанк (nextjs_json.resolve_text_ref), у лотов
+        # ЦДТ - HTML-разметкой площадки (lot_metrics.description_text).
+        "description": lot_metrics.description_text(resolve_text_ref(payload, lot.get("information"))),
         "applications_end": stages.get("end_bid_time"),
         "etp_url": etp_link(lot),
         "efrsb_url": etp_status.efrsb_link(lot),  # объявление на ЕФРСБ: кнопка лота «вне ЭТП» ведёт сюда
@@ -396,7 +397,8 @@ def build_lot(row, details, damage=None, dtp=None):
         # Если карточку скачать не удалось - хотя бы первое фото из таблицы.
         "photos": d.get("photos") or ([{"full": row["photo_url"], "thumb": row["photo_url"]}]
                                       if row.get("photo_url") else []),
-        "description": d.get("description"),
+        # карточки в кэше, скачанные до 29.10.2026, хранят описание ЦДТ с HTML - снимаем и здесь
+        "description": lot_metrics.description_text(d.get("description")),
         "autoru_price_low": _to_int(row.get("autoru_price_low")),
         "autoru_price_high": _to_int(row.get("autoru_price_high")),
         "autoru_owners": _to_int(row.get("autoru_owners_count")),
