@@ -872,7 +872,8 @@ async function renderSearches() {
       h("div", { class: "pw-tag" }, "HonestLot Pro"),
       h("h3", {}, "Новые лоты сами придут к вам"),
       h("p", {}, "Сохраните поиск — и бот напишет, как только появится подходящая машина. Если подешевеет машина из избранного или её выставят снова, тоже сообщим."),
-      IN_TG ? null : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, "searches") }, "Перейти на Pro")));
+      IN_TG ? h("button", { class: "btn", onclick: () => goPro("searches") }, "Оформить Pro")
+        : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, "searches") }, "Перейти на Pro")));
     return;
   }
   if (!state.searches) searchesEl.replaceChildren(head, h("div", { class: "loader" }, "Загружаем…"));
@@ -1676,9 +1677,13 @@ function showStub() {
 // 15.10.2026, решения владельца), остальным по нажатию - окно «… — в подписке Pro». Признак - поле
 // "pro" в /api/me: оно есть, только когда оплата включена (billing.enabled), без него ничего не
 // закрываем. Закрыто только в интерфейсе: API эти функции пока не ограничивает (TODO "Разделение
-// бесплатного и Pro"). В Telegram в окне нет кнопки «Перейти на Pro»: правила Telegram (6.2) и Apple
-// (3.1.1) запрещают внутри мини-аппа вести на оплату мимо Stars - сказать, что функция в Pro, можно.
+// бесплатного и Pro"). В Telegram кнопка «Оформить Pro» (с 29.10.2026, решение владельца: вести на оплату,
+// несмотря на правила Telegram 6.2 и Apple 3.1.1 про оплату мимо Stars) открывает страницу оплаты в браузере
+// (tg.openLink) и передаёт в адресе после «#» initData - страница узнаёт того же пользователя без входа
+// (pay.js authHeader, подпись initData действует 7 дней).
 let proLocked = false;
+function payUrl() { return location.origin + "/pay/" + (IN_TG && tg.initData ? "#init=" + encodeURIComponent(tg.initData) : ""); }
+function goPro(kind) { track("paywall_go", null, kind); openLink(payUrl()); }
 function locked(kind) {
   if (!proLocked) return false;
   showPaywall(kind);
@@ -1703,9 +1708,9 @@ function showPaywall(kind) {
       h("h3", {}, title),
       h("p", {}, text),
       IN_TG
-        ? h("button", { class: "btn", onclick: close }, "Понятно")
+        ? h("button", { class: "btn", onclick: () => { close(); goPro(kind); } }, "Оформить Pro")
         : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, kind) }, "Перейти на Pro"),
-      IN_TG ? null : h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
+      h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
   document.addEventListener("keydown", onKey);
   document.body.append(sheet);
   sheet.querySelector(".btn").focus();

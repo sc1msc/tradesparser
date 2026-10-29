@@ -88,7 +88,11 @@ noindex` и метатегом `robots`.
 (`app.js`: `locked`, `showPaywall`), признак — поле `pro` в `GET /api/me` (есть, только когда
 оплата включена). Закрыто только в интерфейсе: API фильтры и избранное не ограничивает. Показ окна
 и нажатие «Перейти на Pro» пишутся в `events` как `paywall` / `paywall_go` (`source` — `filters`
-или `favs`), итог — в `python -m app.stats`.
+или `favs`), итог — в `python -m app.stats`. В Telegram (с 29.10.2026, решение владельца — вести на оплату,
+несмотря на правила Telegram 6.2 и Apple 3.1.1) в окне и во вкладке «Поиски» кнопка «Оформить Pro»:
+`tg.openLink` на `/pay/#init=<initData>` — страница оплаты берёт пользователя из подписанного initData
+(`pay.js authHeader`, `billing.user_from_header` вид `tma`, подпись действует 7 дней); после «#» адрес не
+уходит на сервер и в логи.
 
 ## База (SQLite, `/data/honestlot.db` в контейнере, `miniapp/data/` на сервере)
 
