@@ -16,6 +16,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+import uuid
 
 DEFAULT_API = "https://api.telegram.org"
 
@@ -40,14 +41,33 @@ def call(method, http_timeout=15, bot_token=None, **params):
     потому что timeout - параметр Bot API (getUpdates). bot_token - другой бот
     (бот уведомлений, watchdog._send); без него - @honestlot_bot (HONESTLOT_BOT_TOKEN).
     """
+    return _send(method, json.dumps(params, ensure_ascii=False).encode("utf-8"), "application/json",
+                 http_timeout, bot_token)
+
+
+def upload(method, files, http_timeout=60, bot_token=None, **params):
+    """Метод Bot API с файлом с диска (sendPhoto картинки рассылки, broadcast.py) - multipart/form-data.
+    files - {поле: (имя файла, байты, тип)}; словари и списки в params (reply_markup) - JSON-строкой."""
+    boundary = uuid.uuid4().hex
+    parts = []
+    for name, value in params.items():
+        if not isinstance(value, str):
+            value = json.dumps(value, ensure_ascii=False)
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'.encode()
+                     + value.encode("utf-8") + b"\r\n")
+    for name, (filename, data, ctype) in files.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+                     f"Content-Type: {ctype}\r\n\r\n".encode() + data + b"\r\n")
+    body = b"".join(parts) + f"--{boundary}--\r\n".encode()
+    return _send(method, body, f"multipart/form-data; boundary={boundary}", http_timeout, bot_token)
+
+
+def _send(method, data, content_type, http_timeout, bot_token):
     token = bot_token or os.environ.get("HONESTLOT_BOT_TOKEN", "")
     if not token:
         raise TelegramError("HONESTLOT_BOT_TOKEN не задан")
-    req = urllib.request.Request(
-        f"{api_base()}/bot{token}/{method}",
-        data=json.dumps(params, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-    )
+    req = urllib.request.Request(f"{api_base()}/bot{token}/{method}", data=data,
+                                 headers={"Content-Type": content_type})
     try:
         with urllib.request.urlopen(req, timeout=http_timeout) as resp:
             body = json.load(resp)

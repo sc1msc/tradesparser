@@ -929,10 +929,12 @@ def trial_days():
         return 0
 
 
-def claim_trial(tid):
+def claim_trial(tid, days=None):
     """Новый пользователь: Pro на trial_days() дней, один раз. Подарок по ссылке автора курса (claim_promo
-    после этого) добавится сверху. -> конец срока или None. Ошибки входу не мешают."""
-    days = trial_days()
+    после этого) добавится сверху. -> конец срока или None. Ошибки входу не мешают.
+    days - другой срок: подарок старым пользователям в рассылке (broadcast.py, 29.10.2026) - та же
+    таблица, тот же «один раз на человека» и то же сообщение «Вам открыт Pro на N дней» в мини-аппе."""
+    days = trial_days() if days is None else days
     if not enabled() or not days:
         return None
     try:
