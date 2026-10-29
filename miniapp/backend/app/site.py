@@ -59,23 +59,41 @@ def _rub(n):
     return f"{n:,}".replace(",", " ") + " ₽"
 
 
+MONTHS_GEN = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
+              "ноября", "декабря"]
+
+
+def _date_text(d):
+    return f"{d.day} {MONTHS_GEN[d.month - 1]} {d.year} года"
+
+
 def _plans():
-    """Карточки тарифов из billing.PLANS: ранняя цена крупно, обычная зачёркнута, цена за месяц;
-    самый длинный срок отмечен как самый выгодный."""
+    """Карточки тарифов из billing.PLANS: пока ранняя цена доступна (billing.early_open) - она крупно, обычная
+    зачёркнута; цена за месяц; самый длинный срок отмечен как самый выгодный."""
     longest = max(p["months"] for p in billing.PLANS.values())
+    early = billing.early_open()
     cards = []
     for pid, p in billing.PLANS.items():
         best = p["months"] == longest
-        per_month = (f'<div class="per">≈&nbsp;{_rub(round(p["early"] / p["months"]))} в&nbsp;месяц</div>'
+        price = p["early"] if early else p["price"]
+        per_month = (f'<div class="per">≈&nbsp;{_rub(round(price / p["months"]))} в&nbsp;месяц</div>'
                      if p["months"] > 1 else '<div class="per">помесячно</div>')
         cards.append(
             f'<div class="plan{" best" if best else ""}">'
             + ('<div class="badge">Выгоднее всего</div>' if best else "")
             + f'<div class="term">{html.escape(p["title"])}</div>'
-            f'<div class="price">{_rub(p["early"])}</div>'
-            f'<div class="regular">обычная цена <s>{_rub(p["price"])}</s></div>'
-            f'{per_month}{_pay_link("btn small" + ("" if best else " ghost"))}</div>')
+            f'<div class="price">{_rub(price)}</div>'
+            + (f'<div class="regular">обычная цена <s>{_rub(p["price"])}</s></div>' if early else "")
+            + f'{per_month}{_pay_link("btn small" + ("" if best else " ghost"))}</div>')
     return f'<div class="plans">{"".join(cards)}</div>'
+
+
+def _early_note():
+    """Строка над тарифами /pro: срок ранней цены, пока она доступна."""
+    if not billing.early_open():
+        return ""
+    return (f'<p class="sub">Ранняя цена — при оформлении подписки до {_date_text(billing.EARLY_UNTIL)} включительно. '
+            'Она сохраняется при продлении, пока подписка не прерывалась.</p>')
 
 
 def _pay_link(cls):
@@ -100,7 +118,7 @@ def values():
         "SELLER_INN": os.environ.get("HONESTLOT_SELLER_INN", "").strip() or "не указано",
         "EMAIL": os.environ.get("HONESTLOT_CONTACT_EMAIL", "").strip() or "info@honestlot.ru",
         "SITE": billing.site_url(),
-        "EARLY_SLOTS": str(billing.EARLY_SLOTS),
+        "EARLY_UNTIL": _date_text(billing.EARLY_UNTIL),
         "REMIND_DAYS": str(billing.REMIND_DAYS),
         "RENEW_ATTEMPTS": str(billing.RENEW_ATTEMPTS),
         "SUPPORT_BOT": SUPPORT_BOT,
@@ -128,6 +146,7 @@ def render(page):
     out = _read("layout.html").replace("{{CONTENT}}", _read(name))
     # готовый HTML, собранный здесь же (не из настроек)
     out = out.replace("{{PLANS}}", _plans()).replace("{{HERO_CTA}}", _hero_cta())
+    out = out.replace("{{EARLY_NOTE}}", _early_note())
     out = out.replace("{{ROBOTS}}", f'<meta name="robots" content="{NOINDEX}">' if noindex else "")
     out = out.replace("{{TITLE}}", html.escape(title)).replace("{{PAGE}}", page)
     # значения из настроек - последними и с экранированием (во всей странице, и в подвале)

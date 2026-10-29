@@ -137,9 +137,16 @@ function timeLeft(iso, short) {
 }
 const isSoon = (iso) => new Date(iso) - Date.now() < 48 * 36e5;
 const regionShort = (r) => (r || "").replace(/^г\.\s*/, "").replace("Московская область", "МО");
-// «~» - пробег не из описания лота: расчётный по году выпуска или пересчитанная на сегодня запись из отчёта
+// Пробег не из описания лота - расчётный: по году выпуска или пересчитанная на сегодня запись из отчёта.
+// Его принимали за настоящий (владелец, 29.10.2026), поэтому он округлён до тысяч («~170 тыс. км», а не
+// «170 236 км» - точная цифра выглядит как из документов) и помечен меткой «расчётный».
 const mileageApprox = (it) => it.mileage_estimated || it.mileage_source === "report";
-const kmText = (it) => it.mileage_km == null ? null : (mileageApprox(it) ? "~" : "") + nf.format(it.mileage_km) + " км";
+const kmText = (it) => it.mileage_km == null ? null
+  : mileageApprox(it) ? `~${nf.format(Math.max(1, Math.round(it.mileage_km / 1000)))} тыс. км` : nf.format(it.mileage_km) + " км";
+const kmEl = (it) => it.mileage_km == null ? null : mileageApprox(it)
+  ? h("span", { class: "km-est" }, kmText(it), h("span", { class: "tag est" }, "расчётный")) : kmText(it);
+// строка «пробег · регион · ДТП» из строк и элементов
+const dotJoin = (parts) => parts.filter(Boolean).flatMap((x, i) => (i ? [" · ", x] : [x]));
 
 // damaged - у лота возможны повреждения: скидка к рынку не «выгода», плашка жёлтая (решение владельца 19.10.2026)
 function gapBadge(gap, damaged) {
@@ -338,7 +345,7 @@ function card(it) {
   const thumb = thumbBox(it);
   // «новый»: лот открытого поиска, пришедший после прошлого открытия, или появившийся в ленте за сутки
   if (state.newIds.has(it.id) || it.is_new) thumb.append(h("span", { class: "newb" }, "новый"));
-  const meta = [kmText(it), regionShort(it.region), it.dtp_count ? `ДТП: ${it.dtp_count}` : null].filter(Boolean).join(" · ");
+  const meta = dotJoin([kmEl(it), regionShort(it.region), it.dtp_count ? `ДТП: ${it.dtp_count}` : null]);
   const specLine = specsShort(it);
   const closedText = (it.fav_state && it.fav_state !== "open" && OUTCOME_TEXT[it.fav_state]) || "Приём заявок завершён";
   const deadline = it.is_open
@@ -366,7 +373,7 @@ function card(it) {
       h("div", { class: "priceline" }, h("span", { class: "price" }, it.trade === "auction" ? h("span", { class: "pfx" }, "старт ") : null, rub(it.price)), gapBadge(it.gap, it.damaged),
         it.gap_uncertain ? h("span", { class: "unsure", title: "Оценка может быть неточной" }, "неточно") : null),
       specLine ? h("div", { class: "specs" }, specLine) : null,
-      meta ? h("div", { class: "meta" }, meta) : null,
+      meta.length ? h("div", { class: "meta" }, meta) : null,
       relisted,
       deadline),
     heartButton(it.id, it));
@@ -872,7 +879,8 @@ async function renderSearches() {
       h("div", { class: "pw-tag" }, "HonestLot Pro"),
       h("h3", {}, "Новые лоты сами придут к вам"),
       h("p", {}, "Сохраните поиск — и бот напишет, как только появится подходящая машина. Если подешевеет машина из избранного или её выставят снова, тоже сообщим."),
-      IN_TG ? null : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, "searches") }, "Перейти на Pro")));
+      IN_TG ? h("button", { class: "btn", onclick: () => goPro("searches") }, "Оформить Pro")
+        : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, "searches") }, "Перейти на Pro")));
     return;
   }
   if (!state.searches) searchesEl.replaceChildren(head, h("div", { class: "loader" }, "Загружаем…"));
@@ -1306,10 +1314,11 @@ async function renderLot(id) {
   // год с даты записи), с датой записи; по году выпуска - «расчётный» (решение владельца 19.10.2026)
   const recDate = lot.mileage_record_date && /^\d{4}-\d{2}-\d{2}/.test(lot.mileage_record_date)
     ? lot.mileage_record_date.slice(0, 10).split("-").reverse().join(".") : null;
-  const mileage = lot.mileage_km == null ? null
-    : lot.mileage_estimated ? `~${nf.format(lot.mileage_km)} км (расчётный)`
-    : lot.mileage_source === "report" ? `~${nf.format(lot.mileage_km)} км (по записи из отчёта${recDate ? " от " + recDate : ""})`
-    : `${nf.format(lot.mileage_km)} км`;
+  const mileage = () => kmEl(lot);  // элемент - заново для каждого места (шапка и «Характеристики»)
+  const mileageNote = lot.mileage_km == null || !mileageApprox(lot) ? null
+    : h("div", { class: "sub km-note" }, lot.mileage_estimated
+      ? "Пробег расчётный: в лоте его нет, посчитали по году выпуска и среднему пробегу за год. Настоящий может сильно отличаться."
+      : `Пробег расчётный: в лоте его нет. Взяли последнюю запись из истории машины${recDate ? " (" + recDate + ")" : ""} и прибавили средний пробег за прошедшее время. Настоящий может отличаться.`);
 
   let descOpen = false;
   const desc = lot.description ? h("div", { class: "desc clamp" }, lot.description) : null;
@@ -1327,7 +1336,7 @@ async function renderLot(id) {
 
   const headBlock = h("div", { class: "block headblock" },
       h("h2", {}, lot.name, lot.year ? `, ${lot.year}` : ""),
-      h("div", { class: "sub" }, [mileage, regionShort(lot.region)].filter(Boolean).join(" · ")),
+      h("div", { class: "sub" }, dotJoin([mileage(), regionShort(lot.region)])),
       lot.trade === "auction" ? h("div", { class: "pricecap" }, "Начальная цена") : null,
       h("div", { class: "bigprice" }, rub(lot.price), gapBadge(lot.gap, lot.total_damage || (lot.damage || []).length > 0)),
       lot.next_price && lot.is_open ? h("div", { class: "nextstep" },
@@ -1347,7 +1356,7 @@ async function renderLot(id) {
     historyBlock,
     h("div", { class: "block" }, h("h3", {}, "Характеристики"), rows([
       ["Год", lot.year],
-      ["Пробег", mileage],
+      ["Пробег", mileage()],
       ["Кузов", lot.body_name || (lot.body ? cap(lot.body) : null)],
       ["Двигатель", engineText(lot)],
       ["Коробка", lot.transmission],
@@ -1360,7 +1369,7 @@ async function renderLot(id) {
       ["Площадка", lot.platform],
       ["Начальная цена", lot.price_start != null && lot.price_start !== lot.price ? rub(lot.price_start) : null],
       ["Статус", lot.status],
-    ])),
+    ]), mileageNote),
     desc ? h("div", { class: "block" }, h("h3", {}, "Описание"), desc, descToggle) : null,
   ];
   // В веб-версии на широком экране - две колонки: фото слева, цена, кнопки и блоки справа
@@ -1676,9 +1685,13 @@ function showStub() {
 // 15.10.2026, решения владельца), остальным по нажатию - окно «… — в подписке Pro». Признак - поле
 // "pro" в /api/me: оно есть, только когда оплата включена (billing.enabled), без него ничего не
 // закрываем. Закрыто только в интерфейсе: API эти функции пока не ограничивает (TODO "Разделение
-// бесплатного и Pro"). В Telegram в окне нет кнопки «Перейти на Pro»: правила Telegram (6.2) и Apple
-// (3.1.1) запрещают внутри мини-аппа вести на оплату мимо Stars - сказать, что функция в Pro, можно.
+// бесплатного и Pro"). В Telegram кнопка «Оформить Pro» (с 29.10.2026, решение владельца: вести на оплату,
+// несмотря на правила Telegram 6.2 и Apple 3.1.1 про оплату мимо Stars) открывает страницу оплаты в браузере
+// (tg.openLink) и передаёт в адресе после «#» initData - страница узнаёт того же пользователя без входа
+// (pay.js authHeader, подпись initData действует 7 дней).
 let proLocked = false;
+function payUrl() { return location.origin + "/pay/" + (IN_TG && tg.initData ? "#init=" + encodeURIComponent(tg.initData) : ""); }
+function goPro(kind) { track("paywall_go", null, kind); openLink(payUrl()); }
 function locked(kind) {
   if (!proLocked) return false;
   showPaywall(kind);
@@ -1703,9 +1716,9 @@ function showPaywall(kind) {
       h("h3", {}, title),
       h("p", {}, text),
       IN_TG
-        ? h("button", { class: "btn", onclick: close }, "Понятно")
+        ? h("button", { class: "btn", onclick: () => { close(); goPro(kind); } }, "Оформить Pro")
         : h("a", { class: "btn", href: "/pro", onclick: () => track("paywall_go", null, kind) }, "Перейти на Pro"),
-      IN_TG ? null : h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
+      h("button", { class: "linkbtn", onclick: close }, "Не сейчас")));
   document.addEventListener("keydown", onKey);
   document.body.append(sheet);
   sheet.querySelector(".btn").focus();
@@ -1843,4 +1856,25 @@ async function start() {
     if (e instanceof AuthError) showStub();
   }
 }
+// Вернулся в мини-апп после оплаты на сайте (кнопка «Оформить Pro»): Pro узнаём при старте, и без этого
+// открытый мини-апп показывал бы замок, пока его не перезапустят. Пока замок стоит, при каждом возвращении
+// на экран (не чаще раза в 5 с) переспрашиваем /api/me; Pro появился - снимаем замок и говорим об этом.
+let proCheckedAt = 0;
+async function recheckPro() {
+  if (!proLocked || document.visibilityState === "hidden" || Date.now() - proCheckedAt < 5000) return;
+  proCheckedAt = Date.now();
+  let me;
+  try { me = await api("/me"); } catch { return; }
+  if (me.pro !== true || !proLocked) return;
+  mePromise = Promise.resolve(me);
+  if (WEB) { location.reload(); return; }  // на сайте шапка («Перейти на Pro» -> «Pro») строится при старте
+  proLocked = false;
+  hapticNotify("success");
+  toast("Pro активен — фильтры, избранное и поиски открыты", null, 5000);
+  if (state.searchesOn) loadSearches().then(renderActive).catch(() => {});
+  showTab();  // вкладка «Поиски» без Pro - карточка с замком: перерисовать
+}
+document.addEventListener("visibilitychange", recheckPro);
+if (IN_TG && tgv("8.0")) tg.onEvent("activated", recheckPro);
+
 if (WEB && !webToken()) showLogin(); else start();

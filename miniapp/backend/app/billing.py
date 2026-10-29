@@ -37,8 +37,9 @@ Telegram (правила для разработчиков, п. 6.2) и Apple (3
 ОТМЕНА = перестать списывать и стереть у себя идентификатор способа оплаты
 (у ЮKassa его не удалить, monetization.md). Доступ - до конца оплаченного периода.
 
-ЦЕНЫ. Тарифы - PLANS. Ранняя цена - первым EARLY_SLOTS платящим и тем, кому её
-дали вручную (python -m app.billing early <telegram_id>); держится, пока
+ЦЕНЫ. Тарифы - PLANS. Ранняя цена - всем, кто оформил подписку до EARLY_UNTIL включительно
+(с 29.10.2026, решение владельца: «скидочные до конца года»; раньше - первым 100 платящим), и тем,
+кому её дали вручную (python -m app.billing early <telegram_id>); держится, пока
 подписка не прерывалась: при продлении берётся цена, зафиксированная в подписке.
 Повышение цены действующим подписчикам (со следующего периода, письмо за 14
 дней) - пока не реализовано: цена периода хранится в subscriptions.price.
@@ -78,7 +79,7 @@ PLANS = {
     "quarter": {"title": "3 месяца", "months": 3, "price": 3490, "early": 2490},
     "year": {"title": "12 месяцев", "months": 12, "price": 11900, "early": 7900},
 }
-EARLY_SLOTS = int(os.environ.get("HONESTLOT_EARLY_SLOTS", "100"))
+EARLY_UNTIL = datetime.date.fromisoformat(os.environ.get("HONESTLOT_EARLY_UNTIL", "2026-12-31"))
 REMIND_DAYS = 3
 RENEW_ATTEMPTS = 3
 RETRY_HOURS = 24
@@ -281,17 +282,20 @@ def user_from_header(authorization):
 
 # ---------- цены ----------
 
+def early_open(now=None):
+    """Ранняя цена ещё доступна новым подписчикам (до EARLY_UNTIL включительно, по Москве)."""
+    return (now or datetime.datetime.now(MSK)).astimezone(MSK).date() <= EARLY_UNTIL
+
+
 def _early_for(c, telegram_id):
     """Ранняя цена: вручную выдана, или подписка с ранней ценой ещё не прерывалась,
-    или платящих пока меньше EARLY_SLOTS."""
+    или ранняя цена ещё доступна всем (early_open)."""
     if c.execute("SELECT 1 FROM early_access WHERE telegram_id = ?", (telegram_id,)).fetchone():
         return True
     sub = c.execute("SELECT early, status FROM subscriptions WHERE telegram_id = ?", (telegram_id,)).fetchone()
     if sub and sub["status"] in ("active", "past_due"):
         return bool(sub["early"])
-    payers = c.execute("SELECT COUNT(DISTINCT telegram_id) n FROM payments WHERE status = 'succeeded' "
-                       "AND telegram_id != ?", (telegram_id,)).fetchone()["n"]
-    return payers < EARLY_SLOTS
+    return early_open()
 
 
 def offer(telegram_id):

@@ -115,10 +115,14 @@ input { font: inherit; color: inherit; }
 .gap.warn { color: var(--warn); background: rgba(199, 120, 0, .14); }
 .unsure { font-size: 11px; color: var(--hint); border: 1px dashed var(--sep); border-radius: 5px; padding: 0 4px; }
 .unsure-note { color: var(--warn); }
-.meta { color: var(--hint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { color: var(--hint); font-size: 13px; }
+.km-est { white-space: nowrap; }
 .deadline { font-size: 13px; }
 .deadline.soon { font-weight: 600; }
 .tag { font-size: 11px; color: var(--hint); border: 1px solid var(--sep); border-radius: 5px; padding: 0 4px; margin-left: 2px; }
+/* расчётный пробег (не из лота): метка заметнее серых - его принимали за настоящий */
+.tag.est { color: var(--warn); border-color: currentColor; margin-left: 4px; }
+.km-note { font-size: 13px; margin-top: 8px; }
 
 .fav {
   position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; display: grid; place-items: center;
