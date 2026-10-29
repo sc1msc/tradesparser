@@ -488,8 +488,9 @@ class Mets:
 
     def read_lot(self, get, url, with_trade=True):
         """Страница лота -> поля строки листа и данные для мини-аппа (with_trade не нужен: всё на
-        одной странице). Нет названия или статуса - parse_error."""
-        html = get(url)
+        одной странице). Нет названия или статуса - parse_error. В торгах несколько лотов - разбираем
+        только блок лота из адреса (etp_status.mets_lot_html)."""
+        html = etp_status.mets_lot_html(url, get(url))
         number = re.search(r"/(\d+)-(\d+)$", url.rstrip("/"))
         s = self.sections(html)
         f = lambda label, section=None: self.field(s, label, section)  # noqa: E731
@@ -1055,7 +1056,8 @@ def page_photos(url, html):
     if host == "m-ets.ru":
         base = "https://m-ets.ru/"
         return [{"full": base + full, "thumb": base + thumb} for full, thumb in dict.fromkeys(
-            re.findall(r'href="(download/[^"]+)"[^>]*data-lightbox="lotpics\d+"[^>]*data-thumb="([^"]+)"', html))]
+            re.findall(r'href="(download/[^"]+)"[^>]*data-lightbox="lotpics\d+"[^>]*data-thumb="([^"]+)"',
+                       etp_status.mets_lot_html(url, html)))]
     if host == "torgi.cdtrf.ru":
         # страница торгов: фото - ссылки на webapi с номером лота; в торгах несколько лотов - не берём
         found = {}

@@ -90,6 +90,9 @@ NEXT_LABEL_RE = re.compile(r"\s(?:Дата|Начало|Окончание|Ка�
                            r"Периоды|Предмет|Аукцион|Регион|Начальная|Текущая|Купить|Документы|Сведения)")
 CDT_RE = re.compile(r'"tradeStatusDescription"\s*:\s*"([^"]{1,80})"')
 METS_RE = re.compile(r'class="[^"]*lot-status-name[^"]*"[^>]*>\s*([^<]{1,80})<')
+# МЭТС: блок лота на странице торгов и начало общих сведений о торгах (о торгах, должник, организатор).
+METS_LOT_RE = re.compile(r'<div class="lot-container"')
+METS_SHARED_RE = re.compile(r'<div class="[^"]*lot-info-block-header[^"]*info-type_[2-9]')
 # Lot-online (РАД): статус лота - в блоке formMain:opStatus (<span class="status-N">Идет прием заявок</span>).
 # До 19.10.2026 его искали рядом с VIN (near_vin), но после длинного описания фраза уходила дальше 400
 # символов, а «Процедура по лоту проведена» (торги прошли) словарь не знал - 7 из 14 лотов не распознавались.
@@ -195,6 +198,27 @@ def _anchors(text, hint):
     return out
 
 
+def mets_lot_html(url, html):
+    """Страница МЭТС с несколькими лотами показывает их все подряд, какой бы лот ни открыли:
+    на /239544-3 лоты 1, 3, 4, 5, первые заголовок и цена - лота 1 (прицеп), фото - лота 5 (Нива),
+    а лот 3 - Duster (29.10.2026 в ленте был «Дастер» с ценой прицепа и фото Нивы). -> та же страница,
+    но из лотов только тот, что в адресе (data-lotNumber), плюс общие сведения о торгах. Лот один
+    или блока с таким номером нет - страница как есть."""
+    m = re.search(r"/\d+-(\d+)/?$", url or "")
+    starts = [x.start() for x in METS_LOT_RE.finditer(html or "")]
+    if not m or len(starts) < 2:
+        return html
+    shared = METS_SHARED_RE.search(html, starts[-1])
+    end = shared.start() if shared else len(html)
+    bounds = starts + [end]
+    for a, b in zip(bounds, bounds[1:]):
+        # первый data-lotNumber блока - его собственный (дальше в блоке бывают ссылки на соседние лоты)
+        own = re.search(r'data-lotNumber="(\d+)"', html[a:b])
+        if own and own.group(1) == m.group(1):
+            return html[:starts[0]] + html[a:b] + html[end:]
+    return html
+
+
 def _pick(found, anchors):
     """found - [(позиция, фрагмент, (state, outcome))]. Все одинаковые - берём; разные - ближайший
     к VIN; VIN не нашёлся - неизвестно (лучше промолчать, чем закрыть чужой лот)."""
@@ -217,6 +241,7 @@ def parse(url, html, hint=None):
         found = [(m.start(), m.group(1), classify(m.group(1))) for m in CDT_RE.finditer(raw)]
         text = page_text(html)
     elif kind == "mets":
+        html = mets_lot_html(url, html)
         found = [(m.start(), m.group(1), classify(m.group(1))) for m in METS_RE.finditer(html)]
         text = page_text(html)
     elif kind == "lotonline":
