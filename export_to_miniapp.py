@@ -282,17 +282,37 @@ def _letters(value):
     return re.sub(r"[^A-ZА-ЯЁ]", "", (value or "").upper())
 
 
-def _same_brand(marka, brand):
-    """Марка из ответа TRONK - та же машина, что в лоте? Модель у TRONK бывает обобщённой («Прочие
-    модели Mazda»), поэтому только марка, и мягко: расхождение - только когда обе латиницей и ни одна
-    не начинается с другой («ВАЗ» против «LADA» не сравниваем)."""
+# Марки одной группы: в ГИБДД машину записывают под маркой концерна (TANK 500 - «GREAT WALL», BELGEE X50 -
+# «GEELY», 29.10.2026). Ключи и значения - как после _letters.
+BRAND_GROUPS = {
+    "TANK": "GREATWALL", "HAVAL": "GREATWALL", "WEY": "GREATWALL",
+    "BELGEE": "GEELY", "LANDROVER": "ROVER", "LADA": "VAZ",
+}
+
+
+def _same_brand(marka, brand, accident_model=None, model=None):
+    """ДТП из ответа TRONK - той же машины, что в лоте? Модель у TRONK бывает обобщённой («Прочие
+    модели Mazda»), поэтому сверяем марку, и мягко: расхождение - только когда обе латиницей и ни одна
+    не начинается с другой («ВАЗ» против «LADA» не сравниваем). Та же машина и когда марки одной группы
+    (BRAND_GROUPS) и когда модель лота есть в марке или модели ДТП: в ГИБДД пишут модель в поле марки
+    («ASTRA» у Opel Astra) или марку сборщика («HINDUSTAN» Lancer, «FAW» A6, «GEELY» Belgee X50)."""
     a, b = _letters(marka), _letters(brand)
     if not a or not b or not (a.isascii() and b.isascii()):
         return True
-    return a.startswith(b[:4]) or b.startswith(a[:4])
+    if a.startswith(b[:4]) or b.startswith(a[:4]):
+        return True
+    if BRAND_GROUPS.get(a, a) == BRAND_GROUPS.get(b, b):
+        return True
+    # модель лота («ASTRA», «X50», «A6», код «SANTA_FE») в марке или модели ДТП; не из одних цифр.
+    # Короткие («X5», «A6») - только словом целиком, длинные («SANTAFE») - и слитно с соседним словом
+    text = f"{marka} {accident_model or ''}".upper()
+    m = re.sub(r"[^A-ZА-ЯЁ0-9]", "", (model or "").upper())
+    if len(m) < 2 or m.isdigit():
+        return False
+    return m in re.findall(r"[A-ZА-ЯЁ0-9]+", text) or (len(m) >= 4 and m in re.sub(r"[^A-ZА-ЯЁ0-9]", "", text))
 
 
-def dtp_payload(rec, brand):
+def dtp_payload(rec, brand, model=None):
     """Строка справочника -> {count, as_of, accidents: [{date, type, region, scheme}]} или None (нет данных).
     ДТП чужой марки (опечатка в VIN у организатора) отбрасываем; если отброшены все - «нет данных»,
     а не «ДТП не найдены»."""
@@ -302,7 +322,7 @@ def dtp_payload(rec, brand):
         accidents = json.loads(rec.get("dtp_accidents") or "[]")
     except ValueError:
         return None
-    kept = [a for a in accidents if _same_brand(a.get("marka"), brand)]
+    kept = [a for a in accidents if _same_brand(a.get("marka"), brand, a.get("model"), model)]
     if accidents and not kept:
         return None
     return {
@@ -404,7 +424,8 @@ def build_lot(row, details, damage=None, dtp=None):
     # Справочник не прочитался (dtp is None) - поля нет вовсе: сервер оставит прежнее значение.
     if dtp is not None:
         lot["dtp"] = dtp_payload(dtp.get((row.get("vin") or "").strip().upper()),
-                                 row.get("autoru_mark") or row.get("brand"))
+                                 row.get("autoru_mark") or row.get("brand"),
+                                 row.get("autoru_model") or row.get("name"))
     return lot
 
 
