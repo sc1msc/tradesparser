@@ -195,8 +195,9 @@ POST_MIGRATION_SQL = "CREATE UNIQUE INDEX IF NOT EXISTS users_ref_code ON users 
 
 # paywall / paywall_go - веб-версия показала предложение Pro / человек нажал "Перейти на Pro"
 # search_save - сохранил поиск, notify_open - открыл мини-апп из уведомления или письма (с 19.10.2026)
+# write_ask / write_answer - мини-апп спросил разрешение писать / ответ ok, denied, later (с 30.10.2026)
 EVENT_TYPES = {"open", "lot_view", "fav_add", "source_click", "share", "paywall", "paywall_go",
-               "search_save", "notify_open", "dtp_open"}
+               "search_save", "notify_open", "dtp_open", "write_ask", "write_answer"}
 
 # Код для ссылок "Поделиться": без похожих 0/o, 1/l/i. 6 знаков - ~10^9
 # вариантов, совпадение при генерации всё равно проверяется (UNIQUE).

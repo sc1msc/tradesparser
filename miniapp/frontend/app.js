@@ -681,27 +681,59 @@ async function setNotify(patch) {
 }
 
 // Бот может писать человеку, только если тот разрешил. Свой текст в запрос Telegram не вставить -
-// сначала своё объяснение (showPopup), потом requestWriteAccess. Кто уже разрешил (запускал бота),
-// тому ничего не показываем (allows_write_to_pm в initData). -> разрешено ли.
+// сначала своё объяснение (showPopup), потом requestWriteAccess.
+// -> "ok" (разрешил) / "denied" (отказал в окне Telegram) / "later" («Не сейчас» или закрыл окно).
+async function askWriteAccess(title, message) {
+  const choice = await new Promise((res) => {
+    try {
+      tg.showPopup({ title, message,
+        buttons: [{ id: "later", type: "default", text: "Не сейчас" }, { id: "ok", type: "default", text: "Разрешить" }] }, res);
+    } catch { res("ok"); }
+  });
+  if (choice !== "ok") return "later";
+  const ok = await new Promise((res) => { try { tg.requestWriteAccess((x) => res(!!x)); } catch { res(false); } });
+  return ok ? "ok" : "denied";
+}
+const canWrite = () => !!(tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.allows_write_to_pm);
+
+// Включить уведомления в Telegram (сохранение поиска, переключатель на вкладке «Поиски»). Кто уже разрешил
+// (запускал бота), тому ничего не показываем (allows_write_to_pm в initData). -> разрешено ли.
 async function ensureTelegram() {
   if (!IN_TG) return false;
   if (state.notifySettings && state.notifySettings.tg) return true;
-  const u = tg.initDataUnsafe && tg.initDataUnsafe.user;
-  let allowed = !!(u && u.allows_write_to_pm);
+  let allowed = canWrite();
   if (!allowed) {
-    if (!(tg.isVersionAtLeast && tg.isVersionAtLeast("6.9"))) return false;
-    const choice = await new Promise((res) => {
-      try {
-        tg.showPopup({ title: "Уведомления в Telegram",
-          message: "Чтобы присылать новые лоты по вашим поискам, боту HonestLot нужно разрешение писать вам.",
-          buttons: [{ id: "later", type: "default", text: "Не сейчас" }, { id: "ok", type: "default", text: "Разрешить" }] }, res);
-      } catch { res("ok"); }
-    });
-    if (choice !== "ok") return false;
-    allowed = await new Promise((res) => { try { tg.requestWriteAccess((ok) => res(!!ok)); } catch { res(false); } });
+    if (!tgv("6.9")) return false;
+    allowed = (await askWriteAccess("Уведомления в Telegram",
+      "Чтобы присылать новые лоты по вашим поискам, боту HonestLot нужно разрешение писать вам.")) === "ok";
   }
   try { await setNotify({ tg: allowed }); } catch { /* попробуем при следующем сохранении */ }
   return allowed;
+}
+
+// Разрешение писать - у всех, кому Telegram его ещё не дал (решение владельца 30.10.2026). Кто пришёл по
+// прямой ссылке (подарок автора курса, «Поделиться»), бота мог не запускать ни разу, а первым бот написать
+// не может: не дойдут ни уведомления, ни рассылки. Спрашивать ли (не больше двух раз, второй - через
+// 14 дней), решает сервер (me.write_ask, notify.write_ask_due). Поверх лота, открытого по ссылке, не
+// спрашиваем: человек пришёл посмотреть машину - ждём, пока вернётся в ленту (renderTop).
+// head - первая строка (подарок, пробный Pro) вместо всплывающего сообщения о Pro.
+let writeAskPending = null;
+const writeAskNeeded = (me) => IN_TG && !!me.write_ask && tgv("6.9") && !canWrite();
+async function askWriteOnStart(head) {
+  if (state.stack.length) {  // успел открыть лот - о Pro скажем сразу, разрешение спросим в ленте
+    if (head) toast(head, null, 5000);
+    writeAskPending = () => askWriteOnStart(null);
+    return;
+  }
+  track("write_ask");
+  const text = "Разрешите боту HonestLot писать вам — пришлём новые лоты по вашим поискам и снижение цены в избранном.";
+  const answer = await askWriteAccess(head ? "Pro активен" : "Уведомления в Telegram", head ? `${head}.\n\n${text}` : text);
+  track("write_answer", null, answer);
+  if (answer === "ok") {
+    if (state.notifySettings) state.notifySettings.tg = true;  // сервер включил Telegram (write_answer)
+    hapticNotify("success");
+    toast("Готово — бот сможет присылать вам уведомления");
+  }
 }
 
 async function openSaveSheet(params) {
@@ -987,6 +1019,11 @@ function renderTop() {
   root.classList.toggle("hidden", !!top);
   overlay.replaceChildren();
   if (IN_TG) top ? tg.BackButton.show() : tg.BackButton.hide();
+  if (!top && writeAskPending) {  // вернулся в ленту с лота, открытого по ссылке, - теперь спросим
+    const ask = writeAskPending;
+    writeAskPending = null;
+    setTimeout(ask, 800);
+  }
   if (!top) return;
   if (top.kind === "lot") renderLot(top.id);
   if (top.kind === "filters") renderFilters(null);
@@ -1772,7 +1809,8 @@ function showLogin(expired) {
   const s = document.createElement("script");
   s.async = true;
   s.src = "https://telegram.org/js/telegram-widget.js?22";
-  Object.assign(s.dataset, { telegramLogin: BOT, size: "large", radius: "12", onauth: "onTelegramAuth(user)" });
+  // requestAccess: write - Telegram при входе предложит разрешить боту писать (уведомления, рассылки)
+  Object.assign(s.dataset, { telegramLogin: BOT, size: "large", radius: "12", requestAccess: "write", onauth: "onTelegramAuth(user)" });
   s.onerror = () => fallback.classList.remove("hidden");
   box.append(s);
   setTimeout(() => { if (!box.querySelector("iframe")) fallback.classList.remove("hidden"); }, 6000);
@@ -1834,10 +1872,12 @@ async function start() {
   const me = await loadMe();
   proLocked = me.pro === false;
   state.searchesOn = !!me.searches;
-  // пришёл по подарочной ссылке автора курса - сервер уже включил Pro, скажем об этом один раз
-  if (me.gift) setTimeout(() => toast("Ваша подписка Pro активна", null, 5000), 600);
+  // пришёл по подарочной ссылке автора курса - сервер уже включил Pro, скажем об этом один раз;
   // новый пользователь - пробный Pro (с 22.10.2026); при подарке по ссылке хватает сообщения о подарке
-  else if (me.trial) setTimeout(() => toast(`Вам открыт Pro на ${me.trial.days} ${plural(me.trial.days, "день", "дня", "дней")} — до ${me.trial.until}`, null, 6000), 600);
+  const proText = me.gift ? "Ваша подписка Pro активна"
+    : me.trial ? `Вам открыт Pro на ${me.trial.days} ${plural(me.trial.days, "день", "дня", "дней")} — до ${me.trial.until}` : null;
+  const askWrite = writeAskNeeded(me);  // окно «Разрешите боту писать» - вместо сообщения о Pro
+  if (proText && !askWrite) setTimeout(() => toast(proText, null, me.gift ? 5000 : 6000), 600);
   if (proLocked) state.filters = emptyFilters();
   if (WEB) document.getElementById("app").append(webHeader(me.pro));
   document.getElementById("app").append(root, overlay);
@@ -1860,6 +1900,7 @@ async function start() {
   if (sharedId) push({ kind: "lot", id: sharedId });
   else if (qp.get("tab") === "favs") selectTab("favs");
   else if (qp.get("tab") === "searches" && state.searchesOn) selectTab("searches");
+  if (askWrite) setTimeout(() => askWriteOnStart(proText), proText ? 1200 : 2500);
   if (state.searchesOn && !proLocked) {
     loadSearches().then(() => {
       renderActive();

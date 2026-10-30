@@ -21,7 +21,9 @@ API мини-аппа honestlot (FastAPI) + раздача статики фро
                                    переходе на сайт торгов, {"type": "share", "lot_id", "place"}
                                    при "Поделиться", {"type": "paywall"/"paywall_go", "place":
                                    "filters"/"favs"} - веб-версия без Pro показала предложение Pro /
-                                   нажали "Перейти на Pro" (остальное пишет сервер)
+                                   нажали "Перейти на Pro", {"type": "write_ask"} - мини-апп показал окно
+                                   «Разрешите боту писать», {"type": "write_answer", "place": "ok"/"denied"/
+                                   "later"} - ответ на него (notify.py; остальное пишет сервер)
   GET    /api/lot-statuses       - (ключ импорта) статусы торгов, которые сервер прочитал
                                    сам на агрегаторе и ЭТП (status_refresh.py) - ПК пишет их в лист
   POST   /api/notify             - (ключ импорта) уведомление пайплайна с ПК -> администратору
@@ -193,7 +195,7 @@ def api_web_login(payload: WebLoginPayload):
 
 @app.get("/api/me")
 def api_me(authorization: str = Header(default="")):
-    uid = current_user(authorization)
+    uid, source = current_user(authorization, with_source=True)
     me = {"ref": db.user_ref_code(uid)}
     gift = billing.promo_notice(uid)  # «вам подарен Pro» по ссылке автора курса - один раз
     if gift:
@@ -206,6 +208,8 @@ def api_me(authorization: str = Header(default="")):
         me["pro"] = billing.is_pro(uid)
     if searches.enabled_for(uid):
         me["searches"] = True  # сохранённые поиски и уведомления (включаются HONESTLOT_SAVED_SEARCHES)
+    if source != auth.WEB_SOURCE and notify.write_ask_due(uid):
+        me["write_ask"] = True  # мини-апп спросит разрешение писать, если Telegram его ещё не дал
     return me
 
 
@@ -223,7 +227,8 @@ SHARE_PLACES = {"top", "bottom", "toast"}
 def api_event(payload: EventPayload, authorization: str = Header(default="")):
     uid, start_param = current_user(authorization, with_source=True)
     # с фронта принимаем только то, что сервер сам не видит
-    if payload.type not in ("open", "source_click", "share", "paywall", "paywall_go", "notify_open"):
+    if payload.type not in ("open", "source_click", "share", "paywall", "paywall_go", "notify_open",
+                            "write_ask", "write_answer"):
         raise HTTPException(status_code=400, detail="неизвестный тип события")
     # events.source: для open - метка источника, для share - место кнопки
     source = start_param if payload.type == "open" else None
@@ -233,6 +238,12 @@ def api_event(payload: EventPayload, authorization: str = Header(default="")):
         source = payload.place  # что пытались открыть без Pro
     if payload.type == "notify_open" and payload.place in ("notify", "email", "broadcast"):
         source = payload.place  # открыли мини-апп из уведомления в Telegram / из письма / из рассылки
+    if payload.type == "write_ask":
+        notify.note_write_ask(uid, _now_iso())  # окно «Разрешите боту писать» - не больше WRITE_ASK_MAX раз
+    if payload.type == "write_answer" and payload.place in ("ok", "denied", "later"):
+        source = payload.place
+        if payload.place == "ok":
+            notify.set_tg(uid, True, _now_iso())  # бот может писать: уведомления и рассылки дойдут
     db.log_event(uid, payload.type, _now_iso(), lot_id=payload.lot_id, source=source)
     return {"ok": True}
 

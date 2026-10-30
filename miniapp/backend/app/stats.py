@@ -105,6 +105,13 @@ def run():
         print("Предложение Pro в веб-версии за 30 дней: " + ", ".join(
             f"{'показано' if r['type'] == 'paywall' else 'нажали «Перейти на Pro»'} ({kinds.get(r['source'], r['source'])}) "
             f"{r['n']} раз, {r['u']} чел." for r in pw))
+    # окно «Разрешите боту писать» (notify.py, с 30.10.2026): кому показали и что ответили
+    wa = {r["k"]: r["u"] for r in _q(c, "SELECT CASE type WHEN 'write_ask' THEN 'shown' ELSE source END k, "
+                                        "COUNT(DISTINCT telegram_id) u FROM events WHERE type IN ('write_ask', 'write_answer') "
+                                        "AND created_at >= ? GROUP BY k", (start,))}
+    if wa:
+        print(f"Разрешение боту писать за 30 дней: спросили {wa.get('shown', 0)} чел., разрешили {wa.get('ok', 0)}, "
+              f"«Не сейчас» {wa.get('later', 0)}, отказали в окне Telegram {wa.get('denied', 0)}")
     top = _q(c, "SELECT r.telegram_id, r.username, r.first_name, COUNT(*) n FROM users u "
                 "JOIN users r ON r.telegram_id = u.referred_by GROUP BY r.telegram_id ORDER BY n DESC LIMIT 10")
     if top:

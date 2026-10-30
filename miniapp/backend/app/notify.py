@@ -37,6 +37,14 @@ r"""
 выключали) - вместо событий его поиски заново отмечают все подходящие машины известными: после
 продления не придёт пачка всего, что появилось за перерыв.
 
+Разрешение писать. Бот может написать человеку первым, только если тот запускал бота или разрешил это
+в мини-аппе (requestWriteAccess). Кто пришёл по прямой ссылке t.me/<бот>?startapp=... (подарок автора
+курса, «Поделиться», метка источника), бота мог не запускать ни разу - ему не дойдут ни уведомления, ни
+рассылка (broadcast.py). Поэтому мини-апп сам спрашивает разрешение у тех, у кого его нет (решение
+владельца 30.10.2026): не больше WRITE_ASK_MAX раз, с перерывом WRITE_ASK_PAUSE_DAYS после «Не сейчас».
+Сколько раз спрашивали, хранит сервер (write_asks, write_asked_at), а не телефон: после очистки данных
+Telegram или на другом устройстве окно не появится снова. write_ask_due -> признак write_ask в /api/me.
+
 Почта подтверждается ссылкой из письма (confirm_url); адрес, на который уже пришла оплата Pro, -
 сразу подтверждён. Ссылки подписаны (billing._link_secret): подтверждение живёт CONFIRM_DAYS дней,
 «Отписаться» - бессрочно.
@@ -59,6 +67,8 @@ TG_TTL_HOURS = 24                      # событие, не доставлен
 REBASELINE_HOURS = 72                  # проходы - минимум раз в день (письмо), обычно 5-6 раз
 CONFIRM_DAYS = 3
 SEND_PAUSE_SECONDS = 0.1               # между сообщениями (лимиты Telegram)
+WRITE_ASK_MAX = 2                      # окно «Разрешите боту писать» - не больше двух раз
+WRITE_ASK_PAUSE_DAYS = 14              # второй раз - не раньше, чем через 14 дней после первого
 EMAIL_RE = re.compile(r"^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$")
 
 SCHEMA = """
@@ -72,6 +82,8 @@ CREATE TABLE IF NOT EXISTS notify_settings (
     email_digest_at    TEXT,                        -- когда ушло последнее письмо
     fav_events         INTEGER NOT NULL DEFAULT 1,  -- события избранного
     last_pass_at       TEXT,                        -- последний проход с событиями
+    write_asks         INTEGER NOT NULL DEFAULT 0,  -- сколько раз мини-апп спрашивал разрешение писать
+    write_asked_at     TEXT,                        -- когда спросил последний раз
     updated_at         TEXT NOT NULL
 );
 
@@ -115,6 +127,11 @@ def conn():
     if not _schema_ready:
         with db._lock:
             c.executescript(SCHEMA)
+            have = {r[1] for r in c.execute("PRAGMA table_info(notify_settings)")}
+            if "write_asks" not in have:  # базы до 30.10.2026
+                c.execute("ALTER TABLE notify_settings ADD COLUMN write_asks INTEGER NOT NULL DEFAULT 0")
+            if "write_asked_at" not in have:
+                c.execute("ALTER TABLE notify_settings ADD COLUMN write_asked_at TEXT")
             c.commit()
         _schema_ready = True
     return c
@@ -165,6 +182,33 @@ def _upsert(telegram_id, now_iso, **fields):
 def set_tg(telegram_id, allowed, now_iso):
     """Мини-апп сообщил итог requestWriteAccess (или пользователь выключил Telegram у себя)."""
     _upsert(telegram_id, now_iso, tg=int(bool(allowed)), tg_blocked_at=None)
+
+
+def write_ask_due(telegram_id, now=None):
+    """Пора ли спросить разрешение писать: бот ещё не может писать (по нашим данным; что знает Telegram,
+    мини-апп видит сам - allows_write_to_pm), спрашивали меньше WRITE_ASK_MAX раз и не за последние
+    WRITE_ASK_PAUSE_DAYS дней."""
+    r = _settings_row(telegram_id)
+    if not r:
+        return True
+    if r["tg"] and not r["tg_blocked_at"]:
+        return False
+    if r["write_asks"] >= WRITE_ASK_MAX:
+        return False
+    asked = _dt(r["write_asked_at"])
+    now = now or datetime.datetime.now(lots.MSK)
+    return asked is None or now - asked >= datetime.timedelta(days=WRITE_ASK_PAUSE_DAYS)
+
+
+def note_write_ask(telegram_id, now_iso):
+    """Мини-апп показал окно «Разрешите боту писать»."""
+    with db._lock:
+        c = conn()
+        with c:
+            c.execute("INSERT INTO notify_settings (telegram_id, write_asks, write_asked_at, updated_at) "
+                      "VALUES (?, 1, ?, ?) ON CONFLICT(telegram_id) DO UPDATE SET "
+                      "write_asks = write_asks + 1, write_asked_at = excluded.write_asked_at, "
+                      "updated_at = excluded.updated_at", (telegram_id, now_iso, now_iso))
 
 
 def set_fav_events(telegram_id, on, now_iso):

@@ -37,8 +37,8 @@ Telegram) или `Authorization: web <токен>` (веб-версия в бр�
 | GET | `/api/lots/{id}` | экран лота (пишет событие `lot_view`) |
 | GET | `/api/favorites` | избранное пользователя |
 | PUT / DELETE | `/api/favorites/{id}` | добавить / убрать |
-| GET | `/api/me` | код пользователя для ссылок «Поделиться» |
-| POST | `/api/events` | событие `open`, `source_click`, `share`, `paywall`, `paywall_go`, `notify_open` (открыли из уведомления: `notify` / `email`) |
+| GET | `/api/me` | код пользователя для ссылок «Поделиться»; `write_ask` — пора спросить разрешение писать |
+| POST | `/api/events` | событие `open`, `source_click`, `share`, `paywall`, `paywall_go`, `notify_open` (открыли из уведомления: `notify` / `email`), `write_ask` / `write_answer` (окно «Разрешите боту писать»: показали / ответ `ok`, `denied`, `later`) |
 | GET / POST / PATCH / DELETE | `/api/searches`, `/api/searches/{id}` | сохранённые поиски (Pro): список с числом лотов и новыми, сохранить, переименовать / фильтры / уведомления, удалить |
 | GET | `/api/searches/preview` | имя и число лотов для окна «Сохранить поиск» |
 | POST | `/api/searches/{id}/open` | поиск открыт: его новые лоты просмотрены |
@@ -105,7 +105,7 @@ noindex` и метатегом `robots`.
 | `saved_searches` | сохранённые поиски: `telegram_id`, `name` (пусто — из фильтров), `params` (JSON, параметры ленты), `notify`, `opened_at` |
 | `notify_seen` | машины (VIN или `lot:<номер>`), о которых пользователь уже знает: из выдачи при сохранении поиска или из уведомления — повторов не бывает |
 | `notify_events` | события уведомлений (`search`, `relisted`, `price_down`) и их доставка в Telegram и почту |
-| `notify_settings` | каналы пользователя: Telegram разрешён / бот заблокирован, почта и её подтверждение, события избранного |
+| `notify_settings` | каналы пользователя: Telegram разрешён / бот заблокирован, почта и её подтверждение, события избранного; `write_asks`, `write_asked_at` — сколько раз и когда мини-апп спрашивал разрешение писать |
 | `fav_watch` | последнее известное по машине из избранного: главный лот, открыт ли, цена |
 | `catalog_fixes` | ручные правки справочника марок и моделей (`catalog.py`) |
 
@@ -243,6 +243,18 @@ docker compose exec api python -m app.broadcast stats broadcasts/2026-10-29-roll
 - Разрешение писать: мини-апп сначала показывает своё объяснение (`showPopup`), потом
   `requestWriteAccess`; кто уже разрешал (`allows_write_to_pm` в initData), тому ничего не
   показывается. Ссылки из писем подписаны (`billing._link_secret`).
+- **Спрашиваем всех** (с 30.10.2026, решение владельца): кто пришёл по прямой ссылке
+  `t.me/honestlot_bot?startapp=…` (подарок автора курса, «Поделиться»), мог не запускать бота ни разу —
+  ему не доходят ни уведомления, ни рассылка (`broadcast.py`: 403). Поэтому при входе в мини-апп в
+  Telegram, если `allows_write_to_pm` нет, а `/api/me` вернул `write_ask` (`notify.write_ask_due`: бот
+  не может писать по нашим данным, спрашивали меньше `WRITE_ASK_MAX` = 2 раз и не за последние
+  `WRITE_ASK_PAUSE_DAYS` = 14 дней), появляется окно (`askWriteOnStart` в `app.js`) — у новых и
+  подарочных вместо сообщения о Pro. Поверх лота, открытого по ссылке, не спрашиваем — ждём возврата в
+  ленту. Показ — событие `write_ask` (сервер считает в `notify_settings.write_asks`), ответ —
+  `write_answer`; `ok` включает Telegram (`set_tg`). Счётчик на сервере, а не в телефоне: после
+  очистки данных Telegram окно не вернётся. На сайте вход через Telegram Login Widget с
+  `data-request-access="write"`: Telegram сам предлагает разрешить. Итоги — строка «Разрешение боту
+  писать» в `python -m app.stats`.
 - Проверить локально: `miniapp/run_local.py` (там функция включена; без токена бота сообщения не
   уходят, без SMTP письма — в лог).
 
