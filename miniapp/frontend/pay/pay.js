@@ -36,6 +36,7 @@ export function showLogin(box, onDone) {
   s.dataset.size = "large";
   s.dataset.radius = "10";
   s.dataset.onauth = "onTelegramAuth(user)";
+  s.dataset.requestAccess = "write";  // Telegram предложит разрешить боту писать (уведомления, рассылки)
   box.append(s);
   box.classList.remove("hidden");
 }
