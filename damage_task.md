@@ -5,7 +5,7 @@
 
 ## Что сделать
 
-Для каждого из 40 лотов ниже (список - в конце файла, JSON):
+Для каждого из 83 лотов ниже (список - в конце файла, JSON):
 
 1. Скачать его фото во временную папку (например `/tmp/p/`). В ссылках есть символы `$`, поэтому в shell ссылку
    ВСЕГДА брать в одинарные кавычки:
@@ -13,6 +13,8 @@
 '`
    Если сайт отвечает 502/503/504 или обрывает соединение - повторить до 3 раз с паузой 5 секунд
    (`sleep 5`): в прошлый раз сайт торгов отвечал так на часть фото. 404 - не повторять.
+   Качать по ссылкам из поля `download` (фото МЭТС идут через наш сервер honestlot.ru/img - напрямую площадка
+   отвечает облаку 403).
 2. Если доступен python3 с Pillow - уменьшить каждое фото до 800 px по длинной стороне (меньше токенов).
    Фото .webp при необходимости перевести в .jpg.
 3. Посмотреть каждое фото инструментом Read (он показывает картинки) и вынести вердикт по правилам ниже.
@@ -54,390 +56,895 @@ signs - короткие названия признаков, которые т�
 
 ## Лоты
 
-Сюда же включены лоты, которые в прошлый раз получили «unclear» - посмотри их заново.
+Задание от 05.11.2026: 83 лотов дешевле рынка на 40%+ без вердикта (и 2 с «unclear» - посмотри заново).
+Прошлые результаты (19.10) - в истории ветки и в `damage_check_cache_additions.json`, их не трогать;
+`damage_results.json` начат заново.
 
 ```json
 [
  {
-  "lot_id": "7232666",
-  "title": "Публичное предложение по реализации имущества Альдеева А.В.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$f2geyeoUelTkO8700bmImeRva9WQYfrf5jFmEY5xUiE9YlPNtcQ.G.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Y1TFwmYYJFxhyRjc6wjly.YEebrzVyzGvgFu7ljesld9ZLsTC0O.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$BW0Kjv1E0l462tDqzAEeduxO1Uro5SgQt31cvpn2OJUazirpo10q.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$tHSwzoHcuVHcJGA488KBuuuLXbbqjEHcsh0hBrNyb8NMK7oad6.K.jpg"
+  "lot_id": "7238565",
+  "name": "Лот",
+  "gap": 91.9,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$VTJooG8jkR3H2yTfpcnJmuu3R7M8TDHEJ5MIeakab6IKBuASWNg96.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$vOPx.lWwDL4pBZZmERoLePq5bTrzcGzpo.7BrcmpgmmyuXTE.EJe.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$bUCRfVseivHwmIzy7RzxN.XUaojO6girkxM5wfIHU0unKKpQKUNr2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$ItBclOdq6xJdqKwPst22ouDFHBVNJ4KmUOx8rtiFOJV2oLkNO.8eW.jpeg"
   ]
  },
  {
-  "lot_id": "7220427",
-  "title": "автомобиль легковой Volkswagen Polo, VIN: XW8ZZZ61ZKG023768",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$p4dydTumdg41YucMuRZzOMZc5MmtLrVQnF2R.2bbj3vpyxh6g3e.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$z8kzvZTBDg8DKHH2y2TYAOximZBk2jyWkE4NcxbvTl3YtmBfVN8Qi.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$o.QhbDjNtzpJmYJlBJVAe5ozxiG3HQWOSr76Y.FUEKcSgoB5uy.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gRXRIhdSiMLq8XylsRpOfYWE7r7Au2JbtjVdJn6MScV297Eoce.jpeg"
+  "lot_id": "7269755",
+  "name": "Chery Tiggo 7 Pro Max, 2023",
+  "gap": 91.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$GKd.e.7S6.KF6JhfxAXiu.qPO7xsA5cbk25ws6K1FHkq6PX81iCEa.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$iG1fBRo86jXCJaeeHFeOK.Ff45MP0CLCVd.TEzQBnv7MRQuzLEnW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$J73g9QhA2Sy4IJKeGXEWau7ZNc0c.ynYzenqe9EMDpLhZ0ozuQa.m.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$r50WbHHw5x3B3AAmOK37BOfpuD5LFUOOdYkDxs82KCdafcELpaapm.jpeg"
   ]
  },
  {
-  "lot_id": "7229744",
-  "title": "Транспортное средство HONDA ACCORD, идентификационный номер (VIN) 1HGCV1F96JA009468.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$kj1WWIZSv9rjCIC1IC5Gk.pqGzzjPYrz2AxXKgdjjGvNq93.47kde.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$sz0qexvqHEWsy.D9WSwWb.Pxd7v2oCG7FhcyGyk2wPGTdLvW7v2.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fFewNL3xUROJQGqRQsMs3ut1O56xkz3VsokgaB80yAWeLq.UnS3uG.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$DiMJihQHLA0auI0AcKdmIekArBzbh3VfSeYP492AxdAD8ljPYQ6.O.jpeg"
+  "lot_id": "9223511401",
+  "name": "Volkswagen Golf, 1999",
+  "gap": 83.5,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269260688%2F269260688_269260688.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269260676%2F0_269260676.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269260685%2F0_269260685.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269260680%2F0_269260680.jpg"
   ]
  },
  {
-  "lot_id": "7223710",
-  "title": "Автомобиль",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$NlFBFIDnIx1CFB92h9LBGuQsJthCRhkbcE15vxxny8AfTsWlY9ZIW.png"
+  "lot_id": "7251076",
+  "name": "Toyota LAND CRUISER РRАD, 2005",
+  "gap": 81.5,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$UDnX20TVEg6cpJEvSxrupOuZ4g9E9dSjEpM8WUNMXgnscNVcmrW6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$0uulc275nG8AKeuvoju8Weoa1.16qWSkcrMAcgjvXzND872VRVVpG.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$skymNiRKTmh42LFpVTAI.vJJfRc7HomjWMuFm.PURf9BMCSH3vy.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$2P8LyH242cTm9qyzXPJrQ.aoZk2DfgS6DJv8dVXuCZvh1zv2rnM6.png"
   ]
  },
  {
-  "lot_id": "7229662",
-  "title": "Автомобиль марки CHANGAN модель CS35SC7164A АS 2017 г.в. VIN-номер XDJA3ABE4HL000550",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hhOTrwtcYH0EpW8S6pM6QueLvgDgpVvgJ2dbyVecSeLjUbwfk6Oma.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$SN73iV.2aqjn0IDPjAKvkOHTsuvIXQwgO6qHSLHPMtSAtoHCI7S6m.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$zjG12HsA3s194Dvfz.86u1m2E5m0YdiGj0aM0V7yBGy3s7o3S.W.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$7DrnLPpvvVU357C.Hqa9eI5HKnOKG2PenGaSGocxBYoo9fsyORBy.jpeg"
+  "lot_id": "7267498",
+  "name": "Лот",
+  "gap": 79.3,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$DWCIixRqBMscmlNdsu8Fl.BmKUUhRAdNy8D9C6KkRLKfOcQe9v6j6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$xCRd4q1eRfJ8ZYsRD.zA1OdJrR04Wt76aha9dC5fd5wmw9iO9vnv6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$XiYigw.edYhbMarl5WdtEODaVar72QPM.Q5rxbi91Vo6BqYejDOq.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$H4pOuorpatR2XS8Vs5QR5uyHsag1rH0A.0zSCb2v7S057ve.HLu.png"
   ]
  },
  {
-  "lot_id": "7187382",
-  "title": "ВАЗ модель LADA LARGUS,  (VIN)  - XTARS045LK1130807",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZNfDfc6pRFOUmmj2V4zM3e1cx2SXq3vJO0QBmq7uQkSWfY1GHVTTK.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3nLeKPIMwAUTrD1HSv6AgefHSEWqo9wPlrKTPnWGwWJeaDpQjk9F6.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cPTxjPXx64pxqO51hkZWOeIJL0uhE1fz.lVJxZdMUdtEAVtbQRpO.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$UFPUXnfWY0NYU6B.egoi5.omAiJ0idLXWsrtHY40EX8lGXq1CeMO.jpeg"
+  "lot_id": "7268714",
+  "name": "BMW 320d xDrive, 2017",
+  "gap": 77.5,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$Fm5EBIYBpcuhGaFg6vblBO6QytsxQFHmRPOAo.8yBOF.uKQHLBX6y.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$rTY3sCuoQcnpbtzddA1nC.nEpTx3ia6xCPmj9NJb8n6Y1BW6IiCq.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$2pk9YXCY4QSuqxYOqaJKP.A0U3nwFATjzv6lBLMgC9ncDc9vZhWkG.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$GaVxTd07.6LkFpQd.PZX2.6QcxAl71yvvJmSj6SpFq4j7pyVqigWa.jpeg"
   ]
  },
  {
-  "lot_id": "7186033",
-  "title": "Автомобиль",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ycwLpc5I3lwuX1zOVtabxeVqSWowXlv58VGAAH62a9JXROI2YdSXO.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$K22tYXQD8sxYNl2V5ibw5eoiz952oifjuqiC7fj2p97FGCsZY9cu..png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$XfI4xTdsxCF.MrmIIcCNNO8ML4D6KQ0zIdGdDN2lwd8k7gwwt8n1a.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nzoF6J349xYhzzoGvogaOe931QMZAdmz0D7N41p41jxHaHRCsPfS.png"
+  "lot_id": "9300390929",
+  "name": "Лот",
+  "gap": 76.4,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=7db85fba-8dad-4159-9d82-99c1dc746677&LotId=391464&TradeId=390929&_v=b1cf4758-47d1-4567-b0a2-c7ea5f060a39",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=93348589-44d1-4293-95ff-05878ca64514&LotId=391464&TradeId=390929&_v=8cc9b9c6-c992-4f18-a8fb-0af1387c08e6",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=758e8996-3dce-4909-98dc-163c94d82c0e&LotId=391464&TradeId=390929&_v=c3320c1f-ca16-4551-96e3-72ff9a0cb5d3",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=194615b3-7efc-4c4c-b48d-b64fe266600d&LotId=391464&TradeId=390929&_v=e4020a8c-f2d9-4b3c-8514-0ed7c4afbe14"
   ]
  },
  {
-  "lot_id": "7224970",
-  "title": "Публичное предложение имуществом Багдасаряна Г.А.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ei0G3J8wSrniJ.Njyc2zDendMomvf9h6aJqwEa35TtH5HES3HRxm.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rJL9rnG6.AJVmTOgSZugeFfEhDK6sfEAJmKsu3ETKwCVZkqqV9Qy.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$9AHlE1B57ldupU8rTwQ.gO7zsey9Jiq4TC9wFup7jcgMhtrYbiEjC.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$sDnUj5UkkLTF9dsJUr2Np.mMgEUfSKQZ8cGdeyidlPD.PuReDCqsu.jpg"
+  "lot_id": "9224321101",
+  "name": "Hyundai ix35, 2012",
+  "gap": 75.4,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269886625%2F269886625_268773737.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269886618%2F0_268773748.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269886624%2F0_268773750.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269886623%2F0_268773754.jpg"
   ]
  },
  {
-  "lot_id": "7228828",
-  "title": "Renault Duster, 2012 года, 90 лс",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iYq7wT1YHWT3kwoWTj9DE.4aTC5vhUdgNQ1o2Q0Yy4OSoHLWGu.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$XNDtOWr5InehvGG6OuSfYecP0FAVUFu6uhf6A3vmNkiqrUFQDYtFi.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$EdMT4RJReHVgjqZ66cW10.71rsOyJx.E1cRk7qEu7CzEtWaubu.7O.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$sItoa2sI5Yyrpyso3cBIUef13tuPhtUdSos63ILDJonEA5YjJ6nhC.jpeg"
+  "lot_id": "9224216901",
+  "name": "Daewoo Gentra, 2014",
+  "gap": 75.2,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269814867%2F269814867_269814867.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269814868%2F0_269814868.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269814870%2F0_269814870.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269814871%2F0_269814871.jpg"
   ]
  },
  {
-  "lot_id": "7179675",
-  "title": "Торги по продаже имущества Должника: Елкиной Любови Юрьевны",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$46Ip.Yu1gsw2PERFcOGYQ.ZcHTBfEeoAsN1zjN7Zx3Ld2mlc4HNbe.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rcrhb5cDcgCBEaROnYyiew46RnPPubBRLCoN0Vxd7TPHCDyZ.6C.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$bzmSNmwEekKa1a9smYiKO6.uV4wzCamjUyzaxGI91Fsdvx6G5y.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w1kYHcgOszZEeS3DuK9q.TqXq9gBItyARxqFpHPmSGqdkGf26ojK.jpeg"
+  "lot_id": "9100020886",
+  "name": "Citroen C4, 2014",
+  "gap": 74.1,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$ogKSMBJSMmKomUsVHBYJ.E2eFDEmY1tKvJ.WYGkXJuL.WZalvHy.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$sBjZgyCI5V7Ep9c7tQ41eL1HlvPM..KlU8QSoSg4MU2PQwrtH4kC.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$PsXwoqVujM6NVDtz7LjSbOmE0cIdKEBsLkhZ4iG9eCXjc3EWKldrq.png"
+  ]
+ },
+ {
+  "lot_id": "9224133101",
+  "name": "Chery IndiS (S18D), 2012",
+  "gap": 71.4,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269749661%2F269749661_269150692.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269749665%2F0_269150691.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269749662%2F0_269150690.jpg"
+  ]
+ },
+ {
+  "lot_id": "7176593",
+  "name": "Skoda Rapid, 2019",
+  "gap": 68.7,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$2pWQOVSTnkZzxNLu5r1pN.NPavh1aMBo1FRzdue4FTA4M0Z8YJa.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$r9QNCVvdre82OXU34sdu1.lgVtrUw.EUsEnpLBWzaYbS8YsXaVYpW.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nwZWnLBMG7w3PQ9gJIUENu02aNyfGHLdgYMi2DjFZDcSobqdtlayq.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$0ryN8yXM.OT3o3S4WDPZeziDZpkcsGOSSNqgGnnzlJ3BtcNjVF2.png"
+  ]
+ },
+ {
+  "lot_id": "9224000801",
+  "name": "Лот",
+  "gap": 68.4,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269637658%2F269637658_269038126.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269637655%2F0_269038128.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269637656%2F0_269038124.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269637663%2F0_269038120.jpg"
+  ]
+ },
+ {
+  "lot_id": "7209002",
+  "name": "«Jaguar X-Ture» 2003, 2003",
+  "gap": 68.3,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$xVC6pSOThFeeq67Ky98X.RCO5bHoPFlkehLKBxQyBlyIUZtrM2xW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$qSemeuybaPZwLyl54.wouOYRXElehKpQR89c9FZFQEFfLmkfULQC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$1jZd2xlI2jGh5qyg4VRqOMxWKJWBwg0AA5sQmA.R8H2H.vTEDxC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Zx9kijgco8RnqovcwWbWulyNviwzkhc4U71dofPD4yzVlRf8e9G.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9300389651",
+  "name": "Kia РИО, 2012",
+  "gap": 68.0,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$aa2OzU6uUWF1SZy4.BGPN.nudXUtMlW.ExwpIzrArg2.KkBXl2sYS.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$GrDDb6W1H2bVaeZVrVlYM.2Gy0ydKL0UwmMlZ1ehKvN6PUcXrIC0i.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$jsfirTBHGZskL2kroN6suYEaUD3TPadsi1EbEFj4lpsznJQd3yO.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$XVN5KM8hPXul5HmGcYZ7aejeevqjl39Kweym10GXcHwy1fWGBrU..png"
+  ]
+ },
+ {
+  "lot_id": "9300391565",
+  "name": "Kia SPECTRA, 2008",
+  "gap": 66.2,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=badb6276-dfef-42c9-8082-54cd60a400a5&LotId=392100&TradeId=391565&_v=eda4bd71-46a9-4802-9533-4c280f478f31",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=a5bdbb14-0806-4c41-922b-6b4527954ffe&LotId=392100&TradeId=391565&_v=eaacccc4-917c-4cd0-949c-7a04c43a380e",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=4cf5360f-3fe9-4606-a1c7-05f80bdad5b8&LotId=392100&TradeId=391565&_v=f033042a-f794-410b-a0f6-83df505f4901",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=5472a288-9e78-4046-baf8-4a949905ea7d&LotId=392100&TradeId=391565&_v=d454b28e-16e5-4069-9bc4-23b9d7c3cb74"
+  ]
+ },
+ {
+  "lot_id": "7245641",
+  "name": "Mitsubishi Montero Sport, 2000",
+  "gap": 65.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$EO7E1cEzi6UseITFN5AGefhNbtEXcsPYBRrD6MkPh1EzJvwpma.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$Tv1e5x8a0rFHsLIvQEaHi.x30u2vK2p098yiMjXLomN4IUGdnVb..png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$ZjB.ChZFMDVwCvmdHDW3ufSUV6DS8ht7egHl1noyx6ibi3FZpa6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$LJs2xo72DEas0EuELMfymOzOfv5fPpqW3MML0mwedA4VoxbaLyaA6.png"
+  ]
+ },
+ {
+  "lot_id": "9300391929",
+  "name": "Ford Focus",
+  "gap": 65.6,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=468429a5-28ef-4ff0-baeb-8278bcd50c00&LotId=392464&TradeId=391929&_v=65693bbc-ac48-4480-b137-3debdc4b20c7",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=38233fde-553d-40ee-9426-919e07b249d3&LotId=392464&TradeId=391929&_v=385363f6-9bb8-4229-9ca6-831b1fd9aa52",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=d05fc3f8-f337-4bc3-8982-35aff754a79a&LotId=392464&TradeId=391929&_v=8dd4c4cf-41a3-4d4f-9cd4-1bf16f603739",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=4d8717cd-e4e5-4f80-b6f5-2b31a49f25b7&LotId=392464&TradeId=391929&_v=58e72a73-7b19-459e-981b-1cdee7b11097"
+  ]
+ },
+ {
+  "lot_id": "7266222",
+  "name": "Renault Megane, 2011",
+  "gap": 64.5,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$L0QJMft4YXTAhR00tR2ROzNTLO75ASJUs7GH66gQzEsy.jEjIWou.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$b3PkWQaciui2SPesWYYNaehqSc25DFTnlMvnecLTbq0WBGyK4xvP..jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$ebSiA7u2I5tNcGzWHBgwR.SR4LAE2koO1z87YaIGED.MP8AE1tleW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$wwO29Sy53F5MvqnD9nB9neLyZP30TVhoaUiSSli3pnMNC8Sh85UO.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9300379916",
+  "name": "Лот",
+  "gap": 62.7,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=d829c02b-0927-44a6-9e08-da4d0d17cb14&LotId=380450&TradeId=379916&_v=3905a4c1-d4bb-4dca-982f-b1a1a1c63d57",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=5683f3cc-6dc7-4424-8e6e-2266f9d93951&LotId=380450&TradeId=379916&_v=3d72569e-17ce-47c5-9a51-4618e912301b",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=b5cf5f23-1553-46ab-a0c2-675767950a12&LotId=380450&TradeId=379916&_v=4745f093-29a0-4dbb-85c6-4bf3b64abb33",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=04b696ee-60f4-4909-bbb2-4acc4b314580&LotId=380450&TradeId=379916&_v=0dd37f81-5a35-4db7-9599-b3643326139c"
   ]
  },
  {
   "lot_id": "7224949",
-  "title": "Легковой автомобиль, LADA 219020 LADA GRANTA, 2013 г.в., VIN: XTA219020D0148505.",
-  "photos": [
+  "name": "Lada 219020 LADA GRANTA, 2013",
+  "gap": 61.5,
+  "download": [
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$v3DbnszFU8YjqHSpXlyOrO82BXCwCKOQBFPmiLD4KnfnVzMVHLA16.jpg",
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$YFc3xQMkZ4VAViDEysIeqehAaQw1PBm5gfCBpqyl0w2ZFiN5hba.jpg"
   ]
  },
  {
-  "lot_id": "7230080",
-  "title": "BMW 3 серии, 1996 года, 102 лс, 350000 км",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w2iwtNwQcMUl8oy5eeZNV.AjHfc.EXOInneUATiOiJWMfbuTJpopu.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cQlymiEgLIL81F.AbAKx8OzQdD1sRN66.x.d1pvsDK48rEysgWntC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$tr1YnwNkuXAXSYEV4fciP.51SzfoDFOXsteXl6Id0ckJwQJw0dTLC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$eTeJdUp5G9d.oTEKMa67eHfUoRhGd7Ppjv8hUddQBciMoVKZbB0K.jpeg"
+  "lot_id": "7234352",
+  "name": "Peugeot NFU1OFX 6OPSA2745738, 2005",
+  "gap": 60.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Os97Dnzf18uwyOBJkN8SuEDXNXIIdgFiWAtBQQGgMmVr1Ka2k3eq.webp",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZTMdgq01.1Vxe8kl47coi.rfYh3vukTboLFyGTrDsaWUV25mLfQLe.webp",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$MxILSIWwAxG0p3qIqMoepOVDcfNbH.jJGrFMOHIOdii57Bcw3Yui.webp",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$4WJNhXJ5I66y91Jglma6AufjEabjLmtDNIVwoOJuXf8qw6tCQUwm.webp"
   ]
  },
  {
-  "lot_id": "7208960",
-  "title": "ПЕЖО 308, 2012 в залоге АО «Авто Финанс Банк»",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$p7QnaUEDrEwloY9CmedteGhm9SlExBWZZc.okauKz52aUjSR9m.6.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w4LAnn0BmtJfQkCp5WF4uc0rMo33m5lodFmMhYfaWfLEWXr4CBC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$tH7jbuJ5yv9NYkTOeDT.NlpxFU9mQl15BN4zl0OnIYj132vqSuG.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$J.pB5LvPN9RTo3XBCjHDHetajqLZyQC6XgBCUM..UhkAu82pz.5zu.jpeg"
+  "lot_id": "9300386203",
+  "name": "Лот",
+  "gap": 60.1,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=74f26ba2-2284-48c8-95e2-ca1e0f353e4e&LotId=386738&TradeId=386203&_v=a490ac23-b310-4c10-bee1-a4cd51f0dd7a",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=bca7243d-a9d4-493e-a842-845b6441075f&LotId=386738&TradeId=386203&_v=36478546-651a-4bf3-bd84-b6d7373d3474",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=63ca9349-f53a-4a8c-b164-178513e77bd7&LotId=386738&TradeId=386203&_v=52eb6526-28b2-4fcb-a6ba-23b420083863",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=53159605-b59a-433f-920f-13e79eab965f&LotId=386738&TradeId=386203&_v=e528e895-dbdb-43e5-9a1a-2f9918b48c51"
   ]
  },
  {
-  "lot_id": "7152048",
-  "title": "Электронные торги- публичное предложение по продаже имущества Бернацкой Л.А.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iMMfRgZ3T.QjVHVcoRXpY.OURpm46xTAwUsjCAFKA0FR5N9C9Nrca.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ao96By0GSDPyuK9se3zDW.B8i1zTOZkgC8e44hpS9gLIrpzQ9kay.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$deeQOFPp5tlE0XZIJTnxCOu6PuwNePm2pL2Amj8kkWaVyTiBNoWFK.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$20HIJTipv.Xu7D25eoLvT.0qIB6Q3c.fNho125mHBcdAGzl051he.jpeg"
+  "lot_id": "9300391659",
+  "name": "Chery TIGGO 4 PRO, 2023",
+  "gap": 58.7,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=bd1be8bd-0af8-479f-ba0d-c27f585f74c5&LotId=392194&TradeId=391659&_v=f82437a4-c2e0-4fe7-9c72-96b9c7d8f923",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=a582e236-677c-407a-baf9-59042bac73b5&LotId=392194&TradeId=391659&_v=0a85e5a9-1fd3-4e51-a452-e0d65433abd0",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=5493ebb3-bd43-45d3-9c32-52d692f2a233&LotId=392194&TradeId=391659&_v=5ed76ebf-82d5-445c-85fd-b84193629c41"
   ]
  },
  {
-  "lot_id": "7229645",
-  "title": "Бегахмедова Ф.М. Автомобиль ПЕЖО 308",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$KsB7R44ziKC8S7zeq9vtAuByUv.0Po6bhylHfv.6UAR9YpzigX6.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$E6xJss.OgEGE1SCqA0JAEO1B1MXY4UMXcmCsLD0Y9tc7EdOXZHW.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Jtg4p78Z9av2W8oKty0FOb0cewH1chG.8GTxznHDEfsUW9EXtwDC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$6XzEz1fDrABswQ1tCEby2uCLmaFyg2JBaRrG1N7Km9GItLwc7ycFW.jpeg"
+  "lot_id": "7223136",
+  "name": ", Модель Тс: Вольво S80 ТС: ВОЛЬВО S80",
+  "gap": 58.6,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$JdeHsVAR0ITswWHCSA5SgOyhFFgkCrJfGHQ.M36OOCiRIeBkdV5C.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$jtq1zMeoDpzgMs5klU4kuuE.GwO6gqlGx.0F8xz3kin.wn6d2p2K.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$a6Xe8mqhWmPQReUOvDNtc.MjkRoPTkFNqGzCv4lPZvZjqz6Q3E1AW.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$vkCG5lhaIGJ5iuliyp0aOpAA60v34M4JjZAimYJZW1uLn1CLbaWe.jpg"
   ]
  },
  {
-  "lot_id": "7195602",
-  "title": "Транспортное средство: Автомобиль Пежо 308, VIN - VF34H5FWF55402964, 2009 г.в.,зарегистрированный за супругой должника – Турковой Ириной Владимировной.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$8vxVHwDw9BmxeEkND3ucmOdv2lq2XGgNz39ZjRpSwAnzLewc9dwFu.webp",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gGnS8KmPTgvXADju2nioutguahRF7.KeDG5IRU8A9QT.z85zg7u.webp",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$10NGqe62Xge0aGpb8kEUTeK6qJaXhYhC5H7UG2Sr1bstPwHFSo4jW.webp",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$24zc.A06Rgpyg9e6efnnEeWsATmB1Kmqgis1f8exZ6VxzFgt3k8LG.webp"
+  "lot_id": "9501171667",
+  "name": "И(Или) Модель: Volkswagen Polo VOLKSWAGEN POLO, 2016",
+  "gap": 58.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$bCsILtlHVkgcpCrBsj.Ug.1z8MmwFmzgBsxy32zuZagrDxOJBKae.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$DYuE0PtQqFtC10tj0c8MQu2Rh9bSSOXZ0e4eUkOuHSlzh7lLyuKcm.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$K4IIKghvP2grL.xOsCKvnOZD4M0.iqeUX9Yvsvc5pSX83Q7VmqVIa.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$cXsnuAh7Jp3z7SE6GlFvoOb9ewxm7L4z0APSHfyuKWCG0qjSxlJe2.png"
   ]
  },
  {
-  "lot_id": "7210310",
-  "title": "Skoda Rapid, 2018 года, 110 лс",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$NIPpBErgX05rtjoQlzk1eFoZblucLpSo1glKAXg9ASbxey07A..jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3C0rNbDj0BnFfPJUxtgVuiUejp3e92koYQ5aGZbjd84Rr0iosUuC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dGBzf06Ip.OjFFU.V86juqBi3ZaKdzpPZijPo9iTbN4IFcYAQ5G.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$HaY19xwirvrYHzqq65QZ6OBMCBInwvYTbNe5bR3aCFM1jvpF4PJiK.png"
+  "lot_id": "7227014",
+  "name": "Ford ФОКУС, 2007",
+  "gap": 56.7,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$bIYRkEpTPtUNaOQMKrFCruT0LAh0k4AAZcbISk6qCA7JbtTtUWv4S.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$7WdoCa00DP9gDbtgUaleqOleDMm.YgcX51bJQxazc8wN25Dthghm.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$lu7GoEs9hdMiVCZSeA02peA6yvdxKeAwjnPQP9GYhhwxfN15eZdpe.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$g0VSETyGj.X51RVs3Vbt5.SEmOkpugiz1MH9tz7uRLSqWbSmsgO.png"
   ]
  },
  {
-  "lot_id": "7221030",
-  "title": "Автотранспортного средства ТОЙОТА ЯРИС, 2008 года выпуска, WIN: JTBT923184027174, гос. № Т339РМ77",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$GXiKEzpkvlUkGNCyeHqW3uErjYu4kiZ6KKHZiXSWqN3Lrxy3xseI6.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$4vyI1LF1dykgxqATU9POpuAUvaX5r1A3hmLSbg5RZzBBec.H8TKzi.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$I3e7F2h8X2ScgYfcrYh3O4OV8q29ptqVCUbDjiY2.QN01yB6rtOG.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$c7XxLyM1KCB6Yxz4heNMrOlskjTs03.SyjiV2P8nNeiLrTSHjyiIW.png"
+  "lot_id": "7227372",
+  "name": "Ford Focus, 2003",
+  "gap": 55.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$DqjnluURMCIWtiZ7XyEOAeo0Fq7Q5h0A4KVE2RoRMIcc11.Rl5PiG.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$POFUVSizXRUT5kCIEIWUeefV0gbOh40RbPj81VOMYyaS.cv4O0x6e.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$yfgrBJZ.TUuki9nsXf8detkeIzxnl2F2sbT.iNoTtGyLT3Dz7CK.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Gts0I70zjy0cScaQUWQIoe2qGn1NggS0b2EVXJbIIhO0rT2bgVNVW.jpeg"
   ]
  },
  {
-  "lot_id": "7192922",
-  "title": "Opel Astra, 2006 года, 105 лс, 304171 км",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nHQlZX9GiDaXPAFkOftceXK9n5yJm1gsid4ukV.03YIjbTfaQ2ZO.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$YTrHAFE10SFZEg3GQgePcup3FbzMYOnoWCSE667rqwMFQhAmy3C.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$v5HjoymmtzKrZSKS1I1QueGjFGq4lbUqzTjG.n1fhPmlqLMrreZW.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$oQhnz2P6atFAhtcmIPrLOdboXPHzLfkk6J0XB8oWVGAIn1lub2..jpeg"
+  "lot_id": "9300390446",
+  "name": "Renault ЛОГАН, 2011",
+  "gap": 55.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$LCKHWPA6hOAI.p2wOA4KvuwXIo2zjCV.TqdYkQNWx0Wl09NT1Hq.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$1VB8j872zV.iGO9d8TZwTO5gxcx7zBzIRIigiOuo61BN6fQAwoHKu.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$7yB3Z7gOG8R6MkK0MY2jeeQBJGU7d4gcnBfIjBBxfLnOY..OFJkTa.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$rI1LPVd5a.JETUrxip5lButn0tFCS0AKWT6yeYVlGTEKx6xXQRTBG.jpg"
   ]
  },
  {
-  "lot_id": "7227466",
-  "title": "Легковой автомобиль марки: NISSAN, модель: PRIMERA 1.6 ELEGANCE, год выпуска: 2006 г., идентификационный номер (VIN): SJNBAAP12U2302265.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$QWozXAkVHLhcD2FsRJP00ON.7rB3sAYIBwhuXqKUgPLlFYjolC1km.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nv7BeBPUX8sCddwSdaefD.sY0rUpuoVTvrVRBaSrVTkaIXwf6eA2.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$6lZv1lrHgeqs6qc46SYuKOFD2vjTvLljYqObVS3IO.PonudMSTwCC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$9roajjzJzqEz11vEwVYMF.0nKkRUzy7OZxtSKuUyMIA8aJW1pdVr2.jpeg"
+  "lot_id": "7229361",
+  "name": "Lada 2111, 2005",
+  "gap": 55.7,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$PwGKRxWax22s.ebRY5xUwOB7ouZCbO8Fk8o7jd2HCJqajsDMAxPNW.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$KDvfDEuxs2TAzuUWB4a0ekCNgKT46G6XKUN.p9pRDzaMMLNmC3p2.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hu0Y5oTvKQ6zaRAB.LZGgOZxdWJCZn0NkZtEF19lYQRUr4VhK5he.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nhhmH5uTbKbiG624RbwDaufY9GDl21SZlU2wPVulPERRBjsJ63bi.jpg"
   ]
  },
  {
-  "lot_id": "7225620",
-  "title": "транспортное средство: ШЕВРОЛЕ ЛАЧЕТТИ, Идентификационный номер (VIN номер): KL1NF356J7K723093, Год изготовления: 2007 гос.номер Т206КЕ05",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$lDVIYBEiVeXz4mQQ9UF3Y.6vOpngJQZUpUPv8713hWhtV1l3HlfW.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VAQ696g7GlwSkvP.BP1OYewWuZShURJViDG8tMt4.jMZ2A4gVskFW.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$swoMU6gdSxfocGiuREyweu2kpzGwG1wldQUiwH6bBykukCYOVgce.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$2mRAXL3IIFn8p3i2mF5hpunN73s7cuGLkhIuhjQNpqjH2pCGFkzzS.jpg"
+  "lot_id": "7272367",
+  "name": "Chery Tiggo 7 Pro Max, 2023",
+  "gap": 55.7,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$Ym0bNtGzWjdVg7MtQBHn.UYDcQTsCF.DHkkBCWydI9JFw4osMn8W.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$o7m.dzUmrxUD45TplhAgiOEzNC2No2eCQ9pCiItRAIEiEV8NkBdW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$JXKQP8O09CCbSdl8ws.XOzAJZpIvOSLcAX7enBMhr18JgW8Dy..jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$W0jgYjCR6OF.P3U5CEiJNe.GI2o8jsHnF4Xgk9.VaPRrsqSISql0e.jpeg"
   ]
  },
  {
-  "lot_id": "7175452",
-  "title": "Автомобиль: марки ШЕВРОЛЕ КРУЗ, год выпуска: 2012, идентификационный номер (VIN): XUFJA696JC3050821, цвет кузова: черный, модель, кузов номер: XUFJA696JC3050821, гос. регистрационный номер: Е099МО777, Москва, Зеленоград, д. 3, стр. 1",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$OC6S0UU0fwORTnMmCYtePa04KXxfmeupc21jnCrXCEkpWOd5jPy.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$jRBMRa7pHBhQPcJWLSm09OYhZ22ivDg0WDi.JVh4u7TCkILMZQ9zW.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Lf1M8sfOs4GvjqzKUiugbeTWi7gRXh8gUIKMTj921JrUZDZyUoDAe.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$b77a9TgXv4kMOzSt1NOeEzMg.uBrX3nXetUDr9e8YRNuqV6zRq.jpeg"
+  "lot_id": "7229847",
+  "name": ", Модель Тс: Ваз 21150 ТС: ВАЗ 21150",
+  "gap": 55.6,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3e1e78rdfYXaHxICrZfCQ.WfkAHGW62uMKUBi2XZs.EpEmenyCNr2.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$OaP4qIdCPranh21MIBmOBeRtZOvdG8htIGEIPcxkhSjagnKtZ3vlm.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$YvO6mqZyUj74twiqEFWeBbVwwgCRVnUjiLZo4SWc60KNBFBVr5u.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$edEiuCJkiRyKZWmHTCCrNeKs5Yt8hNLcMTMdWa.BktqQO72NA3iS.png"
   ]
  },
  {
-  "lot_id": "7167330",
-  "title": "Автомобиль ХЕНДЭ ТУССОН 2.0 GLS 2006 г.в., VIN: KMHJN81BP6U409963",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$eLdp.BDuCWwy7eEa19U.uefgPvOjo6N4tozJqKF8SikAwtCDiU5e.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Akh6KL1gXQX2BtMHSbToguaEUFj58b0orSNPusEAxn5POi1vzs2A..png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Z2hE2xjDJDtzeH9L2QNyyu9Iedn63dYGx0i8XUcLbFc97DAcMDzSu.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$oUSEOtrmI7RLvLTiXOUO9OkSuoqzkPVTTjvcK2PuqmEB.3R.jAzRa.png"
+  "lot_id": "7220461",
+  "name": "Лот",
+  "gap": 55.4,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$6401vebtJK5d6oUibz6KnecbcnVBjc35pzSojXCmRyTU6M68npicu.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ViCgByMw4K90Q4xJOrhnl.YasodXf7B5O7b55pvbdGG6lcCbwqTGS.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ppp03JBAhFmU4xbFh1zwOtclNHm8..7fiWZqZO7zXNLUFhUASy2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3zyJ5SZh.ormZOhI2wsqouAjG2a8mCCwUmtvU1S.huIE3Kiy.Y7zy.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9300385633",
+  "name": "Лот",
+  "gap": 54.8,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=028a567e-d018-41ab-a491-34449f097c5e&LotId=386168&TradeId=385633&_v=8d764c3c-c34e-462c-8ea7-6b2aa6f6abb0",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=b530c896-87c7-4f8b-a2fb-cfb22da7a73e&LotId=386168&TradeId=385633&_v=55d27a31-ca4c-498b-95ee-350b33990b0d",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=7fc9a87d-3009-464b-9008-06dc4639494f&LotId=386168&TradeId=385633&_v=056af062-bfc0-4af3-981e-7bab788c7e30",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=287c2a24-56dc-41ce-b67d-cac37609d17c&LotId=386168&TradeId=385633&_v=1dbc7cf0-a7bd-4e80-b961-6f590428b84f"
+  ]
+ },
+ {
+  "lot_id": "9300385236",
+  "name": "Лот",
+  "gap": 54.7,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=86016ad3-c09d-4a28-a962-f571387e8a69&LotId=385771&TradeId=385236&_v=fdb62223-41cb-4022-9106-fc0c82b7f74f",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=11344723-a13d-42f3-9043-8339ba7ba1df&LotId=385771&TradeId=385236&_v=8294f2fb-1385-4856-8373-1052f7e63446",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=ecc0d90b-eab4-41d3-9caa-42d24c575ec4&LotId=385771&TradeId=385236&_v=379267d0-e1ce-4f07-b0c7-49c596f784d9",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=f2fdb2fa-72cc-4d2f-99d2-eba048353f93&LotId=385771&TradeId=385236&_v=2cf2a77c-0b96-48fa-b710-4248f0c523c6"
+  ]
+ },
+ {
+  "lot_id": "9224033901",
+  "name": "BMW 3 серии, 2021",
+  "gap": 54.6,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269672050%2F0_269672050.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269672040%2F0_269672040.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269672053%2F0_269672053.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269672026%2F0_269672026.jpg"
+  ]
+ },
+ {
+  "lot_id": "7225215",
+  "name": "Chevrolet Aveo, 2007",
+  "gap": 54.4,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$9xN0pZRW7sh10hBmu0j.MUwAHb5HSAXdPF6YLuJTbBJEHGmRXI2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$0N07xTt2zu0x7z5sdpURN.KKqtSKL7dJVqH2nMY9.Br6IrnFgzC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cVLemyxtvdsZLgl6ojsVsuwD4OtuCO.HXLpMYLThO3f5kZv.0l..jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$RS2AsekWQLxtMfRPQwxVOeEjI7Fla7nqDFDHKlP3O5hxM9BqqSga.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7260819",
+  "name": "Chevrolet Lacetti, 2008",
+  "gap": 53.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$4c4mjxew84W0sJiwgYf44OCJ5WD4cpCGlBzNjtRKe4A1K3OaYK5Q6.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$6rUk38rvrNRIH51NNbHtO2C0GbRNZ2qgMJPXEeShKnN32UpM1h2.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$5JF6OevbMf7baLSBSzVz6.uzPbUJlGEjq0.rTImFnFApN1ZsO0t0K.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$dWw4F8TIHTm1HYG1th1h..bD9A.LQ801RB1tEp88RG9GpxtfiTFem.png"
+  ]
+ },
+ {
+  "lot_id": "9100021725",
+  "name": "JAC J7, 2023",
+  "gap": 53.3,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$bcq8osu8OpxE2Ui0YKI60.l2OHpod1BhZYCQxC4jc6Pn.b3mx4wa.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$CsDZsX5Hk9EXUtHQyVEVuogLyfVl4R7RxaBOUBmB2zqB0RW8xI6y.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$6p89uoW7PJAdeKgNq0iN4.Y7h7RCZrlYRrMTsMJZ5HToFRd3q.DC.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$UfDDF0KZhbIko6oLtnWEcOLyD1sgErBJfYwfXmURhKh50RPa5La7m.png"
+  ]
+ },
+ {
+  "lot_id": "7245776",
+  "name": "Лот",
+  "gap": 53.1,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$jm0B0Z6lrwL1.aBKUdKFQu0hqxPWvjbukcpLh8YRdLUn9wsqG6Nm.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$kAtVSO7OidOC4WeQWoDJT.dRVuSS8JyGCweBxVXekz46omJDdlW26.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$qjKggbwvLhCI5RsWLUCO0OQifOvhraBuVpHSE5VLgrcf8xEs5iRS.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$tfYyjwUZ3VWLyHGtgYZe6edIqpU2uDX4x6pq5EeHKX0X9OrrrFXEe.png"
+  ]
+ },
+ {
+  "lot_id": "9224272301",
+  "name": "Opel Insignia, 2013",
+  "gap": 52.9,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269862589%2F269862589_269862589.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269862588%2F0_269862588.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269862593%2F0_269862593.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269862592%2F0_269862592.jpg"
+  ]
+ },
+ {
+  "lot_id": "9300384125",
+  "name": "Nissan ALMERA",
+  "gap": 52.8,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=c754ef86-4a38-4e3f-8799-ac4e386173c2&LotId=384660&TradeId=384125&_v=62e902b7-848a-45c3-af56-ffaf3bb5234c",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=5afc20eb-117d-4f7e-81d6-d7e456e95db1&LotId=384660&TradeId=384125&_v=cb2041bd-e9de-49ad-ba57-6d3811dc721d",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=eeb58cab-de7c-4cb5-935b-912e969aa9f4&LotId=384660&TradeId=384125&_v=0a66e92b-c81d-468f-a9ee-504361e71ea8",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=e16c686e-799f-4f27-b1d6-d70a7b8a16c1&LotId=384660&TradeId=384125&_v=89fd2d64-0838-4814-8b0d-ff57b04fe7be"
+  ]
+ },
+ {
+  "lot_id": "9300389895",
+  "name": "Лот",
+  "gap": 52.3,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=986e71dc-0c6b-4f34-a0bb-24959933cf8d&LotId=390430&TradeId=389895&_v=6a201b53-81ec-42e2-99b0-27cacf478e0f",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=8ea768ec-f1ed-41d7-91d3-e6c4c2cdbdb6&LotId=390430&TradeId=389895&_v=510d30ca-3cff-4d5c-b340-7a49baabd6fd",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=fa8d5e38-9fe4-4e39-911f-0a3f54d0e5e7&LotId=390430&TradeId=389895&_v=ac1cb533-2cd0-46ec-83d4-16ac147357a1",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=3aae27f6-d8e5-4d23-aa34-1a1e963ab02b&LotId=390430&TradeId=389895&_v=72a3163d-631a-4f5a-8ab6-2c6495340db5"
+  ]
+ },
+ {
+  "lot_id": "7173228",
+  "name": "CHEVROLET Cruze (4DR NB), 2012",
+  "gap": 52.0,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VtZEF0leKR4VxOHHZo.QejXbqksxW5B5Y6IrdgtAlGsCvKmy6QOW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$2nhbonukJH1plwd.scp8cugd2mbFpdRlKeUvdTB9sP6hqJpiwqtBS.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ezuwSARpgKg0B5KmCbJMG.f6JUyCgq2umZfJwM6O15DKQogWsAYl2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$GaJT9GrYhy1iPkV7zRu0Qu5bj9fyP5r.GimFocWPMEz.44.nIiXm.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7211957",
+  "name": "Ford Mondeo, 2013",
+  "gap": 51.9,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$swvBevmPjDnhc9I7e9rdRe4TEqEfU93wSlL1EbaKQE2Q7kjZde1W6.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$aq93FAAe2xEuscHFfvBgK.0YneznUTvXRoFiffDygNc9rmuASXsI2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Xo14JgSWRn7miC9rxdIB.Wx2hivp0pkqy4mzlxSDGHI2a3CPKuvW.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$p3F5Bgl5T2Xl6XD7oh3eg4Q7rk3NilLS1KfDghw4jduMw6kXgx..jpeg"
+  ]
+ },
+ {
+  "lot_id": "7138447",
+  "name": "Great Wall грейт волл сс6461км29, 2012",
+  "gap": 51.6,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$0Wr4y1imlwHNirU.mtJeS.PVlXzv7f33t9DaMhNhxBJMFEt7gn9mq.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$xooxmzbT6ymokOiSirRIDu6bTEqijJnvYC0lf66e299j2NCY4QXpG.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$TJCXtJif.izXSDGT6N.bu6ZiJmKrLTVhOnzcSnRkdSjhojaBfccC.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9223957501",
+  "name": "Hyundai Santa Fe, 2008",
+  "gap": 51.5,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269610635%2F269610635_269610635.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269610625%2F0_269610625.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269610628%2F0_269610628.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269610629%2F0_269610629.jpg"
+  ]
+ },
+ {
+  "lot_id": "9300391003",
+  "name": "Лот",
+  "gap": 51.5,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=6e51708f-8c4f-4c97-9dd7-c22e590851f0&LotId=391538&TradeId=391003&_v=582c4981-7502-4465-8647-c20e5409a221",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=ae56cb81-08f8-4138-b1d0-c5bb1b9f02cb&LotId=391538&TradeId=391003&_v=8b1e31d4-d143-48f7-8566-0c9e59707b23",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=93ad9b7b-a858-4f24-aad6-bb0c9ade9f30&LotId=391538&TradeId=391003&_v=9c742935-8b85-47ce-99bd-e6291f681a3c",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=13c0be87-bbf9-4712-b87b-19a5f25830d6&LotId=391538&TradeId=391003&_v=faef8cf0-7cc1-4672-964f-6bd7af6a2dea"
+  ]
+ },
+ {
+  "lot_id": "7198461",
+  "name": "Lada 219070 LADA GRANTA года выпуска, 2016",
+  "gap": 51.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$MnGiwqUiz5ByEmCCSs8fzeVcBblJ.X.OdSAswKffF0iso19vzqG.webp"
+  ]
+ },
+ {
+  "lot_id": "7070626",
+  "name": "Ford Fiesta, 2015",
+  "gap": 50.5,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$k8e2cdZbeu4sh3LpB9GVuOUdiKkEMxF.MOpufT9o6VxbVtAVbLxn..jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fY5tNwFElNSheYpaiQBUJOlxqPKo0.OLQJSvkUV2GOYiY9W5KIsWC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$LQB7sj6DdI9Vk.VFOoKnY.499OCJWIF0QapF8uO7ekHfIawJquhPm.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$grDetbFwLkIkE21Eps8CXOahGXDwbd9JFukg0543m0HnMgcc4hwDa.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9224082601",
+  "name": "Skoda Octavia, 2018",
+  "gap": 50.3,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269705667%2F269705667_269705667.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269705666%2F0_269705666.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269705669%2F0_269705669.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269705668%2F0_269705668.jpg"
+  ]
+ },
+ {
+  "lot_id": "7226355",
+  "name": "Opel Astra, 2011",
+  "gap": 50.0,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$f2X7UEO5H53zYbRBZ3WeGe.8MkjoGuOeeADaW6ffYDEJAWrGjoHC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$.KbtKCiUuZyCHzR.8sQ1Qu5cQiVlMwPUIrn8.qQ88PBpz4byaNcw6.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$wVy6Z3cUTRVNtMRQ2ScbDue2e1xLl1bcXB4HGZRdOVO.7NlLAS10u.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hxSGvhTdzJi4Re912JPpev9lJ168eJj39Vxqz0CsKFEMDE.DzuDa.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9300386775",
+  "name": "Ford Focus, 2011",
+  "gap": 49.4,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=01777613-28a9-4d90-bc1f-22a339bc6ad3&LotId=387310&TradeId=386775&_v=19e7ac2f-9be7-47b5-9d9b-994702718732",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=64a90a5e-13c2-417b-8dd1-7f2d9fb081c4&LotId=387310&TradeId=386775&_v=cf6981b8-9f8b-4bf2-a259-d7f8acf4f5f5",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=4a0b95bd-fc3a-435d-a08b-5211ba268a9e&LotId=387310&TradeId=386775&_v=9a641f62-d615-4128-a9b9-f801bcb43fe1",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=134d778f-5cc9-4f18-8b6b-049b2a5adb02&LotId=387310&TradeId=386775&_v=e3ea72bd-a730-4bea-8588-2f4c941dc948"
+  ]
+ },
+ {
+  "lot_id": "7255565",
+  "name": "Volkswagen ПОЛО, 2017",
+  "gap": 49.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$hlRo5CzSA4hq51oYsYZl8eOQIGMn7wtlnrYm8ygv6zsh2e2rPe0ZS.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$xr6lYslQDBuWlNbHzl3J9OjxNGCgHuB.Xxn207qxdHJWdjBB5yU1K.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$H5oMLDnBYST1Y0R2kKbcGuLODj3GyI0Z9aY2y59LwIXtZ.nclVpm.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$dkt9zBTsgS8O8HddmWnYJum0OXTA3obV1WQtMNaiDiWYocaAZkCQq.png"
+  ]
+ },
+ {
+  "lot_id": "7191790",
+  "name": "Citroen C4, 2013",
+  "gap": 47.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$BqAhOhNMRiRLPhzYTfGAeKejUoCCvzZM6WzPywJycR1gZ6Fg8NCa.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9224212301",
+  "name": "Audi A3, 2013",
+  "gap": 47.7,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269809330%2F269809330_269149005.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269809327%2F0_269149009.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269809334%2F0_269148988.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269809326%2F0_269149022.jpg"
+  ]
+ },
+ {
+  "lot_id": "9224275001",
+  "name": "Лот",
+  "gap": 47.5,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269864955%2F269864955_269864955.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269864948%2F0_269864948.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269864953%2F0_269864953.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269864949%2F0_269864949.jpg"
+  ]
+ },
+ {
+  "lot_id": "7181207",
+  "name": "FORD Focus 2004-/Focus C-Max CAP 2003-2007, 2006",
+  "gap": 47.1,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$X7YLcGsG86ujyHQOw7XS.mJDBWfERtmqX.KVIO7mUrSJckWdMl6.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$KR6ws94PBKXoODIMGiguClMLRYHYTYg1rSWMSa0k0xt3s2O2tS.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$WbSFUryOnhbghVlJDWJNje.bJISIxt6rUWW3GDcSWfcwLx8h.2KC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$8apef8AEmLBsCcMAf1H7eueE.I7oPSxgwEtjOLFfFya2gu1E6ZMvK.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9100015276",
+  "name": "Opel модель Astra, 2008",
+  "gap": 46.9,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$WThiUGmyJbzokTp0m5v7qenjkEqXDfR2.ip42leq0OQsuY0yoELyO.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$XakwwCIzKyVH5ffSzUNJIenuLohhBKYVn6nNWz8ETnKcUSUY7pmS.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$wbxMpn2MN4ZXUVPEM9SI4OKk8NX5VaFJXBfJvci2qwHTG8Pf4DOYe.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rW0h35lN3ek8MwUQo0Nne7jslm.xEpm3o7e0EHkEimtnX7.1VXpC.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9224270101",
+  "name": "Cadillac SRX, 2013",
+  "gap": 46.9,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269861483%2F269861483_269278205.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269861501%2F0_269278245.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269861497%2F0_269278240.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269861482%2F0_269278246.jpg"
+  ]
+ },
+ {
+  "lot_id": "7173946",
+  "name": "SUZUKI Grand Vitara, 2010",
+  "gap": 46.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$pvAJllUtixQbohultSuqf.7WvTJ.6DDWgZ6JE4vhU9lX6yOnN9NbK.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$CPJhX1I6vgWNdg9IHyCM.T9.I9lji6JWjJ4I8wJ5TVKQ6YcxEVCC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$I2zKYJLzV7Z4Sy3WV1SulOcTwU4d86SzRh41fYEugqdo8V7ykzSGu.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$b98NndAwgUtZFX5ax9Sll.u9GUmNywfxYJSMajUHOH0UG8Nv7c09y.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9300386696",
+  "name": "Лот",
+  "gap": 46.2,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=6bd4a717-6e2c-432c-bdf0-ae80939cb49b&LotId=387231&TradeId=386696&_v=49114f29-08c4-4cd9-8b50-f61fceff1abe",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=4c47e7cf-610d-4165-b51c-b2ef7deb2289&LotId=387231&TradeId=386696&_v=19f7ea86-8a5e-4ead-87cb-c8de9ba9bc2d",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=c05ad529-ac59-4cc2-bc06-6b0d7656e67a&LotId=387231&TradeId=386696&_v=6835ffbb-6a35-468a-b321-94fcb37132af",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=484f6b53-6d4e-44e9-b6d5-7a8114731587&LotId=387231&TradeId=386696&_v=a4d06466-63c8-49af-b5c1-42d94d55f31d"
+  ]
+ },
+ {
+  "lot_id": "9300387076",
+  "name": ", Ваз 21041- 20, 2007",
+  "gap": 45.6,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=f0530cf5-6c3a-4e5c-b690-ba4194f44d37&LotId=387611&TradeId=387076&_v=0108e9b2-7f90-460a-9c55-6cdd16a2bfd1"
+  ]
+ },
+ {
+  "lot_id": "7193356",
+  "name": "SKODA Octavia, 2014",
+  "gap": 44.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$1u3Cnd091f1EAIs69Kz2lOdii81G7BQXpErzYre8ETUzpLQGz4Xke.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$QRXfUb3LhJfoqVXnrGuk5uUSafZ2H7ykOfC9o8FLQFJoBW9Ms0S.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$LmLJiU760AjzPL9F5.wuJePWrHhiBaqlzY.Xw9IZwlqyElRRvEs...jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$e1DBJVNtOVhoPTbsO3Bzwe838.RLIp3S86gvRvcUyY8HkoH3oNhSu.jpeg"
+  ]
+ },
+ {
+  "lot_id": "7263207",
+  "name": "Mazda CX-7",
+  "gap": 44.5,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$ro1qnKajkZ4PjUy0vp650.RhK5OqmgxZkxN76WFS5sBnA8qbczYIG.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$KM8fbevQLhdNMit1Gp931eX9bb4c19.p7jqeZ7mkRycoJIhBgEad2.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$xALdcSxlU3wi3Zqkb8bEOWdNMi337bn6iRjdjkaZruwnKkdTNwO.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$yoFsVBs2X6jxQU2x9Og6uYjRgP.Os.7wWNriWt1vgtTAXFwuR5G.png"
+  ]
+ },
+ {
+  "lot_id": "9223968501",
+  "name": "Vortex Tingo, 2011",
+  "gap": 44.2,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269573125%2F269573125_268244446.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269573131%2F0_268244431.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269573130%2F0_268244433.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269573121%2F0_268244441.jpg"
+  ]
+ },
+ {
+  "lot_id": "9100016355",
+  "name": "Volkswagen Polo, 2018",
+  "gap": 44.2,
+  "download": [
+   "https://bankrot.torggroup.org/Picture/Show/82976"
+  ]
+ },
+ {
+  "lot_id": "7196618",
+  "name": "Volkswagen POLO, 2010",
+  "gap": 43.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$tzU5QYTlqCvLIAVw2PtfvOVLOuz8Vzbe2NhzD2hxLAH.YfXkSVBiO.jpeg"
+  ]
+ },
+ {
+  "lot_id": "9100020831",
+  "name": "Volkswagen POLO, 2018",
+  "gap": 43.6,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$r6fJzPjpHyG7kRPsfEfrBuYokgG0cXI9L7D0lCAz82CNWiD8fy1f2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$C9WMOqNhcDcdOuZ3Cx7dhecUcpg22oj6U5g2pxqsB6mIiRdwCWlKS.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$p4v7Lk2r21E7tGSsDupT6uxeRiym32y94UwnM2lnniR.7qKpAN7bC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$nvbYUqbGenI78u6.bnP2gOpKlfg.uchRmKNIxIme2EZD5HaGrXFa.jpeg"
   ]
  },
  {
   "lot_id": "7229452",
-  "title": "Легковой автомобиль, ЛАДА 111930 КАЛИНА, 2012 г.в., VIN: XTA111930C0219558.",
-  "photos": [
+  "name": "Lada 111930 КАЛИНА, 2012",
+  "gap": 43.3,
+  "download": [
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$15Km.Q8Uz77d85wrJlsgIuOSsZ9cGxNmyLqwriWTwGPK7EtATKn0..png",
    "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$5CDpcjLtWnqSEgkY1ts.TujLVMIfkHI9..x4UWavL0lfz5NIS2Se.png"
   ]
  },
  {
-  "lot_id": "7232464",
-  "title": "Audi A6, 1998 года, 165 лс, 238102 км",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$bIZtMJMGwuDfn.TRV9K14eIM3Q2oQeVJtGiTu8rdhHu6rCAHP6wS.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$q35EcYKQC9b8McrhUJ1tweFRYby5Jiy4mRZbNdUzb8xh95KuFVmq.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$DloWJFzefGrozdUd7Duuueh6KFHiGMlwLLsY7HOBDKdXaMMVVfZgC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$v2ukNb93Tyg7FWsqZEslTeJNstHpXLVAo8Uh63yB194OLiiMSaC0..jpeg"
+  "lot_id": "9300385551",
+  "name": "Citroen С4, 2008",
+  "gap": 43.2,
+  "download": [
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=ec51251d-201f-4d0b-a645-1a7d952c5819&LotId=386086&TradeId=385551&_v=91fdaf6a-13ff-4370-8c90-cc187f4d1e33",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=a20e3ae8-c90c-4649-8043-6178b1766331&LotId=386086&TradeId=385551&_v=7588aea5-1d6f-4e31-b1f2-b58fad20ce45",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=864b0dc7-d435-4b20-bb3c-3f1f2df77b1b&LotId=386086&TradeId=385551&_v=ebed61d1-fb16-41da-b506-a0c2ed41cc21",
+   "https://webapi.torgi.cdtrf.ru/LotImage/public?LotImageSize=Large&ImageId=45ab4a39-ceb4-43d8-8f9e-aee7edc3de11&LotId=386086&TradeId=385551&_v=cb99a9bd-48a1-489f-933d-a72be016a2df"
   ]
  },
  {
-  "lot_id": "7070431",
-  "title": "Автомобиль марки FORD модель FOCUS 2007 г.в. VIN-номер WF04XXWPD47U32455",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$GTZERtgC4MtPTTvDTcPkpOO3D.61hjcxtwBImIvatyvM3y9A2eYy.jpeg"
+  "lot_id": "7228755",
+  "name": "Lada 21070, 1999",
+  "gap": 42.6,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$r3PjW4cmYn2.zpQbUJXjXuAD0WpWNdGleTgh8J2qvRVglUeNHaHOe.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Y3hKm4KpQXNvadHEn8KPh.R5HuFqDadaKp0GdWaDGYBF8Vjby8wGO.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$65tROx4rtbsnOHAURiOHLuOf6RiRGH.2Jrgr3LKegQgJaQqJRbFC..jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$nMbmFxv5UwDW61rhwz.ZOahKUM3clonHfVs0G6dZyLLKjdFuBmC.jpg"
   ]
  },
  {
-  "lot_id": "7160721",
-  "title": "Легковой автомобиль марки: HONDA, модель: Civic, год выпуска: 2008г., идентификационный номер (VIN): SHHFK28808U037082",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fW8SPA81pRM7MyzuxK8TeOswgbdEZBriMo0A5on1pwUHy9WMZ.BVq.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$G9uOcNb5gQD0ZQyakEfDE.14jwB.VHcr8s.eg4V6U90tX.aypiVC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$wvwJXoJAUFvaR0WnZ1qwXeQAd9V65OSV0UitM7zpNlp.mk0GeLz6m.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$kR3FdWkKl7O7ndnoyrYCIujwfqc.rTJZYlH0P2Ymau8AID6FgFam.jpeg"
+  "lot_id": "7177760",
+  "name": "KIA Optima, 2019",
+  "gap": 42.3,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$WkMtAPGcEMVf79Odi9yNxe6QdlUTzubFJE30aTMMbzZjWBZ7t0i.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$l3oDkqsmCHANdEhatZwaIOAOiZ5MdyYABEHIhCtNjIA5p0RPle7nq.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$50bumbBiYoBS7p7jCL6VTOCTR3MGy5Eb5FWgYHHa8eVnIxJWcae2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$wb1Db9zfL6DCYlxhEwBeGMKKXSNkBrYyh9HsWVgYZ5OOrxm0i.e.jpeg"
   ]
  },
  {
-  "lot_id": "7198560",
-  "title": "Автомобиль УАЗ Patriot",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$RynbFDsDQ62uSVcHu694beemxpGZ2shJEsUg8Gy4K5x.tcL84iLSG.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$HUmFnr6B6lBYQYsTULPTSOEU5J51BuEssnb9iMzyEA8t4kfDVOf6.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cL4hUlSu6s1IOuxVT42eY.eCIc.Rc.Z6rByZqrOwQqiBSV2j9jH76.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$.mfHeU6jMe7tND4s4Gd93Ol9ILCpX2uiyI6IjI5..oDUg6YsHDwe.jpg"
+  "lot_id": "9100016694",
+  "name": "Opel Astra, 2013",
+  "gap": 42.2,
+  "download": [
+   "https://bankrot.torggroup.org/Picture/Show/83606"
   ]
  },
  {
-  "lot_id": "7219863",
-  "title": "Повторные торги по реализации имущества Бугаева А.В. Лот №2",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$pF6Se49CZteSg8FT9CljH.dANljrHHoeoOVoegho3LyQYuMiRGC.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$4SUWVpCkk55j2mpwb1N6OOHVr5pytVR7nkb3jp37lie77rEQQGtCe.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Y5ylHTKMWTaEgqK80kW94udbRR7YfuVxhMgMM8F.F.LOGSAxfWuIa.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$H5z1WT5QAQ6z5VBCnNMI2.EedniEVGz7h1FJ41vbtFSs7rMu.3GJW.jpeg"
+  "lot_id": "9224017601",
+  "name": "Peugeot 308, 2008",
+  "gap": 42.2,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269635900%2F269635900_269635900.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269635910%2F0_269635910.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269635966%2F0_269635966.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269635911%2F0_269635911.jpg"
   ]
  },
  {
-  "lot_id": "7223704",
-  "title": "Транспортное средство Ситроен С4 2011 г.в., WIN: Z8TNC5FS0BM500953 Лот №1",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$BaRPA1huOK.Lbw3uzRBVvOGxIwFDm7i9p7b2bmoTqAItyDMVViMtm.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Ula5CVA0gvVTl85zXh7eGuv3XSaZ62bcRjwBu0ltreBcclEZMKh2a.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$OstBHxJ3UbeffzFxfGus.caXRtb1dps9Op4.2jxPS0l1qMIHGH0q.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$w62ndyM8JzxiBGrFAbE21OVKEUZRTBoLJluB0S930luR2W23NEQLC.jpeg"
+  "lot_id": "7190801",
+  "name": "Mg 5, 2023",
+  "gap": 41.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$l8BHSEx2Tiz7t1O098O38eYQV.TK4HKUconcJsJSIOyJ4UCeymJ9m.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$qjdkpfETLCRUKUCd1zXrTuLr22P.X56sTU1qMs6u6RiKL15bw6GSW.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$MdqH25zMHJy.Ivr6c1d0eOaFnQO6Bxj0mC3E7t9EDXQ2JlWghzxK.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$AAcNEDtbg25RYLpkWDalOZTCz7BxMCmuFdJhipTEqLUzIIUThz5K.jpg"
   ]
  },
  {
-  "lot_id": "7164389",
-  "title": "SsangYong Rexton, 2012 года, 186 лс, полный привод, АКПП",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZsFBzmUV9PXoA1HAfjkuSunyWiV9FedOXxyYS9pzmi3b9N2tbsAiC.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$OhBfrMGhWcVF303ZlzggujFurX.FQw2.thwOJd0S.RQ2XHgbe.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZTK2X4UnKtJNuw3.pTffP.dFFInxB.fb44OW7oIuj0JV9l8529NG.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$1URAWvkb2CwxO0NrYXxFKe41J1DOVYIOJl4U1LcaWMwlsdHlxv9FO.png"
+  "lot_id": "7229588",
+  "name": "Лот",
+  "gap": 41.3,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Kie7kg434jKZrZxX6zAz3ebNYe9TA84g3FSLPEJH1gMV679rV8e.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$lGG36dKcTA24zFovJxdCgO0D1lojHK16fjuwIEoEESgmlOfEapBay.jpeg"
   ]
  },
  {
-  "lot_id": "7218629",
-  "title": "Hyundai Accent, 2006 года, 75 лс, 250000 км",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$iHFbvBmCJndNZkvd1fLxxeJcGWCyW358Ab9qi2hUlzHk4MTcj.Lcm.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$IkBHCDRb06plR5CBNbBXluVjJH1oWsnmu5Thhg9J7InBMgmQIW0Ze.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$WigBejqDbLww0ylTzKNUN.Exjt1.B6Zh6bAH1yJ7wtLOwSbGzfAEm.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$n3D8rXvi2MyIJ.Zf0.FEdugPzvpKyIIYaxJm6yGzs6RMY5DsTgEG.jpeg"
+  "lot_id": "9224113601",
+  "name": "Mercedes-Benz GL-Класс, 2011",
+  "gap": 41.3,
+  "download": [
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269732840%2F269732840_269185077.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269732844%2F0_269185071.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269732842%2F0_269185067.jpg",
+   "https://honestlot.ru/img?u=https%3A%2F%2Fm-ets.ru%2Fdownload%2F269732847%2F0_269185072.jpg"
   ]
  },
  {
-  "lot_id": "7186432",
-  "title": "Право (требование) к ПАО «ЛК «ЕВРОПЛАН» ОГРН 1177746637584 (Лизингодатель)1 на получение в собственность Предмета лизинга по договору финансовой аренды (лизинга) №2638351-ФЛ/ОРК01-21 от 06.04.2021, а именно: Марка, модель ТС: Lada Largus, Идентификационный номер (VIN): XTAKS035LM1365730, Модель, №двигателя: –, № 11189 4545570, Шасси (рама): отсутствует, Кузов №: XTAKS035LM1365730, ГРЗ: А779УА799.",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$qZISvjgL82sFgZxYiKVduKhiNAkDtqc6B0Na4O.rJv9nQTFLBhq.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$q6MD1TjgJD1nrPasOYJlBuLd6Wt84XhAPKAPxa5Ya3P7nPdmMBIy.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VqyaMLfdKpfXEU.i98HAuBpTIuPatZe4By3U2WDduwBcPUHFd36.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$MErhsOVao6vMgGe5yNVdpexXYvmlgTRe2t2o4sAeC9vxUQUijK0a.png"
+  "lot_id": "7131996",
+  "name": "NISSAN TEANA, 2010",
+  "gap": 41.2,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$UGMfEaf6kltdx7PMzffOLLDK6acOFknzf4gDzgSlCs6gLUqFX2.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$1Wy5EyRhwxP8YrQpVMtQ6.N9vOIZ7cUxtcMCPtlykAN4062.AZ71e.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$U.I09pQQCiYmRc8CUa5lHe81QW4zvZ.cwix3kIxlxc2VX1ZMO5SXO.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$SOgyZTdnvtSBcUb77f.dOJwfoWAcB4w5WD.qJpPPpQglfg3dd9Ee.jpeg"
   ]
  },
  {
-  "lot_id": "7149760",
-  "title": "Легковой автомобиль марки: SSANG YONG, модель: Kyron II, год выпуска: 2011 г., № шасси (рамы): KPTSOA1KSBP142776, кузов №: Z8US0A1KSB0011925, идентификационный номер (VIN): Z8US0A1KSB0011925. В залоге у ПАО «Совкомбанк».",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ssmaevIUKvjpZqeMHKFHeuRPscWMr3Ig4W72BUifvXh8klqK1GW9S.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$774BWg.gx3gqD.fUhLUcc.20xmYwEGTZO5c4wky83dZI2K46hWEoW.jpeg"
+  "lot_id": "7260305",
+  "name": "Kia Rio, 2012",
+  "gap": 40.8,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$eTOnO3Qv8Z8XhJjybdGsOXC6MsP4OBiccCUp7W6VrgX2ylnHjdxK.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$DJYolek4ryt5vSN4QdkxT.Vj3LzPRo.cpsVHiIsXjMOEUblXz0hK.jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$DuUK1XdnNQnMjrkHvMKQOOsyooMVifaoFAyns0civ7jfcRgxHU..jpg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$12$T1TRE8VgX4ZVrp.hs8EyueKgv7ijv.h47AfZWRBlmykLrV3XdtnCK.jpg"
   ]
  },
  {
-  "lot_id": "7157450",
-  "title": "Volvo S60, 2013 года, 180 лс, 168761 км, АКПП",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$DxPZfDCT6GL8OCuMMv.qBeI0CkColcsNk5PfcaC6BM11Fotamhpq.jpeg"
+  "lot_id": "7160709",
+  "name": "CHEVROLET LACETTI + NUBIRA + OPTRA (J200) [EUR], 2008",
+  "gap": 40.7,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ZfwrOTQc48IGNUW8htkwceqS6XByun4l7ZEdqn5YYZ4TpUDUzLTC.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$KHeAKBxtYPXf.aZmY704.YxT7ZvRLtdddL8hpiI96XaSarrZvd9a.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$9EQivmGkiSP21x0KWlwht.sFsmchc.NuF0Rbj7QlaVKLpAitjyDe.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$ehws0SsDZBdvRHg7rsHh0.8NO3etySVKtA2u4Ce13otJyPMEmf.o2.jpeg"
   ]
  },
  {
-  "lot_id": "7219081",
-  "title": "Транспортное средство",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$rMWpk4JFjaPVtCXc6JNrmekCMHURwVuXiYcNgkOwVCluDjZ42R292.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$cDEgg3DhPtZltptxwVPHEeFDBOpVt22SWpgTcEyQUOtNiPXPwqh4K.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$.CXxIRhUTZsn7wCsxv6eICcR6Hnlmx498sOJlmWKlfzf4I11Pa.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$uGVqXtnEzO.ZuHbda5D6.utOOxgQCCMMqrfwFgmhrMlTrLNGHQGr2.jpeg"
+  "lot_id": "7134701",
+  "name": "OPEL ASTRA-H, 2008",
+  "gap": 40.5,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$stHD..A3uNSOk6XbdvmfLuo3zkqNGVxLG4nHhvL9L3YF97Sd.6ROi.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fLzTcWoRmOUJTMruO8zu4O.aHPXXQOOfOTa7tiiI2Yp4761EknOvC.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$Gpn.NaM12YrTlGtu2Ae8eOj.h3p1qY3FIUrYV4kG3lLIbRnbm.0y.png",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$CwRvs0TZARMPiQWHn8mtR..8PTbpdp3HLmzmm0Ddoq5iu42cHOoa.png"
   ]
  },
  {
-  "lot_id": "7199338",
-  "title": "Volkswagen Polo, 2011 года, 105 лс, 250000 км",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VXFki4UGp0Xgi.7f7pcHuIImOvCYmuhqLKfEHn0CmoXPx7Xdpc2..png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$bTKOIW7Juw0v3.PlP900ul0SvQou0ndxqWyxqVQYbAt7UzravVDG.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$X.S4s8TJ25ek46gO4t4XOuyAVZOMXIWd8qSraBE.CncdRkSUf2tu.png"
-  ]
- },
- {
-  "lot_id": "7182272",
-  "title": "Автомобиль марки NISSAN модель Almera 2016 г.в. VIN-номер Z8NAJL10055242528",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$3zexZBsdeKTba2qPMfAHMuWBUVX6HIPTzvUerUYZXCHJ4xj4ykma.jpeg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$C41yt7dVu9Yx6BapvCXKUuamQzdpYx40R.B95oYaHQQ2VXfumQeDy.jpeg"
-  ]
- },
- {
-  "lot_id": "7227943",
-  "title": "Автомобиль марки: МЕРСЕДЕС-БЕНЦ ML320 BLUEГод выпуска:2008Государственный регистрационныйзнак: У663СН790Идентификационный номер:4JGBB25E29A489426Тип ТС: Легковой универсалШасси (рама) №: отсутствуетКузов: 4JGBB25E29A489426Цвет кузова: КрасныйРазрешенная максимальная масса, кг:2830Масса без нагрузки, кг: 2256",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dPZqlHN3YQU8qVjBhoUqjuBwOd.QJNOHNITvKZkWki5hrMKVPoVvu.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$dEHBn2IPzHoDVnsr3.PVG.TZFXIg.LIma1wRPCPQsBpFRAF7DZoN6.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$hKHvRcT6bG1SApYmsYqwCOsuHPBGgbq57pu5WBPTTbMc4ToXu0u.png",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$moTEGaLLZ7ICCWm0UayfeegUsVSLuSCInft8udvtKXn3EnYLjVaK.png"
-  ]
- },
- {
-  "lot_id": "7136898",
-  "title": "Автомобиль RENAULT DUSTER, г/в 2014, г/н О 061 РМ 163, VIN Х7LHSRDJD51434935, автошина Nokian Nordman S 2 SUV R16 215/65 (4 шт.) (г. Москва).",
-  "photos": [
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$m9IIScQAZ37KaipaGbUYjeqZxEvKj9OhrkW50IT2zBPcbyGdo3VUm.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$gXJkcycxriNpkH4JDXkeyMCikFqRNLb6kd7Bl51IVhnhvH.0Ry.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$zjnQ4RMYXDxF88xrHb8be.ZdtDkcBR.IZwnWJKUPVjooieiyJBV2.jpg",
-   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$VEZpL.FHvgh7x70Wa7doO6wTjqMFW3ruXzDCc50Pb8KMdgSq1nu.jpg"
+  "lot_id": "7200889",
+  "name": "Volvo S80, 2011",
+  "gap": 40.3,
+  "download": [
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$BIxFIFKMvssVSemItdCUkeq2keP1oZuG2WObuWEU0nmgZsG8wOAm..jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$fEViW6nY1VW69MRw.9Afju3fM6geyWUv29Fow8qS7nsnSrZrzVeHG.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$TxB7tWFni6tPFnPgjLrAOBEn931Qrdm9AhIoYJ7O8FuZ4B47mphS.jpeg",
+   "https://xn----etbpba5admdlad.xn--p1ai/pictures/$2y$10$71gKm1KJdakk9nU3g.gt.ccGfnihG5FCXwEdItnklmdvuiaBnxzO.jpeg"
   ]
  }
 ]
